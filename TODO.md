@@ -71,10 +71,91 @@ Rough execution order. Newest decisions at the top.
 
 ## Phase 5 — Scheduling + launchers
 
-- [ ] `run.bat` — Windows launcher (installs deps + starts uvicorn + opens browser)
-- [ ] `run.sh` — POSIX launcher (same)
-- [ ] Create Claude Code `/schedule` trigger pointing at SKILL.md
-- [ ] Desktop shortcut guide in README (Windows + macOS)
+Goal: make local launch actually one-click on desktop and make the daily
+Claude Code update flow reproducible without relying on system-global Python
+installs or README fiction.
+
+Approach:
+
+- Use a repo-local `.venv` in both launchers so Windows/macOS/Linux all avoid
+  PEP 668 and random user-environment drift.
+- Treat Claude Code `/schedule` as documented user-environment setup, not a
+  magical repo file we can pretend to version-control.
+- Fold README cleanup into this phase, because the current quick-start copy
+  already talks like the launchers exist.
+
+Detailed plan:
+
+1. Launcher contract
+
+- [ ] Lock the runtime contract: repo-root working dir, repo-local `.venv`,
+  default port `8787`, optional override via `LLM_DASH_PORT`, best-effort
+  browser open, foreground server lifecycle.
+- [ ] Confirm `uvicorn server:app` is still the only required entrypoint and
+  no extra CLI flags are needed beyond host/port.
+
+2. `run.sh`
+
+- [ ] Create `run.sh` with repo-root resolution from the script path and a
+  hard `cd` into the repo.
+- [ ] Resolve Python in this order: `python3`, then `python`.
+- [ ] Create `.venv` if missing, upgrade `pip`, and install
+  `requirements.txt` inside the venv.
+- [ ] Start `uvicorn server:app` on `127.0.0.1:${LLM_DASH_PORT:-8787}` using
+  the venv interpreter.
+- [ ] Poll the local server before opening the browser so startup isn't a race.
+- [ ] Open via `xdg-open` or `open`; if that fails, print the URL and keep
+  serving normally.
+- [ ] Trap exit signals and stop the uvicorn child process cleanly.
+
+3. `run.bat`
+
+- [ ] Create `run.bat` with `cd /d %~dp0`.
+- [ ] Resolve Python in this order: `py -3`, then `python`.
+- [ ] Create `.venv` if missing and install `requirements.txt` inside it.
+- [ ] Start `uvicorn server:app` on `127.0.0.1:%LLM_DASH_PORT%` with `8787`
+  as the default.
+- [ ] Add a small readiness loop before launching the browser.
+- [ ] Keep uvicorn attached to the console so closing the window actually
+  stops the server.
+- [ ] Echo useful failure text for missing Python / venv / pip issues.
+
+4. Claude Code scheduling
+
+- [ ] Capture the exact `/schedule` prompt text using the current SKILL.md
+  contract and repo-path expectations.
+- [ ] Document the trigger cadence as `0 9 * * *` local time unless the user
+  changes it.
+- [ ] Add README/setup instructions for creating the `/schedule` trigger
+  manually in Claude Code.
+- [ ] Dry-run the schedule prompt as a normal manual agent run before calling
+  automation done.
+
+5. README + shortcut docs
+
+- [ ] Replace the current README launch instructions that assume
+  `run.sh`/`run.bat` already exist.
+- [ ] Add Windows desktop shortcut steps for `run.bat`.
+- [ ] Add macOS Automator wrapper steps for `run.sh`.
+- [ ] Add troubleshooting notes for first-run dependency install, port
+  conflicts, and browser auto-open failures.
+
+6. Verification / done bar
+
+- [ ] POSIX smoke test from a clean-ish repo state with no `.venv`.
+- [ ] Windows smoke test on a real Windows machine.
+- [ ] API spot checks: `/`, `/api/prompt`, `/api/bootstrap-status`,
+  `/data/run_metrics.csv`.
+- [ ] Schedule dry run proves the documented prompt still yields a
+  SKILL.md-compliant update session.
+
+Risks / watch-outs:
+
+- System `pip install` is a footgun here; keep launcher deps inside `.venv`.
+- `/schedule` is user-environment state, so the repo can document it but can't
+  fully own it.
+- Browser-open helpers vary across Linux desktop environments; the failure mode
+  should still leave a printed URL and a running server.
 
 ## Nice-to-haves (post-v1)
 
