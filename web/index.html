@@ -7,6 +7,7 @@
   <link rel="icon" href="data:," />
   <link rel="stylesheet" href="style.css" />
   <script src="vendor/sql-wasm.js"></script>
+  <script src="vendor/marked.min.js"></script>
 </head>
 <body>
   <main id="app">
@@ -23,24 +24,28 @@
     </header>
 
     <section class="controls" aria-label="Controls">
-      <div class="sort-group" role="group" aria-label="Sort by">
-        <span class="control-label">sort</span>
-        <button class="sort-btn" data-sort="overall" aria-pressed="true">Overall</button>
-        <button class="sort-btn" data-sort="value">Value</button>
-        <button class="sort-btn" data-sort="intelligence">Intelligence</button>
-        <button class="sort-btn" data-sort="coding">Coding</button>
-        <button class="sort-btn" data-sort="agents">Agents</button>
-        <button class="sort-btn" data-sort="speed">Speed</button>
-        <button class="sort-btn" data-sort="cost">Cost</button>
+      <div class="controls-main">
+        <div class="sort-group" role="group" aria-label="Sort by">
+          <span class="control-label">sort</span>
+          <button class="sort-btn" data-sort="overall" aria-pressed="true">Overall</button>
+          <button class="sort-btn" data-sort="value">Value</button>
+          <button class="sort-btn" data-sort="intelligence">Intelligence</button>
+          <button class="sort-btn" data-sort="coding">Coding</button>
+          <button class="sort-btn" data-sort="agents">Agents</button>
+          <button class="sort-btn" data-sort="speed">Speed</button>
+          <button class="sort-btn" data-sort="cost">Cost</button>
+        </div>
+        <div class="view-switch" role="tablist" aria-label="View">
+          <button class="view-btn" data-view="table" aria-pressed="true" role="tab">Table</button>
+          <button class="view-btn" data-view="chart" aria-pressed="false" role="tab">Chart</button>
+          <button class="view-btn" data-view="changelog" aria-pressed="false" role="tab">Changelog</button>
+          <button class="view-btn" data-view="stats" aria-pressed="false" role="tab">Stats</button>
+        </div>
       </div>
-      <div class="view-switch" role="tablist" aria-label="View">
-        <button class="view-btn" data-view="table" aria-pressed="true" role="tab">Table</button>
-        <button class="view-btn" data-view="chart" aria-pressed="false" role="tab">Chart</button>
-        <button class="view-btn" data-view="changelog" aria-pressed="false" role="tab">Changelog</button>
-        <button class="view-btn" data-view="stats" aria-pressed="false" role="tab">Stats</button>
-      </div>
+      <div id="view-actions" class="view-actions" aria-live="polite"></div>
     </section>
 
+    <section id="filters" class="filter-slot" aria-live="polite"></section>
     <section id="detail" class="detail-slot" aria-live="polite"></section>
 
     <section id="view" class="view-slot" aria-live="polite">

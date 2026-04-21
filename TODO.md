@@ -29,24 +29,25 @@ Rough execution order. Newest decisions at the top.
 - [x] `web/app.js` — sql.js loader, state, `render()` dispatcher
 - [x] Port JSX helpers (`tier`, `barColor`, `avg`, `getOverall`, `getValue`)
 - [x] Port JSX components (ScoreCell, DetailPanel, model row, chart row)
-- [ ] Sort controls (done) + vendor multi-select + tier chips + range sliders + text search
+- [x] Sort controls (done) + vendor multi-select + tier chips + range sliders + text search
 - [x] **Table** view
 - [x] **Chart** view
-- [ ] **Changelog** view (date list + marked.js renderer) — vendor `marked.min.js`
-- [ ] **Stats** view
-    - [ ] Totals cards (Σ cost, Σ tokens, Σ duration, run count, word total)
-    - [ ] Averages cards (per-run cost, per-run duration, words/run, cost/word)
-    - [ ] Per-agent breakdown table
-    - [ ] Time-series canvas charts (cost, duration, tokens, word_count per day)
-    - [ ] Run-metrics table (sortable)
-    - [ ] Stats filters (date range, agent)
-- [ ] Last-updated freshness pill (reads `meta.last_updated`)
+- [x] **Changelog** view (date list + marked.js renderer) — vendor `marked.min.js`
+- [x] **Stats** view
+    - [x] Totals cards (Σ cost, Σ tokens, Σ duration, run count, word total)
+    - [x] Averages cards (per-run cost, per-run duration, words/run, cost/word)
+    - [x] Per-agent breakdown table
+    - [x] Time-series canvas charts (cost, duration, tokens, word_count per day)
+    - [x] Run-metrics table (sortable)
+    - [x] Stats filters (date range, agent)
+- [x] Last-updated freshness pill (reads `meta.last_updated`)
 
 ## Phase 3 — CSV exports
 
-- [ ] Models CSV export (filtered Table view → client-side download)
-- [ ] Metrics CSV download (Stats page → link to `/data/run_metrics.csv`)
-- [ ] Verify both CSVs open cleanly in Excel / Numbers / LibreOffice
+- [x] Models CSV export (filtered Table view → client-side download)
+- [x] Metrics CSV download (Stats page → link to `/data/run_metrics.csv`)
+- [x] Verify both CSVs open cleanly in Excel / Numbers / LibreOffice
+  Verified here: browser downloads + Python `csv.reader` parse for both files. User also confirmed both CSVs open cleanly in Excel on Windows. Numbers / LibreOffice were not checked here, but the Excel smoke test is done.
 
 ## Phase 4 — Server + Refresh UX
 
@@ -55,6 +56,7 @@ Rough execution order. Newest decisions at the top.
 - [ ] `GET /api/prompt` — return agent prompt (absolute repo path + today + last_updated)
 - [ ] `POST /api/open-terminal` — platform chain: Windows Terminal → cmd; macOS Terminal.app; Linux gnome-terminal / konsole / xfce4-terminal / xterm
 - [ ] Mount `/data` so the Stats page can download `run_metrics.csv` directly
+- [ ] Mount `/changelogs` so the Changelog view can fetch rendered markdown files
 - [ ] UI Refresh button: auto-copy prompt to clipboard + show modal with prompt + Open Terminal + Copy-again buttons + paste-hint
 - [ ] Verify clipboard-copy fallback path when `navigator.clipboard` is blocked
 
@@ -81,5 +83,5 @@ Rough execution order. Newest decisions at the top.
 - ? Ship a Windows `.lnk` directly, or document "Create shortcut → drag to desktop"?
 - ? Stats charts: plain canvas (zero deps, a bit crude) or vendor a tiny lib like uPlot?
 - ? First-run UX when DB is missing — splash with instructions, or auto-run `init_db.py` the first time `server.py` starts? (frontend renders an inline "run init_db.py" message today; not a splash)
-- ? Frontend fetch path is `../data/dash.sqlite` (works with `python -m http.server` from repo root). When the FastAPI server lands, switch to `/data/dash.sqlite` and mount `/data` — noted in LOGBOOK Entry 004.
+- ? Frontend fetch path is already `/data/dash.sqlite`, and changelogs are fetched from `/changelogs/...`. When the FastAPI server lands, mount both paths so the current static frontend keeps working unchanged.
 - ? Add `CHECK (col BETWEEN 0 AND 10)` to `model_scores` for score columns. Needs a migration; not urgent — render-side clamp covers it for now.
