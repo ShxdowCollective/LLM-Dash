@@ -15,24 +15,24 @@ Rough execution order. Newest decisions at the top.
 
 ## Phase 1 — Data layer
 
-- [ ] `scripts/schema.sql` — `models`, `model_scores`, `changelogs`, `run_metrics`, `meta`, `v_models_latest`
-- [ ] `scripts/init_db.py` — build `data/dash.sqlite` from schema + seed 34-model dataset from the reference JSX
-- [ ] `changelogs/2026-04-20.md` — project-start changelog (Run Metadata footer included; agentless seed values allowed)
-- [ ] `scripts/export_metrics_csv.py` — regenerate `data/run_metrics.csv` from the `run_metrics` table
-- [ ] Seed initial `run_metrics` row for the bootstrap entry (so Stats page has something to show day 1)
+- [x] `scripts/schema.sql` — `models`, `model_scores`, `changelogs`, `run_metrics`, `meta`, `v_models_latest`
+- [x] `scripts/init_db.py` — build `data/dash.sqlite` from schema + seed 34-model dataset from the reference JSX
+- [x] `changelogs/2026-04-20.md` — project-start changelog (Run Metadata footer included; agentless seed values allowed)
+- [x] `scripts/export_metrics_csv.py` — regenerate `data/run_metrics.csv` from the `run_metrics` table
+- [x] Seed initial `run_metrics` row for the bootstrap entry (so Stats page has something to show day 1)
 
 ## Phase 2 — Static frontend
 
-- [ ] `web/index.html` — shell, CSS vars, font imports, view-mount points
-- [ ] `web/style.css` — Voidware tokens + component styles (shadow-as-border; iridescent tier colors)
-- [ ] `web/vendor/sql-wasm.{js,wasm}` + `web/vendor/marked.min.js`
-- [ ] `web/app.js` — sql.js loader, state, `render()` dispatcher
-- [ ] Port JSX helpers (`tier`, `barColor`, `avg`, `getOverall`, `getValue`)
-- [ ] Port JSX components (ScoreCell, DetailPanel, model row, chart row)
-- [ ] Sort controls + vendor multi-select + tier chips + range sliders + text search
-- [ ] **Table** view
-- [ ] **Chart** view
-- [ ] **Changelog** view (date list + marked.js renderer)
+- [x] `web/index.html` — shell, CSS vars, font imports, view-mount points
+- [x] `web/style.css` — Voidware tokens + component styles (shadow-as-border; iridescent tier colors)
+- [x] `web/vendor/sql-wasm.{js,wasm}` vendored (marked.min.js deferred to Changelog slice)
+- [x] `web/app.js` — sql.js loader, state, `render()` dispatcher
+- [x] Port JSX helpers (`tier`, `barColor`, `avg`, `getOverall`, `getValue`)
+- [x] Port JSX components (ScoreCell, DetailPanel, model row, chart row)
+- [ ] Sort controls (done) + vendor multi-select + tier chips + range sliders + text search
+- [x] **Table** view
+- [x] **Chart** view
+- [ ] **Changelog** view (date list + marked.js renderer) — vendor `marked.min.js`
 - [ ] **Stats** view
     - [ ] Totals cards (Σ cost, Σ tokens, Σ duration, run count, word total)
     - [ ] Averages cards (per-run cost, per-run duration, words/run, cost/word)
@@ -80,4 +80,6 @@ Rough execution order. Newest decisions at the top.
 - ? Prompt wording in the Refresh modal — agent-neutral default, or Claude-shaped with a runtime-switcher?
 - ? Ship a Windows `.lnk` directly, or document "Create shortcut → drag to desktop"?
 - ? Stats charts: plain canvas (zero deps, a bit crude) or vendor a tiny lib like uPlot?
-- ? First-run UX when DB is missing — splash with instructions, or auto-run `init_db.py` the first time `server.py` starts?
+- ? First-run UX when DB is missing — splash with instructions, or auto-run `init_db.py` the first time `server.py` starts? (frontend renders an inline "run init_db.py" message today; not a splash)
+- ? Frontend fetch path is `../data/dash.sqlite` (works with `python -m http.server` from repo root). When the FastAPI server lands, switch to `/data/dash.sqlite` and mount `/data` — noted in LOGBOOK Entry 004.
+- ? Add `CHECK (col BETWEEN 0 AND 10)` to `model_scores` for score columns. Needs a migration; not urgent — render-side clamp covers it for now.
