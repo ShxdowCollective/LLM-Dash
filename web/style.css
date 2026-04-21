@@ -1210,12 +1210,45 @@ table.data-table thead th.num,
   letter-spacing: 0.08em;
 }
 
-.stats-canvas {
+.stats-chart {
   width: 100%;
-  height: 188px;
+  min-height: 200px;
   display: block;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0));
   border-radius: var(--vw-radius-md);
+  padding: 6px 4px 2px;
+}
+
+.stats-chart .uplot {
+  width: 100% !important;
+  font-family: var(--vw-font-mono);
+  color: var(--vw-text-muted);
+}
+
+.stats-chart .u-legend {
+  font-family: var(--vw-font-mono);
+  font-size: 11px;
+  color: var(--vw-text-muted);
+  margin-top: 6px;
+}
+
+.stats-chart .u-legend th,
+.stats-chart .u-legend td {
+  color: var(--vw-text-soft);
+}
+
+.stats-chart .u-cursor-pt {
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+
+.chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--vw-text-faint);
+  font-family: var(--vw-font-mono);
+  font-size: 12px;
+  height: 200px;
 }
 
 .table-sort-btn,

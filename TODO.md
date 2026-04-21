@@ -71,91 +71,176 @@ Rough execution order. Newest decisions at the top.
 
 ## Phase 5 — Scheduling + launchers
 
-Goal: make local launch actually one-click on desktop and make the daily
-Claude Code update flow reproducible without relying on system-global Python
-installs or README fiction.
+- [x] `run.sh` (POSIX) and `run.bat` (Windows) — repo-local `.venv`, default
+  port `8787` (override via `LLM_DASH_PORT`), readiness poll before browser
+  open, foreground uvicorn lifecycle, clean trap on exit.
+- [x] `docs/scheduling.md` — Claude Code `/schedule` prompt text, `0 9 * * *`
+  default cadence, dry-run checklist.
+- [x] README rewritten: quick-start matches the launchers that now exist,
+  Windows-shortcut + macOS Automator notes, troubleshooting section for
+  `python3-venv`, port conflicts, and browser auto-open.
+- [x] POSIX smoke test: uvicorn + `/api/bootstrap-status`, stats charts
+  verified in headed browser.
+- [x] Stats charts: vendored uPlot 1.6.31 (52 KB min, zero deps) and swapped
+  the hand-rolled canvas for proper time axes + hover readouts. Voidware-
+  skinned, instances destroyed on view-leave.
 
-Approach:
+Phase 5 `/schedule` dry-run and Windows smoke tests are intentionally
+dropped. Scheduling is being re-architected in Phase 7 via an OS-level task
+written by the setup wizard; Claude Code `/schedule` turns out to be a
+remote-agent trigger, not the local cron the old plan assumed.
 
-- Use a repo-local `.venv` in both launchers so Windows/macOS/Linux all avoid
-  PEP 668 and random user-environment drift.
-- Treat Claude Code `/schedule` as documented user-environment setup, not a
-  magical repo file we can pretend to version-control.
-- Fold README cleanup into this phase, because the current quick-start copy
-  already talks like the launchers exist.
+## Phase 6 — Pivot: Agent Provider via OpenAI Agents SDK (BYOK)
 
-Detailed plan:
+Goal: add a first-class execution path where the dashboard runs SKILL.md
+itself via [openai-agents-python](https://github.com/openai/openai-agents-python)
+against a user-supplied OpenAI-compatible endpoint. The existing "point any
+CLI agent at the repo" flow stays as the escape hatch.
 
-1. Launcher contract
+Decisions locked:
 
-- [ ] Lock the runtime contract: repo-root working dir, repo-local `.venv`,
-  default port `8787`, optional override via `LLM_DASH_PORT`, best-effort
-  browser open, foreground server lifecycle.
-- [ ] Confirm `uvicorn server:app` is still the only required entrypoint and
-  no extra CLI flags are needed beyond host/port.
+- **Framework:** `openai-agents` (pinned). No other SDKs.
+- **Terminology:** rename **runtime → Agent Provider** across user-visible
+  surfaces (docs, UI copy, API field names, prompt strings). Don't rewrite
+  history in past logbook entries.
+- **BYOK mandatory.** No bundled credentials, no defaults, no fallback keys.
+- **Config precedence (read + write order):** env var → OS keychain →
+  `~/.shxdow/auth.json` → `~/.shxdow/config/shxdow.llmdash.json`. Voidware
+  spec is authoritative for the last two.
+- **Provider fields:** `BASE_URL` (required), `API_KEY` (required),
+  `MODELS_OVERRIDE_URL` (optional). Endpoints resolve to
+  `{BASE_URL}/v1/chat/completions` and
+  `{MODELS_OVERRIDE_URL or BASE_URL}/v1/models` — app never accepts a
+  `BASE_URL` that already contains `/v1`.
+- **App fields:** default model, backup model, optional request-headers map.
+- **Exa** attaches as a **Remote MCP server** registered with the Agents
+  SDK. No local Exa client lib.
 
-2. `run.sh`
+### Milestones
 
-- [ ] Create `run.sh` with repo-root resolution from the script path and a
-  hard `cd` into the repo.
-- [ ] Resolve Python in this order: `python3`, then `python`.
-- [ ] Create `.venv` if missing, upgrade `pip`, and install
-  `requirements.txt` inside the venv.
-- [ ] Start `uvicorn server:app` on `127.0.0.1:${LLM_DASH_PORT:-8787}` using
-  the venv interpreter.
-- [ ] Poll the local server before opening the browser so startup isn't a race.
-- [ ] Open via `xdg-open` or `open`; if that fails, print the URL and keep
-  serving normally.
-- [ ] Trap exit signals and stop the uvicorn child process cleanly.
+**M6.1 — Rename runtime → Agent Provider**
+- [ ] Sweep README, SKILL.md, `docs/plans/IMPLEMENTATION_PLAN.md`,
+  `docs/scheduling.md`, all UI copy. Future logbook entries use the new
+  term; old entries stay as-is.
+- [ ] Update `/api/prompt` body + any response field names that leak the
+  old "runtime" label.
 
-3. `run.bat`
+**M6.2 — Config + credential layer (backend)**
+- [ ] `scripts/config.py` — unified reader/writer honoring the precedence
+  order above.
+- [ ] Keychain integration via the `keyring` Python package; graceful
+  degrade to auth.json when the backend is unavailable (headless Linux).
+- [ ] Voidware helpers for `~/.shxdow/auth.json` +
+  `~/.shxdow/config/shxdow.llmdash.json`.
+- [ ] `API_KEY` never appears in any API response, log line, or on-disk
+  trace outside the credential store.
 
-- [ ] Create `run.bat` with `cd /d %~dp0`.
-- [ ] Resolve Python in this order: `py -3`, then `python`.
-- [ ] Create `.venv` if missing and install `requirements.txt` inside it.
-- [ ] Start `uvicorn server:app` on `127.0.0.1:%LLM_DASH_PORT%` with `8787`
-  as the default.
-- [ ] Add a small readiness loop before launching the browser.
-- [ ] Keep uvicorn attached to the console so closing the window actually
-  stops the server.
-- [ ] Echo useful failure text for missing Python / venv / pip issues.
+**M6.3 — Agents SDK plumbing (backend)**
+- [ ] Add `openai-agents` to `requirements.txt` with a pinned version.
+- [ ] `scripts/run_update.py` — executes SKILL.md end-to-end via the Agents
+  SDK. Default model first, backup model on failure, optional headers
+  applied. Emits the same side effects as a manual CLI agent run (new
+  `changelogs/YYYY-MM-DD.md`, `run_metrics` row, CSV regen, `meta.last_updated`).
+- [ ] Wire Exa as a Remote MCP server in the Agents SDK session config.
+- [ ] Per-run log file under `logs/` for debugging.
 
-4. Claude Code scheduling
+**M6.4 — API routes**
+- [ ] `GET /api/provider` → `{ has_provider, base_url, chat_endpoint,
+  models_endpoint, default_model, backup_model, exa_configured }` (no
+  secrets, ever).
+- [ ] `POST /api/provider` — write config per voidware spec.
+- [ ] `GET /api/provider/test-connection` — `GET` models endpoint; pass iff
+  200 OK.
+- [ ] `GET /api/provider/models` — proxy + normalize for the wizard.
+- [ ] `POST /api/provider/test-model` — short-prompt roundtrip for
+  `{default, backup}`.
+- [ ] `POST /api/exa` — save Exa API key per voidware spec.
+- [ ] `POST /api/run-update` + `GET /api/run-update/{id}` — kick off + poll
+  a background `run_update.py` job.
 
-- [ ] Capture the exact `/schedule` prompt text using the current SKILL.md
-  contract and repo-path expectations.
-- [ ] Document the trigger cadence as `0 9 * * *` local time unless the user
-  changes it.
-- [ ] Add README/setup instructions for creating the `/schedule` trigger
-  manually in Claude Code.
-- [ ] Dry-run the schedule prompt as a normal manual agent run before calling
-  automation done.
+**M6.5 — UI integration**
+- [ ] Refresh button: if `has_provider=true`, `POST /api/run-update` and
+  show a progress overlay; otherwise open the Phase 7 wizard. The
+  clipboard + Open-Terminal flow moves out of the modal.
+- [ ] New **"AI Prompt for updating"** card inside the Data tab — renders
+  the agent-neutral prompt, copy button, "Open Terminal", and the paste
+  hint. This is the manual-CLI escape hatch, deliberately separate from
+  Refresh.
+- [ ] Replace any remaining "runtime" label in the UI.
 
-5. README + shortcut docs
+**M6.6 — Provider preset catalog**
+- [ ] JSON list of popular providers (OpenAI, Anthropic-OpenAI-compat,
+  Google AI Studio, OpenRouter, Kilo Gateway, local Ollama / llama.cpp). Consumed by the wizard (Phase 7).
 
-- [ ] Replace the current README launch instructions that assume
-  `run.sh`/`run.bat` already exist.
-- [ ] Add Windows desktop shortcut steps for `run.bat`.
-- [ ] Add macOS Automator wrapper steps for `run.sh`.
-- [ ] Add troubleshooting notes for first-run dependency install, port
-  conflicts, and browser auto-open failures.
+## Phase 7 — Setup wizard + OS-level scheduling
 
-6. Verification / done bar
+Goal: a first-run wizard that configures the Agent Provider end-to-end and
+finishes with an optional OS-level scheduled job.
 
-- [ ] POSIX smoke test from a clean-ish repo state with no `.venv`.
-- [ ] Windows smoke test on a real Windows machine.
-- [ ] API spot checks: `/`, `/api/prompt`, `/api/bootstrap-status`,
-  `/data/run_metrics.csv`.
-- [ ] Schedule dry run proves the documented prompt still yields a
-  SKILL.md-compliant update session.
+Triggers:
+- Dashboard load when `GET /api/provider` returns `has_provider=false`.
+- A "Configure Agent Provider" button inside the Data tab.
 
-Risks / watch-outs:
+**M7.1 — Wizard shell**
+- [ ] Six-step state machine, progress indicator, back / next / skip
+  controls, Voidware-spec styling.
+- [ ] Auto-open on first load when no provider; manual entry point in Data
+  tab.
 
-- System `pip install` is a footgun here; keep launcher deps inside `.venv`.
-- `/schedule` is user-environment state, so the repo can document it but can't
-  fully own it.
-- Browser-open helpers vary across Linux desktop environments; the failure mode
-  should still leave a printed URL and a running server.
+**M7.2 — Step 1: Credentials**
+- [ ] Preset dropdown = M6.6 catalog merged with saved profiles read from
+  keychain / auth.json.
+- [ ] Fields: `BASE_URL`, `API_KEY` (hidden), `MODELS_OVERRIDE_URL`
+  (optional), optional request-headers key/value list.
+- [ ] Live endpoint preview: `Chat: {BASE_URL}/v1/chat/completions` and
+  `Models: {MODELS_OVERRIDE_URL or BASE_URL}/v1/models`. Inline hint: "do
+  not include `/v1` in BASE_URL".
+- [ ] "Test connection" → `GET /api/provider/test-connection`.
+- [ ] "Skip" button appears **only after** a failed test.
+- [ ] On continue: credentials written per voidware spec (M6.2).
+
+**M7.3 — Step 2: Model selection**
+- [ ] Two searchable dropdowns (default + backup) populated from
+  `/api/provider/models`.
+- [ ] If the user types a model not in the fetched list: confirmation
+  modal before continuing.
+
+**M7.4 — Step 3: Model connection test (unskippable)**
+- [ ] Short-prompt roundtrip against default + backup via
+  `/api/provider/test-model`.
+- [ ] On failure: Retry or Restart. Restart wipes credentials + model
+  selection and drops the user back to Step 1.
+
+**M7.5 — Step 4: Exa**
+- [ ] If Exa key already present in env / keychain / auth.json: skip the
+  step silently.
+- [ ] Otherwise: input + "Sign up for Exa" link + short explainer.
+- [ ] "Skip" is allowed but shows a warning about free-tier rate limits
+  before confirming.
+
+**M7.6 — Step 5: Scheduling (optional)**
+- [ ] Cadence picker: Off / Daily / Weekly (day-of-week) / Monthly
+  (day-of-month).
+- [ ] Time-of-day picker in local time, with UTC echo for sanity.
+- [ ] `scripts/schedule_job.py` with platform branches:
+  - Linux / WSL → systemd user timer.
+  - macOS → launchd agent plist in `~/Library/LaunchAgents/`.
+  - Windows → Task Scheduler task via `schtasks /create /xml`.
+- [ ] Job invokes `scripts/run_update.py` (M6.3); per-platform log path.
+- [ ] API: `GET` / `POST` / `DELETE /api/schedule`. "Off" removes the job.
+
+**M7.7 — Step 6: Summary + finalize**
+- [ ] Review screen listing everything about to be written (creds hint
+  only — no raw key).
+- [ ] Finish → persists remaining config + kicks off an immediate Refresh
+  via M6.5.
+
+**M7.8 — Smoke + verification**
+- [ ] End-to-end wizard run against a real OpenAI-compatible endpoint
+  (local Ollama or OpenRouter free tier).
+- [ ] Schedule creation verified via `systemctl --user list-timers` on
+  Linux, `launchctl list` on macOS, `schtasks /query` on Windows.
+- [ ] "Off" state proven to disable + remove the job.
 
 ## Nice-to-haves (post-v1)
 
@@ -164,9 +249,5 @@ Risks / watch-outs:
 - [ ] Markdown-exportable model report
 - [ ] Keyboard shortcuts (`/` search, `j/k` row nav, `e` export, `r` refresh)
 - [ ] Auto-poll `meta.last_updated` every 15s; show "new data available" toast
-- [ ] Agent leaderboard on Stats page (cost-per-word, words-per-dollar, fastest runtime)
+- [ ] Agent Provider leaderboard on Stats page (cost-per-word, words-per-dollar, fastest wall-clock)
 - [ ] Per-model score trend chart inside DetailPanel
-
-## Remaining open question
-
-- ? Stats charts: plain canvas (zero deps, a bit crude) or vendor a tiny lib like uPlot?

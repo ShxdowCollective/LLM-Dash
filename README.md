@@ -10,9 +10,9 @@ Code, Codex, Gemini CLI, …) following the agent-agnostic procedure in
 
 ## What this is
 
-- **Static frontend.** No npm, no build step. Open `run.bat` (Windows) or
-  `run.sh` (macOS/Linux) to start a local server and pop the dashboard in the
-  default browser. Close the terminal to stop.
+- **Static frontend.** No npm, no build step. Run `./run.sh` (macOS/Linux) or
+  `run.bat` (Windows) to start a local server and pop the dashboard in your
+  default browser. Close the terminal window to stop.
 - **SQLite is the source of truth.** `data/dash.sqlite` holds every model,
   every score (append-only history), the changelog index, and per-run metrics.
   The frontend reads it in-browser via `sql.js` (SQLite-WASM) so complex
@@ -20,57 +20,47 @@ Code, Codex, Gemini CLI, …) following the agent-agnostic procedure in
 - **Changelogs live on disk.** Every update produces `changelogs/YYYY-MM-DD.md`
   with a YAML frontmatter header and a required `## Run Metadata` footer
   (tokens, cost, duration, word count). Append-only — never overwritten.
-- **Daily updates via any AI agent.** A Claude Code `/schedule` trigger fires
-  once a day with the prompt "follow skill/SKILL.md." On demand, click
+- **Daily updates via any AI agent.** A Claude Code `/schedule` trigger can
+  fire once a day with the prompt "follow skill/SKILL.md." On demand, click
   **Refresh** in the UI — it copies a ready-to-paste prompt to your clipboard
   and offers to open a terminal. Paste into `claude`, `codex`, `gemini`,
   whatever.
 - **CSV exports.** Download the filtered models table; download
   `run_metrics.csv` from the Stats page.
 - **Stats dashboard.** Dedicated page for cost / token / duration totals,
-  per-agent breakdown, time-series charts, word counts. All data comes from
-  the `run_metrics` rows each update writes.
+  per-agent breakdown, uPlot time-series charts, word counts. All data comes
+  from the `run_metrics` rows each update writes.
 
-## Quick start (once built)
+## Quick start
+
+**Requirements:** Python 3.10+.
 
 ```bash
-./run.sh          # macOS/Linux; or run.bat on Windows
+./run.sh          # macOS/Linux
+run.bat           # Windows (double-click or from a cmd shell)
 ```
 
-Opens `http://127.0.0.1:8787` in the default browser.
+Both launchers:
 
-## Project layout
+1. Create a repo-local `.venv` if missing (nothing touches your system Python).
+2. Install `fastapi` + `uvicorn` inside that venv.
+3. Start `uvicorn server:app` on `127.0.0.1:8787` (override with
+   `LLM_DASH_PORT`).
+4. Open the URL in your default browser once the server responds.
+5. Stay in the foreground — close the terminal to stop the server.
 
-```
-LLM-Dash/
-├── README.md
-├── CLAUDE.md                    # pointer for Claude Code (follow skill/SKILL.md)
-├── AGENTS.md                    # pointer for any AI agent (same)
-├── TODO.md
-├── LOGBOOK.md
-├── requirements.txt             # fastapi, uvicorn
-├── server.py                    # FastAPI app (static mount + /api/prompt + /api/open-terminal)
-├── run.bat                      # Windows launcher
-├── run.sh                       # POSIX launcher
-├── skill/
-│   └── SKILL.md                 # agent-agnostic daily-update procedure (source of truth)
-├── docs/
-│   └── plans/
-│       └── IMPLEMENTATION_PLAN.md
-├── web/                         # static app (served by server.py)
-│   ├── index.html
-│   ├── style.css
-│   ├── app.js
-│   └── vendor/                  # sql.js wasm, marked.js
-├── data/
-│   ├── dash.sqlite              # generated
-│   └── run_metrics.csv          # generated mirror of run_metrics table
-├── changelogs/                  # YYYY-MM-DD.md files, append-only
-└── scripts/
-    ├── schema.sql
-    ├── init_db.py               # seed DB from the 34-model dataset
-    └── export_metrics_csv.py    # regenerate run_metrics.csv from SQLite
-```
+First launch seeds `data/dash.sqlite` automatically; the UI shows a spinner
+until that finishes.
+
+### Desktop shortcuts
+
+- **Windows:** right-click `run.bat` → *Create shortcut*, drag the shortcut to
+  your desktop, rename to `LLM-Dash`. Double-clicking it boots the dashboard.
+- **macOS:** open Automator → *New → Application*, add a *Run Shell Script*
+  action with `cd "$HOME/Repos/LLM-Dash" && ./run.sh` (adjust path), save as
+  `LLM-Dash.app` in `/Applications`. Drag to the Dock.
+- **Linux:** drop a `.desktop` entry pointing `Exec=` at the absolute
+  `run.sh` path, or just pin a terminal alias.
 
 ## Running an update manually
 
@@ -91,11 +81,67 @@ claude (Get-Clipboard)
 codex  (Get-Clipboard)
 ```
 
-Or just paste the prompt between quotes. When the agent finishes, refresh the
-browser page — no live polling (yet).
+When the agent finishes, refresh the browser page — no live polling (yet).
 
-## Status
+## Scheduling daily updates
 
-Scaffold only. See
-[docs/plans/IMPLEMENTATION_PLAN.md](docs/plans/IMPLEMENTATION_PLAN.md) for the
-full design and [TODO.md](TODO.md) for the task queue.
+The recommended automated path is Claude Code's `/schedule` slash command.
+Full setup (prompt text, cron cadence, dry-run checklist) lives in
+[docs/scheduling.md](docs/scheduling.md). Short version:
+
+- Cadence: `0 9 * * *` local time.
+- Prompt: "Follow skill/SKILL.md end-to-end" + absolute repo path.
+- `/schedule` state lives in your Claude Code install, not in the repo.
+
+## Project layout
+
+```
+LLM-Dash/
+├── README.md
+├── CLAUDE.md                    # pointer for Claude Code (follow skill/SKILL.md)
+├── AGENTS.md                    # pointer for any AI agent (same)
+├── TODO.md
+├── LOGBOOK.md
+├── requirements.txt             # fastapi, uvicorn
+├── server.py                    # FastAPI app (static mount + /api/* routes)
+├── run.sh                       # POSIX launcher (creates .venv, starts server)
+├── run.bat                      # Windows launcher (same)
+├── skill/
+│   └── SKILL.md                 # agent-agnostic daily-update procedure
+├── docs/
+│   ├── scheduling.md            # Claude Code /schedule setup
+│   └── plans/
+│       └── IMPLEMENTATION_PLAN.md
+├── web/                         # static app (served by server.py)
+│   ├── index.html
+│   ├── style.css
+│   ├── app.js
+│   └── vendor/                  # sql.js, marked.js, uPlot
+├── data/
+│   ├── dash.sqlite              # generated
+│   └── run_metrics.csv          # generated mirror of run_metrics table
+├── changelogs/                  # YYYY-MM-DD.md files, append-only
+└── scripts/
+    ├── schema.sql
+    ├── init_db.py               # seed DB from the 34-model dataset
+    └── export_metrics_csv.py    # regenerate run_metrics.csv from SQLite
+```
+
+## Troubleshooting
+
+- **`python -m venv` fails on Debian/Ubuntu** → `sudo apt install python3-venv`
+  (or the versioned variant the error message names). Then re-run the
+  launcher.
+- **Port 8787 already in use** → `LLM_DASH_PORT=9000 ./run.sh` (or set the
+  env var before double-clicking `run.bat`).
+- **Browser didn't auto-open** → the launcher prints the URL; open it
+  yourself. The server keeps running either way.
+- **First-run spinner never clears** → check the uvicorn logs in the
+  launcher's terminal; `scripts/init_db.py` printed a traceback if seeding
+  failed. Re-run manually with `python scripts/init_db.py`.
+
+## More
+
+- Architecture: [docs/plans/IMPLEMENTATION_PLAN.md](docs/plans/IMPLEMENTATION_PLAN.md)
+- Task queue: [TODO.md](TODO.md)
+- Session log: [LOGBOOK.md](LOGBOOK.md)

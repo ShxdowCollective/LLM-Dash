@@ -72,6 +72,7 @@
     lastUpdated: null,
     statsSort: { key: "changelog_date", dir: "desc" },
     chartFrame: 0,
+    uplots: {},
     filter: {
       vendors: new Set(),
       text: "",
@@ -1535,24 +1536,24 @@
       h("section", { class: "stats-section" }, [
         h("div", { class: "section-head" }, [
           h("h2", null, "Time Series"),
-          h("p", null, "Plain canvas charts. Zero deps, no chart-lib drama."),
+          h("p", null, "Daily totals across all runs. Hover for exact values."),
         ]),
         h("div", { class: "chart-card-grid" }, [
           h("div", { class: "chart-card" }, [
             h("div", { class: "chart-card-head" }, [h("h3", null, "Cost by day"), h("span", null, "bar")]),
-            h("canvas", { id: "stats-chart-cost", class: "stats-canvas" }),
+            h("div", { id: "stats-chart-cost", class: "stats-chart" }),
           ]),
           h("div", { class: "chart-card" }, [
             h("div", { class: "chart-card-head" }, [h("h3", null, "Duration by day"), h("span", null, "line")]),
-            h("canvas", { id: "stats-chart-duration", class: "stats-canvas" }),
+            h("div", { id: "stats-chart-duration", class: "stats-chart" }),
           ]),
           h("div", { class: "chart-card" }, [
             h("div", { class: "chart-card-head" }, [h("h3", null, "Output tokens by day"), h("span", null, "line")]),
-            h("canvas", { id: "stats-chart-output", class: "stats-canvas" }),
+            h("div", { id: "stats-chart-output", class: "stats-chart" }),
           ]),
           h("div", { class: "chart-card" }, [
             h("div", { class: "chart-card-head" }, [h("h3", null, "Words by day"), h("span", null, "line")]),
-            h("canvas", { id: "stats-chart-words", class: "stats-canvas" }),
+            h("div", { id: "stats-chart-words", class: "stats-chart" }),
           ]),
         ]),
       ]),
@@ -1573,126 +1574,150 @@
     ]);
   }
 
-  function drawSeriesChart(canvasId, rows, field, options) {
-    const canvas = document.getElementById(canvasId);
-    if (!canvas) return;
-
-    const width = Math.max(canvas.clientWidth || 0, 280);
-    const height = Math.max(canvas.clientHeight || 0, 180);
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(height * dpr);
-
-    const ctx = canvas.getContext("2d");
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, width, height);
-
-    const series = [...rows]
+  function buildSeriesData(rows, field) {
+    const points = [...rows]
       .sort((a, b) => String(a.changelog_date).localeCompare(String(b.changelog_date)))
-      .map((row) => ({
-        label: row.changelog_date,
-        value: row[field] === null || row[field] === undefined || row[field] === "" ? null : Number(row[field]),
-      }))
-      .filter((point) => point.value !== null && Number.isFinite(point.value));
+      .map((row) => {
+        const raw = row[field];
+        const value = raw === null || raw === undefined || raw === "" ? null : Number(raw);
+        const ts = Date.parse(row.changelog_date + "T00:00:00Z");
+        return Number.isFinite(ts) && value !== null && Number.isFinite(value)
+          ? [Math.floor(ts / 1000), value]
+          : null;
+      })
+      .filter(Boolean);
+    const xs = points.map((p) => p[0]);
+    const ys = points.map((p) => p[1]);
+    return { xs, ys };
+  }
 
-    if (!series.length) {
-      ctx.fillStyle = "#72726b";
-      ctx.font = "11px JetBrains Mono, monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("No data", width / 2, height / 2);
+  function renderUplotChart(mountId, rows, field, options) {
+    const mount = document.getElementById(mountId);
+    if (!mount || typeof uPlot === "undefined") return;
+
+    const prior = state.uplots[mountId];
+    if (prior) {
+      try { prior.destroy(); } catch (_) { /* noop */ }
+      state.uplots[mountId] = null;
+    }
+    mount.innerHTML = "";
+
+    const { xs, ys } = buildSeriesData(rows, field);
+    const width = Math.max(mount.clientWidth || 0, 260);
+    const height = 200;
+
+    if (!xs.length) {
+      const empty = document.createElement("div");
+      empty.className = "chart-empty";
+      empty.textContent = "No data";
+      empty.style.height = height + "px";
+      mount.appendChild(empty);
       return;
     }
 
-    const pad = { top: 16, right: 12, bottom: 28, left: 48 };
-    const plotWidth = width - pad.left - pad.right;
-    const plotHeight = height - pad.top - pad.bottom;
-    const maxValue = Math.max(...series.map((point) => point.value), 1);
+    const isBar = options.type === "bar";
+    const stroke = options.color;
+    const fill = options.color + "33";
 
-    ctx.strokeStyle = "rgba(255,255,255,0.08)";
-    ctx.fillStyle = "#72726b";
-    ctx.font = "10px JetBrains Mono, monospace";
-    ctx.textAlign = "left";
+    const series = [
+      {},
+      {
+        label: options.label,
+        stroke,
+        width: 2,
+        fill,
+        points: isBar ? { show: false } : { show: true, size: 5, stroke, fill: stroke },
+        paths: isBar && uPlot.paths && uPlot.paths.bars
+          ? uPlot.paths.bars({ size: [0.6, 48] })
+          : undefined,
+        value: (_u, v) => (v == null ? "—" : options.axis(v)),
+      },
+    ];
 
-    for (let tick = 0; tick <= 4; tick += 1) {
-      const ratio = tick / 4;
-      const y = pad.top + plotHeight - plotHeight * ratio;
-      ctx.beginPath();
-      ctx.moveTo(pad.left, y);
-      ctx.lineTo(width - pad.right, y);
-      ctx.stroke();
-      const label = options.axis(maxValue * ratio);
-      ctx.fillText(label, 6, y + 3);
-    }
+    const dayPadSec = 86400 * 3;
+    const xRange = xs.length <= 1
+      ? [xs[0] - dayPadSec, xs[0] + dayPadSec]
+      : null;
 
-    const xAt = (index) => {
-      if (series.length === 1) return pad.left + plotWidth / 2;
-      return pad.left + (plotWidth / (series.length - 1)) * index;
+    const opts = {
+      width,
+      height,
+      padding: [12, 12, 6, 8],
+      legend: { show: true, live: true },
+      cursor: {
+        drag: { x: false, y: false },
+        points: { size: isBar ? 0 : 6 },
+      },
+      scales: {
+        x: xRange ? { time: true, range: () => xRange } : { time: true },
+        y: { range: (_u, dataMin, dataMax) => {
+          const lo = Math.min(0, dataMin);
+          const hi = dataMax > 0 ? dataMax * 1.08 : 1;
+          return [lo, hi];
+        } },
+      },
+      axes: [
+        {
+          stroke: "#72726b",
+          grid: { stroke: "rgba(255,255,255,0.06)" },
+          ticks: { stroke: "rgba(255,255,255,0.12)" },
+          values: (_u, splits) => splits.map((s) => formatShortDate(new Date(s * 1000).toISOString().slice(0, 10))),
+          font: '10px "JetBrains Mono", monospace',
+        },
+        {
+          stroke: "#72726b",
+          grid: { stroke: "rgba(255,255,255,0.06)" },
+          ticks: { stroke: "rgba(255,255,255,0.12)" },
+          size: 56,
+          values: (_u, splits) => splits.map((s) => options.axis(s)),
+          font: '10px "JetBrains Mono", monospace',
+        },
+      ],
+      series,
     };
-    const yAt = (value) => pad.top + plotHeight - (value / maxValue) * plotHeight;
 
-    if (options.type === "bar") {
-      const slotWidth = plotWidth / Math.max(series.length, 1);
-      const barWidth = Math.min(52, slotWidth * 0.6);
-      ctx.fillStyle = options.color;
-      for (let index = 0; index < series.length; index += 1) {
-        const point = series[index];
-        const x = xAt(index) - barWidth / 2;
-        const y = yAt(point.value);
-        ctx.fillRect(x, y, barWidth, pad.top + plotHeight - y);
+    state.uplots[mountId] = new uPlot(opts, [xs, ys], mount);
+  }
+
+  function destroyAllUplots() {
+    Object.keys(state.uplots).forEach((id) => {
+      const instance = state.uplots[id];
+      if (instance) {
+        try { instance.destroy(); } catch (_) { /* noop */ }
       }
-    } else {
-      ctx.strokeStyle = options.color;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      series.forEach((point, index) => {
-        const x = xAt(index);
-        const y = yAt(point.value);
-        if (index === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
-
-      ctx.fillStyle = options.color;
-      series.forEach((point, index) => {
-        const x = xAt(index);
-        const y = yAt(point.value);
-        ctx.beginPath();
-        ctx.arc(x, y, 3, 0, Math.PI * 2);
-        ctx.fill();
-      });
-    }
-
-    ctx.fillStyle = "#a2a29a";
-    ctx.textAlign = "center";
-    const stride = series.length > 6 ? Math.ceil(series.length / 6) : 1;
-    series.forEach((point, index) => {
-      if (index % stride !== 0 && index !== series.length - 1) return;
-      ctx.fillText(formatShortDate(point.label), xAt(index), height - 8);
+      state.uplots[id] = null;
     });
   }
 
   function scheduleChartDraw() {
-    if (state.view !== "stats") return;
+    if (state.view !== "stats") {
+      destroyAllUplots();
+      return;
+    }
     window.cancelAnimationFrame(state.chartFrame);
     state.chartFrame = window.requestAnimationFrame(() => {
       const rows = getFilteredMetrics();
-      drawSeriesChart("stats-chart-cost", rows, "cost_usd", {
+      renderUplotChart("stats-chart-cost", rows, "cost_usd", {
         type: "bar",
+        label: "Cost",
         color: "#ff5ec7",
         axis: (value) => formatCurrency(value),
       });
-      drawSeriesChart("stats-chart-duration", rows, "duration_sec", {
+      renderUplotChart("stats-chart-duration", rows, "duration_sec", {
         type: "line",
+        label: "Duration",
         color: "#79a7ff",
         axis: (value) => formatDuration(value),
       });
-      drawSeriesChart("stats-chart-output", rows, "tokens_output", {
+      renderUplotChart("stats-chart-output", rows, "tokens_output", {
         type: "line",
+        label: "Output tokens",
         color: "#72f0d7",
         axis: (value) => formatCompactNumber(value),
       });
-      drawSeriesChart("stats-chart-words", rows, "word_count", {
+      renderUplotChart("stats-chart-words", rows, "word_count", {
         type: "line",
+        label: "Words",
         color: "#ffd36a",
         axis: (value) => formatCompactNumber(value),
       });
