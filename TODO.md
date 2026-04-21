@@ -12,6 +12,9 @@ Rough execution order. Newest decisions at the top.
 - [x] Decision: daily scheduling = Claude Code `/schedule` skill only
 - [x] Decision: no cost cap; full token/cost/duration logging instead
 - [x] Decision: Refresh button = clipboard prompt + Open Terminal (UI stays read-only)
+- [x] Decision: Refresh modal prompt text = agent-neutral; runtime examples live in hint copy only
+- [x] Decision: Windows desktop shortcut = document only; do not ship a repo `.lnk`
+- [x] Decision: first-run bootstrap = `server.py` auto-runs `scripts/init_db.py`; UI shows a spinner until ready
 
 ## Phase 1 — Data layer
 
@@ -20,6 +23,8 @@ Rough execution order. Newest decisions at the top.
 - [x] `changelogs/2026-04-20.md` — project-start changelog (Run Metadata footer included; agentless seed values allowed)
 - [x] `scripts/export_metrics_csv.py` — regenerate `data/run_metrics.csv` from the `run_metrics` table
 - [x] Seed initial `run_metrics` row for the bootstrap entry (so Stats page has something to show day 1)
+- [ ] Add score-range schema hardening migration for `model_scores`
+  Validate existing rows, rebuild the table with `CHECK (col BETWEEN 0 AND 10)` constraints, recreate indexes, and bump `meta.schema_version`.
 
 ## Phase 2 — Static frontend
 
@@ -51,13 +56,16 @@ Rough execution order. Newest decisions at the top.
 
 ## Phase 4 — Server + Refresh UX
 
-- [ ] `server.py` — FastAPI app (static mount + API routes)
+- [ ] `server.py` — FastAPI app (static mounts + bootstrap-state + API routes)
 - [ ] `requirements.txt` — fastapi, uvicorn
-- [ ] `GET /api/prompt` — return agent prompt (absolute repo path + today + last_updated)
+- [ ] `GET /api/prompt` — return agent-neutral prompt (absolute repo path + today + last_updated)
+- [ ] `GET /api/bootstrap-status` — expose first-run DB bootstrap state for the UI spinner
 - [ ] `POST /api/open-terminal` — platform chain: Windows Terminal → cmd; macOS Terminal.app; Linux gnome-terminal / konsole / xfce4-terminal / xterm
-- [ ] Mount `/data` so the Stats page can download `run_metrics.csv` directly
-- [ ] Mount `/changelogs` so the Changelog view can fetch rendered markdown files
+- [ ] Auto-run `scripts/init_db.py` when `data/dash.sqlite` is missing on first launch
+- [ ] Mount `/data` so the current frontend keeps `/data/dash.sqlite` and `/data/run_metrics.csv` unchanged
+- [ ] Mount `/changelogs` so the current Changelog fetch path keeps working unchanged
 - [ ] UI Refresh button: auto-copy prompt to clipboard + show modal with prompt + Open Terminal + Copy-again buttons + paste-hint
+- [ ] UI first-run state: blocking spinner/status copy while DB bootstrap is running
 - [ ] Verify clipboard-copy fallback path when `navigator.clipboard` is blocked
 
 ## Phase 5 — Scheduling + launchers
@@ -77,11 +85,6 @@ Rough execution order. Newest decisions at the top.
 - [ ] Agent leaderboard on Stats page (cost-per-word, words-per-dollar, fastest runtime)
 - [ ] Per-model score trend chart inside DetailPanel
 
-## Open questions (non-blocking)
+## Remaining open question
 
-- ? Prompt wording in the Refresh modal — agent-neutral default, or Claude-shaped with a runtime-switcher?
-- ? Ship a Windows `.lnk` directly, or document "Create shortcut → drag to desktop"?
 - ? Stats charts: plain canvas (zero deps, a bit crude) or vendor a tiny lib like uPlot?
-- ? First-run UX when DB is missing — splash with instructions, or auto-run `init_db.py` the first time `server.py` starts? (frontend renders an inline "run init_db.py" message today; not a splash)
-- ? Frontend fetch path is already `/data/dash.sqlite`, and changelogs are fetched from `/changelogs/...`. When the FastAPI server lands, mount both paths so the current static frontend keeps working unchanged.
-- ? Add `CHECK (col BETWEEN 0 AND 10)` to `model_scores` for score columns. Needs a migration; not urgent — render-side clamp covers it for now.
