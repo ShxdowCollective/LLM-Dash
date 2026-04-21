@@ -56,17 +56,18 @@ Rough execution order. Newest decisions at the top.
 
 ## Phase 4 — Server + Refresh UX
 
-- [ ] `server.py` — FastAPI app (static mounts + bootstrap-state + API routes)
-- [ ] `requirements.txt` — fastapi, uvicorn
-- [ ] `GET /api/prompt` — return agent-neutral prompt (absolute repo path + today + last_updated)
-- [ ] `GET /api/bootstrap-status` — expose first-run DB bootstrap state for the UI spinner
-- [ ] `POST /api/open-terminal` — platform chain: Windows Terminal → cmd; macOS Terminal.app; Linux gnome-terminal / konsole / xfce4-terminal / xterm
-- [ ] Auto-run `scripts/init_db.py` when `data/dash.sqlite` is missing on first launch
-- [ ] Mount `/data` so the current frontend keeps `/data/dash.sqlite` and `/data/run_metrics.csv` unchanged
-- [ ] Mount `/changelogs` so the current Changelog fetch path keeps working unchanged
-- [ ] UI Refresh button: auto-copy prompt to clipboard + show modal with prompt + Open Terminal + Copy-again buttons + paste-hint
-- [ ] UI first-run state: blocking spinner/status copy while DB bootstrap is running
-- [ ] Verify clipboard-copy fallback path when `navigator.clipboard` is blocked
+- [x] `server.py` — FastAPI app (static mounts + bootstrap-state + API routes)
+- [x] `requirements.txt` — fastapi, uvicorn
+- [x] `GET /api/prompt` — return agent-neutral prompt (absolute repo path + today + last_updated)
+- [x] `GET /api/bootstrap-status` — expose first-run DB bootstrap state for the UI spinner
+- [x] `POST /api/open-terminal` — platform chain: Windows Terminal → cmd; macOS Terminal.app; Linux gnome-terminal / konsole / xfce4-terminal / xterm
+- [x] Auto-run `scripts/init_db.py` when `data/dash.sqlite` is missing on first launch
+- [x] Mount `/data` so the current frontend keeps `/data/dash.sqlite` and `/data/run_metrics.csv` unchanged
+- [x] Mount `/changelogs` so the current Changelog fetch path keeps working unchanged
+- [x] UI Refresh button: auto-copy prompt to clipboard + show modal with prompt + Open Terminal + Copy-again buttons + paste-hint
+- [x] UI first-run state: blocking spinner/status copy while DB bootstrap is running
+- [x] Verify clipboard-copy fallback path when `navigator.clipboard` is blocked
+  Verified here: real uvicorn smoke test for `/`, `/api/prompt`, `/api/bootstrap-status`, `/data/run_metrics.csv`, and `/changelogs/2026-04-20.md`, plus a first-run temp-repo boot with `data/dash.sqlite` deleted to confirm automatic seeding. Clipboard fallback was checked in headless Chrome/CDP by forcing `navigator.clipboard.writeText()` to throw; the modal still opened, the prompt rendered, and the full prompt text was auto-selected for manual copy.
 
 ## Phase 5 — Scheduling + launchers
 

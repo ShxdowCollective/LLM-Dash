@@ -17,6 +17,9 @@
         <p class="tagline">Benchmark comparisons · tracked daily by AI agents</p>
       </div>
       <div class="site-meta">
+        <button id="refresh-trigger" class="action-btn refresh-btn primary" type="button">
+          Refresh
+        </button>
         <span id="freshness" class="pill" data-state="unknown" title="last update unknown">
           never updated
         </span>
@@ -68,6 +71,7 @@
       </p>
     </footer>
   </main>
+  <div id="overlay-root" aria-live="polite"></div>
   <script src="app.js"></script>
 </body>
 </html>

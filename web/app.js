@@ -48,6 +48,12 @@
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });
+  const BOOTSTRAP_POLL_MS = 1000;
+  const PASTE_HINT = [
+    'macOS: claude "$(pbpaste)"  |  codex "$(pbpaste)"  |  gemini "$(pbpaste)"',
+    'Linux: claude "$(xclip -selection clipboard -o)"  or  claude "$(wl-paste)"',
+    "Windows PowerShell: claude (Get-Clipboard)  |  codex (Get-Clipboard)",
+  ].join("\n");
 
   const state = {
     db: null,
@@ -80,6 +86,23 @@
       from: "",
       to: "",
       agent: "",
+    },
+    bootstrap: {
+      supported: true,
+      state: "idle",
+      message: "",
+      detail: "",
+    },
+    refreshModal: {
+      open: false,
+      loading: false,
+      prompt: "",
+      error: "",
+      copyState: "idle",
+      copyMessage: "",
+      terminalState: "idle",
+      terminalMessage: "",
+      selectPrompt: false,
     },
   };
 
@@ -307,6 +330,82 @@
     return path.startsWith("/") ? path : "/" + path.replace(/^\.?\//, "");
   }
 
+  function sleep(ms) {
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
+  }
+
+  async function fetchJson(url, options) {
+    const response = await fetch(url, Object.assign({ cache: "no-store" }, options));
+    let data = null;
+    const text = await response.text();
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch (_) {
+        data = null;
+      }
+    }
+    if (!response.ok) {
+      const error = new Error(
+        (data && (data.detail || data.error || data.message)) || ("HTTP " + response.status)
+      );
+      error.status = response.status;
+      error.payload = data;
+      throw error;
+    }
+    return data || {};
+  }
+
+  function selectText(el) {
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    el.select();
+    if (typeof el.setSelectionRange === "function") {
+      el.setSelectionRange(0, el.value.length);
+    }
+  }
+
+  function fallbackCopyText(text) {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.inset = "0";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    selectText(textarea);
+    let ok = false;
+    try {
+      ok = typeof document.execCommand === "function" && document.execCommand("copy");
+    } catch (_) {
+      ok = false;
+    }
+    textarea.remove();
+    return ok;
+  }
+
+  async function copyText(text) {
+    if (!text) {
+      return { ok: false, tone: "warning", message: "No prompt to copy yet." };
+    }
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      try {
+        await navigator.clipboard.writeText(text);
+        return { ok: true, tone: "success", message: "Prompt copied to clipboard." };
+      } catch (_) {
+        // Fall through to the legacy path below.
+      }
+    }
+    if (fallbackCopyText(text)) {
+      return { ok: true, tone: "success", message: "Prompt copied with the fallback path." };
+    }
+    return {
+      ok: false,
+      tone: "warning",
+      message: "Clipboard API is blocked here. Copy the selected prompt manually.",
+    };
+  }
+
   function stripFrontmatter(markdown) {
     return markdown.replace(/^---\s*\r?\n[\s\S]*?\r?\n---\s*\r?\n?/, "");
   }
@@ -329,6 +428,113 @@
     }
     const buffer = new Uint8Array(await response.arrayBuffer());
     return new SQL.Database(buffer);
+  }
+
+  function syncBootstrapStatus(payload) {
+    state.bootstrap.supported = true;
+    state.bootstrap.state = payload.state || "unknown";
+    state.bootstrap.message = payload.message || "";
+    state.bootstrap.detail = payload.detail || "";
+  }
+
+  async function fetchBootstrapStatus() {
+    try {
+      const payload = await fetchJson("/api/bootstrap-status");
+      syncBootstrapStatus(payload);
+      return payload;
+    } catch (error) {
+      if (error.status === 404) {
+        state.bootstrap.supported = false;
+        state.bootstrap.state = "unsupported";
+        state.bootstrap.message = "";
+        state.bootstrap.detail = "";
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  async function waitForBootstrapReady() {
+    const first = await fetchBootstrapStatus();
+    if (!first) return;
+    render();
+    while (state.bootstrap.state === "initializing") {
+      await sleep(BOOTSTRAP_POLL_MS);
+      await fetchBootstrapStatus();
+      render();
+    }
+    if (state.bootstrap.state === "error") {
+      const error = new Error(state.bootstrap.detail || state.bootstrap.message || "dashboard bootstrap failed");
+      error.code = "bootstrap-failed";
+      throw error;
+    }
+  }
+
+  function applyCopyResult(result) {
+    state.refreshModal.copyState = result.tone;
+    state.refreshModal.copyMessage = result.message;
+    state.refreshModal.selectPrompt = !result.ok;
+  }
+
+  function closeRefreshModal() {
+    state.refreshModal.open = false;
+    state.refreshModal.loading = false;
+    state.refreshModal.error = "";
+    state.refreshModal.terminalState = "idle";
+    state.refreshModal.terminalMessage = "";
+    state.refreshModal.selectPrompt = false;
+    render();
+  }
+
+  async function copyPromptAgain() {
+    if (!state.refreshModal.prompt) return;
+    const result = await copyText(state.refreshModal.prompt);
+    applyCopyResult(result);
+    render();
+  }
+
+  async function openRefreshModal() {
+    state.refreshModal.open = true;
+    state.refreshModal.loading = true;
+    state.refreshModal.prompt = "";
+    state.refreshModal.error = "";
+    state.refreshModal.copyState = "idle";
+    state.refreshModal.copyMessage = "";
+    state.refreshModal.terminalState = "idle";
+    state.refreshModal.terminalMessage = "";
+    state.refreshModal.selectPrompt = false;
+    render();
+
+    try {
+      const payload = await fetchJson("/api/prompt");
+      state.refreshModal.prompt = payload.prompt || "";
+      state.refreshModal.loading = false;
+      const result = await copyText(state.refreshModal.prompt);
+      applyCopyResult(result);
+    } catch (error) {
+      state.refreshModal.loading = false;
+      state.refreshModal.error = String((error && error.message) || error);
+      state.refreshModal.copyState = "error";
+      state.refreshModal.copyMessage = "Couldn't fetch the update prompt.";
+    }
+    render();
+  }
+
+  async function openTerminal() {
+    state.refreshModal.terminalState = "warning";
+    state.refreshModal.terminalMessage = "Opening terminal…";
+    render();
+    try {
+      const payload = await fetchJson("/api/open-terminal", { method: "POST" });
+      state.refreshModal.terminalState = "success";
+      state.refreshModal.terminalMessage = payload.launcher
+        ? "Opened " + payload.launcher + " in the repo."
+        : "Opened a terminal in the repo.";
+    } catch (error) {
+      state.refreshModal.terminalState = "error";
+      state.refreshModal.terminalMessage = String((error && error.message) || error);
+    }
+    render();
   }
 
   function queryRows(sql, params) {
@@ -909,6 +1115,107 @@
     if (content) slot.appendChild(content);
   }
 
+  function renderRefreshModal() {
+    const body = state.refreshModal.loading
+      ? h("p", { class: "status-msg" }, "loading prompt…")
+      : state.refreshModal.error
+        ? h("p", { class: "status-msg error" }, state.refreshModal.error)
+        : h("textarea", {
+            id: "refresh-prompt",
+            class: "modal-prompt",
+            readonly: "readonly",
+          }, state.refreshModal.prompt);
+
+    return h("div", {
+      class: "overlay-shell",
+      onclick: (event) => {
+        if (event.target === event.currentTarget) closeRefreshModal();
+      },
+    }, h("div", {
+      class: "modal-card",
+      role: "dialog",
+      "aria-modal": "true",
+      "aria-labelledby": "refresh-modal-title",
+    }, [
+      h("div", { class: "modal-head" }, [
+        h("div", null, [
+          h("h2", { id: "refresh-modal-title" }, "Run today's update"),
+          h("p", null, "Prompt is agent-neutral on purpose. Pick your CLI and fire away."),
+        ]),
+        h("button", {
+          class: "modal-close",
+          type: "button",
+          onclick: closeRefreshModal,
+          "aria-label": "Close refresh modal",
+        }, "×"),
+      ]),
+      h("div", { class: "modal-body" }, [
+        state.refreshModal.copyMessage
+          ? h("p", {
+              class: "modal-copy-state",
+              dataset: { tone: state.refreshModal.copyState || "idle" },
+            }, state.refreshModal.copyMessage)
+          : null,
+        body,
+        h("div", { class: "modal-actions" }, [
+          h("button", {
+            class: "action-btn",
+            type: "button",
+            disabled: state.refreshModal.loading || !state.refreshModal.prompt,
+            onclick: copyPromptAgain,
+          }, "Copy again"),
+          h("button", {
+            class: "action-btn primary",
+            type: "button",
+            disabled:
+              state.refreshModal.loading ||
+              !state.refreshModal.prompt ||
+              state.refreshModal.terminalMessage === "Opening terminal…",
+            onclick: openTerminal,
+          }, "Open Terminal"),
+        ]),
+        state.refreshModal.terminalMessage
+          ? h("p", {
+              class: "modal-terminal-state",
+              dataset: { tone: state.refreshModal.terminalState || "idle" },
+            }, state.refreshModal.terminalMessage)
+          : null,
+        h("p", { class: "modal-hint" }, PASTE_HINT),
+      ]),
+    ]));
+  }
+
+  function renderBootstrapOverlay() {
+    return h("div", { class: "overlay-shell" }, h("div", {
+      class: "modal-card bootstrap-card",
+      role: "status",
+      "aria-live": "polite",
+    }, [
+      h("div", { class: "bootstrap-spinner", "aria-hidden": "true" }),
+      h("h2", null, "Preparing dashboard"),
+      h("p", null, "First run is seeding the local SQLite bundle so the app has something real to load."),
+      h("div", { class: "bootstrap-status" }, state.bootstrap.message || "Seeding dashboard database..."),
+      state.bootstrap.detail ? h("div", { class: "bootstrap-detail" }, state.bootstrap.detail) : null,
+    ]));
+  }
+
+  function renderOverlay() {
+    const slot = document.getElementById("overlay-root");
+    if (!slot) return;
+    const nodes = [];
+    if (state.bootstrap.state === "initializing") nodes.push(renderBootstrapOverlay());
+    if (state.refreshModal.open) nodes.push(renderRefreshModal());
+    slot.replaceChildren(...nodes);
+    document.body.classList.toggle("has-overlay", nodes.length > 0);
+  }
+
+  function syncRefreshButton() {
+    const button = document.getElementById("refresh-trigger");
+    if (!button) return;
+    button.disabled = state.bootstrap.state === "initializing" || state.refreshModal.loading;
+    button.textContent = state.refreshModal.loading ? "Loading..." : "Refresh";
+  }
+
   function renderFilterSlot() {
     const slot = document.getElementById("filters");
     if (!slot) return;
@@ -1469,21 +1776,25 @@
     const focus = captureFocus();
     renderActionBar();
     renderFilterSlot();
+    renderOverlay();
+    syncRefreshButton();
 
-    if (sortGroup) sortGroup.hidden = !MODEL_VIEWS.has(state.view);
+    if (sortGroup) sortGroup.hidden = !state.ready || !MODEL_VIEWS.has(state.view);
 
     if (state.error) {
       viewSlot.replaceChildren(state.error);
       renderDetailPanel(null);
       updateFreshness();
-      restoreFocus(focus);
+      if (!state.refreshModal.open && state.bootstrap.state !== "initializing") restoreFocus(focus);
       return;
     }
     if (!state.ready) {
-      viewSlot.replaceChildren(renderPlaceholder("loading dashboard…"));
+      viewSlot.replaceChildren(renderPlaceholder(
+        state.bootstrap.state === "initializing" ? "preparing dashboard…" : "loading dashboard…"
+      ));
       renderDetailPanel(null);
       updateFreshness();
-      restoreFocus(focus);
+      if (!state.refreshModal.open && state.bootstrap.state !== "initializing") restoreFocus(focus);
       return;
     }
 
@@ -1508,7 +1819,14 @@
     });
 
     updateFreshness();
-    restoreFocus(focus);
+    if (!state.refreshModal.open && state.bootstrap.state !== "initializing") restoreFocus(focus);
+    if (state.refreshModal.open && !state.refreshModal.loading) {
+      const promptField = document.getElementById("refresh-prompt");
+      if (promptField && state.refreshModal.selectPrompt) {
+        selectText(promptField);
+        state.refreshModal.selectPrompt = false;
+      }
+    }
     scheduleChartDraw();
   }
 
@@ -1527,7 +1845,12 @@
         render();
       });
     });
+    const refreshButton = document.getElementById("refresh-trigger");
+    if (refreshButton) refreshButton.addEventListener("click", openRefreshModal);
     window.addEventListener("resize", scheduleChartDraw);
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && state.refreshModal.open) closeRefreshModal();
+    });
     window.addEventListener("beforeunload", () => {
       if (state.db) state.db.close();
     });
@@ -1536,20 +1859,35 @@
   async function boot() {
     wireStaticControls();
     try {
+      await waitForBootstrapReady();
       state.db = await loadDB();
       loadStaticState();
       state.ready = true;
+      state.bootstrap.state = state.bootstrap.supported ? "ready" : state.bootstrap.state;
       window.setInterval(updateFreshness, 60000);
     } catch (error) {
       console.error("LLM-Dash boot failed:", error);
-      if (error && error.code === "db-missing") {
+      if (error && error.code === "bootstrap-failed") {
+        state.error = renderError(
+          "dashboard bootstrap failed.",
+          h("span", null, [
+            state.bootstrap.message || "The seed pass crashed before it finished.",
+            state.bootstrap.detail ? " " + state.bootstrap.detail : "",
+            " Check the server logs, then refresh the page or rerun ",
+            h("code", null, "python scripts/init_db.py"),
+            ".",
+          ])
+        );
+      } else if (error && error.code === "db-missing") {
         state.error = renderError(
           "dashboard hasn't been seeded.",
-          h("span", null, [
-            "run ",
-            h("code", null, "python scripts/init_db.py"),
-            " from the repo root and refresh.",
-          ])
+          state.bootstrap.supported
+            ? h("span", null, "The local server should seed it automatically. Give it a second, then refresh.")
+            : h("span", null, [
+                "run ",
+                h("code", null, "python scripts/init_db.py"),
+                " from the repo root and refresh.",
+              ])
         );
       } else {
         state.error = renderError(
