@@ -1,0 +1,705 @@
+#!/usr/bin/env python3
+"""Run an LLM-Dash update through the configured Agent Provider."""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import csv
+import datetime as dt
+import json
+import re
+import sqlite3
+import sys
+import time
+import traceback
+from pathlib import Path
+from typing import Any
+
+try:
+    from scripts.config import (
+        ConfigError,
+        build_auth_headers,
+        load_exa_api_key,
+        load_provider_bundle,
+        provider_api_base,
+        redact_headers,
+        redact_value,
+    )
+except ModuleNotFoundError:
+    from config import (  # type: ignore
+        ConfigError,
+        build_auth_headers,
+        load_exa_api_key,
+        load_provider_bundle,
+        provider_api_base,
+        redact_headers,
+        redact_value,
+    )
+
+ROOT = Path(__file__).resolve().parent.parent
+DB_PATH = ROOT / "data" / "dash.sqlite"
+SKILL_PATH = ROOT / "skill" / "SKILL.md"
+CHANGELOGS_DIR = ROOT / "changelogs"
+LOGS_DIR = ROOT / "logs"
+AGENT_RUNTIME = "openai-agents"
+EXA_MCP_URL = "https://mcp.exa.ai/mcp"
+METRICS_COLUMNS = [
+    "changelog_date",
+    "started_at",
+    "completed_at",
+    "duration_sec",
+    "agent_name",
+    "agent_runtime",
+    "tokens_input",
+    "tokens_output",
+    "tokens_cached",
+    "cost_usd",
+    "exa_searches",
+    "exa_fetches",
+    "word_count",
+    "notes",
+]
+
+
+class RunUpdateError(RuntimeError):
+    pass
+
+
+def utc_now() -> dt.datetime:
+    return dt.datetime.now(dt.timezone.utc)
+
+
+def iso_z(value: dt.datetime) -> str:
+    return value.astimezone(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def local_date() -> str:
+    return dt.datetime.now().astimezone().date().isoformat()
+
+
+def default_log_path() -> Path:
+    stamp = utc_now().strftime("%Y%m%d-%H%M%S")
+    return LOGS_DIR / f"run-update-{stamp}.log"
+
+
+def write_log(path: Path, message: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(f"{iso_z(utc_now())} {message}\n")
+
+
+def parse_json_output(text: str) -> dict[str, Any]:
+    cleaned = text.strip()
+    fenced = re.search(r"```(?:json)?\s*(.*?)```", cleaned, re.DOTALL | re.IGNORECASE)
+    if fenced:
+        cleaned = fenced.group(1).strip()
+    try:
+        data = json.loads(cleaned)
+    except json.JSONDecodeError as exc:
+        raise RunUpdateError(f"Agent output was not valid JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise RunUpdateError("Agent output must be a JSON object")
+    return data
+
+
+def word_count(markdown_body: str) -> int:
+    text = re.sub(r"```.*?```", " ", markdown_body, flags=re.DOTALL)
+    text = re.sub(r"`[^`]+`", " ", text)
+    text = re.sub(r"https?://\S+", " ", text)
+    return len(re.findall(r"\b[\w'-]+\b", text))
+
+
+def yaml_list(values: list[str]) -> str:
+    return "[" + ", ".join(json.dumps(v) for v in values) + "]"
+
+
+def build_frontmatter(update: dict[str, Any], generated_at: str, agent_name: str) -> str:
+    new_models = [str(item.get("name")) for item in update.get("new_models", []) if item.get("name")]
+    changes: list[dict[str, Any]] = []
+    for item in update.get("score_updates", []) or []:
+        if item.get("name") and item.get("field"):
+            changes.append(
+                {
+                    "model": item.get("name"),
+                    "field": item.get("field"),
+                    "from": item.get("old"),
+                    "to": item.get("new"),
+                }
+            )
+    for item in update.get("status_changes", []) or []:
+        if item.get("name"):
+            changes.append(
+                {
+                    "model": item.get("name"),
+                    "field": "status",
+                    "from": item.get("from"),
+                    "to": item.get("to"),
+                }
+            )
+
+    lines = [
+        "---",
+        f"date: {update['date']}",
+        f"generated_at: {generated_at}",
+        f"agent: {agent_name}",
+        f"agent_runtime: {AGENT_RUNTIME}",
+        f"new_models: {yaml_list(new_models)}",
+    ]
+    if changes:
+        lines.append("changes:")
+        for change in changes:
+            lines.append(
+                "  - "
+                + json.dumps(
+                    {
+                        "model": change["model"],
+                        "field": change["field"],
+                        "from": change.get("from"),
+                        "to": change.get("to"),
+                    },
+                    ensure_ascii=False,
+                )
+            )
+    else:
+        lines.append("changes: []")
+    lines.append("---")
+    return "\n".join(lines) + "\n\n"
+
+
+def build_changelog(update: dict[str, Any], generated_at: str, agent_name: str, metrics: dict[str, Any]) -> str:
+    body = str(update.get("changelog_markdown") or "").strip()
+    if not body:
+        title = str(update.get("title") or update["date"])
+        body = f"# Changelog - {title}\n\nNo model or score updates were found."
+    body_words = word_count(body)
+    metrics["word_count"] = body_words
+    footer = "\n\n---\n\n## Run Metadata\n\n| metric | value |\n|---|---|\n"
+    rows = {
+        "agent": agent_name,
+        "agent_runtime": AGENT_RUNTIME,
+        "started_at": metrics.get("started_at"),
+        "completed_at": metrics.get("completed_at"),
+        "duration_sec": metrics.get("duration_sec"),
+        "input_tokens": metrics.get("tokens_input"),
+        "output_tokens": metrics.get("tokens_output"),
+        "cached_tokens": metrics.get("tokens_cached"),
+        "cost_usd": metrics.get("cost_usd"),
+        "exa_searches": metrics.get("exa_searches", 0),
+        "exa_fetches": metrics.get("exa_fetches", 0),
+        "word_count": body_words,
+    }
+    for key, value in rows.items():
+        footer += f"| {key} | {'' if value is None else value} |\n"
+    return build_frontmatter(update, generated_at, agent_name) + body + footer
+
+
+def coerce_score(value: Any, field: str) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise RunUpdateError(f"{field} must be numeric") from exc
+    if not 0 <= number <= 10:
+        raise RunUpdateError(f"{field} must be between 0 and 10")
+    return number
+
+
+def latest_scores(con: sqlite3.Connection, model_name: str) -> dict[str, Any]:
+    row = con.execute(
+        """SELECT m.id, s.intelligence, s.coding, s.agents, s.speed, s.cost, s.source_notes
+           FROM models m
+           LEFT JOIN model_scores s ON s.id = (
+             SELECT id FROM model_scores
+             WHERE model_id = m.id
+             ORDER BY as_of DESC, id DESC
+             LIMIT 1
+           )
+           WHERE m.name = ?""",
+        (model_name,),
+    ).fetchone()
+    if not row:
+        raise RunUpdateError(f"Unknown model in score update: {model_name}")
+    return {
+        "model_id": row[0],
+        "intelligence": row[1],
+        "coding": row[2],
+        "agents": row[3],
+        "speed": row[4],
+        "cost": row[5],
+        "source_notes": row[6],
+    }
+
+
+def export_metrics_csv(db_path: Path, csv_path: Path) -> None:
+    con = sqlite3.connect(db_path)
+    try:
+        rows = con.execute(
+            """SELECT changelog_date, started_at, completed_at, duration_sec,
+                      agent_name, agent_runtime, tokens_input, tokens_output,
+                      tokens_cached, cost_usd, exa_searches, exa_fetches,
+                      word_count, notes
+               FROM run_metrics ORDER BY changelog_date"""
+        ).fetchall()
+    finally:
+        con.close()
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    with csv_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(METRICS_COLUMNS)
+        writer.writerows(rows)
+
+
+def safe_rel_path(path: Path, root: Path = ROOT) -> str:
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def apply_update(
+    update: dict[str, Any],
+    metrics: dict[str, Any],
+    db_path: Path,
+    log_path: Path,
+    changelogs_dir: Path,
+    csv_path: Path,
+) -> None:
+    update.setdefault("date", local_date())
+    parsed_date = dt.date.fromisoformat(update["date"])
+    update.setdefault("title", f"{parsed_date:%B} {parsed_date.day}, {parsed_date:%Y}")
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(update["date"])):
+        raise RunUpdateError("date must be YYYY-MM-DD")
+
+    generated_at = str(metrics["completed_at"])
+    agent_name = str(metrics.get("agent_name") or "unknown")
+    changelog_path = changelogs_dir / f"{update['date']}.md"
+    rel_changelog = safe_rel_path(changelog_path)
+    markdown = build_changelog(update, generated_at, agent_name, metrics)
+    changed_json = json.dumps(
+        {
+            "score_updates": update.get("score_updates", []) or [],
+            "status_changes": update.get("status_changes", []) or [],
+        },
+        ensure_ascii=False,
+    )
+    new_models_json = json.dumps(update.get("new_models", []) or [], ensure_ascii=False)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute("PRAGMA foreign_keys = ON")
+        con.execute("BEGIN")
+        as_of = str(update["date"])
+
+        for model in update.get("new_models", []) or []:
+            name = str(model.get("name") or "").strip()
+            if not name:
+                raise RunUpdateError("new model missing name")
+            con.execute(
+                """INSERT INTO models (name, vendor, color, released, params, pricing, notes, first_seen, last_seen)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, date('now'), date('now'))
+                   ON CONFLICT(name) DO UPDATE SET
+                     vendor = excluded.vendor,
+                     color = excluded.color,
+                     released = excluded.released,
+                     params = excluded.params,
+                     pricing = excluded.pricing,
+                     notes = excluded.notes,
+                     last_seen = date('now')""",
+                (
+                    name,
+                    str(model.get("vendor") or "Unknown"),
+                    str(model.get("color") or "#888888"),
+                    str(model.get("released") or ""),
+                    str(model.get("params") or ""),
+                    str(model.get("pricing") or ""),
+                    str(model.get("notes") or ""),
+                ),
+            )
+            con.execute(
+                """INSERT INTO model_scores
+                     (model_id, as_of, intelligence, coding, agents, speed, cost, source_notes)
+                   SELECT id, ?, ?, ?, ?, ?, ?, ? FROM models WHERE name = ?
+                   ON CONFLICT(model_id, as_of) DO UPDATE SET
+                     intelligence = excluded.intelligence,
+                     coding = excluded.coding,
+                     agents = excluded.agents,
+                     speed = excluded.speed,
+                     cost = excluded.cost,
+                     source_notes = excluded.source_notes""",
+                (
+                    as_of,
+                    coerce_score(model.get("intelligence"), "intelligence"),
+                    coerce_score(model.get("coding"), "coding"),
+                    coerce_score(model.get("agents"), "agents"),
+                    coerce_score(model.get("speed"), "speed"),
+                    coerce_score(model.get("cost"), "cost"),
+                    str(model.get("notes") or ""),
+                    name,
+                ),
+            )
+
+        for update_item in update.get("score_updates", []) or []:
+            name = str(update_item.get("name") or "").strip()
+            field = str(update_item.get("field") or "").strip()
+            if field not in {"intelligence", "coding", "agents", "speed", "cost"}:
+                raise RunUpdateError(f"Invalid score field: {field}")
+            scores = latest_scores(con, name)
+            scores[field] = coerce_score(update_item.get("new"), field)
+            source = str(update_item.get("source_url") or "")
+            notes = str(scores.get("source_notes") or "")
+            if source and source not in notes:
+                notes = (notes + "\n" if notes else "") + source
+            con.execute(
+                """INSERT INTO model_scores
+                     (model_id, as_of, intelligence, coding, agents, speed, cost, source_notes)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(model_id, as_of) DO UPDATE SET
+                     intelligence = excluded.intelligence,
+                     coding = excluded.coding,
+                     agents = excluded.agents,
+                     speed = excluded.speed,
+                     cost = excluded.cost,
+                     source_notes = excluded.source_notes""",
+                (
+                    scores["model_id"],
+                    as_of,
+                    scores["intelligence"],
+                    scores["coding"],
+                    scores["agents"],
+                    scores["speed"],
+                    scores["cost"],
+                    notes,
+                ),
+            )
+
+        for item in update.get("status_changes", []) or []:
+            status = str(item.get("to") or "").strip()
+            name = str(item.get("name") or "").strip()
+            if status not in {"active", "superseded", "deprecated"}:
+                raise RunUpdateError(f"Invalid status: {status}")
+            con.execute("UPDATE models SET status = ?, last_seen = date('now') WHERE name = ?", (status, name))
+
+        con.execute(
+            """INSERT INTO changelogs (date, title, path, summary, new_models_json, changed_json)
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON CONFLICT(date) DO UPDATE SET
+                 title = excluded.title,
+                 path = excluded.path,
+                 summary = excluded.summary,
+                 new_models_json = excluded.new_models_json,
+                 changed_json = excluded.changed_json""",
+            (
+                update["date"],
+                str(update.get("title") or update["date"]),
+                rel_changelog,
+                str(update.get("summary") or ""),
+                new_models_json,
+                changed_json,
+            ),
+        )
+        con.execute(
+            """INSERT INTO run_metrics (
+                 changelog_date, started_at, completed_at, duration_sec,
+                 agent_name, agent_runtime, tokens_input, tokens_output, tokens_cached,
+                 cost_usd, exa_searches, exa_fetches, word_count, notes
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(changelog_date) DO UPDATE SET
+                 started_at = excluded.started_at,
+                 completed_at = excluded.completed_at,
+                 duration_sec = excluded.duration_sec,
+                 agent_name = excluded.agent_name,
+                 agent_runtime = excluded.agent_runtime,
+                 tokens_input = excluded.tokens_input,
+                 tokens_output = excluded.tokens_output,
+                 tokens_cached = excluded.tokens_cached,
+                 cost_usd = excluded.cost_usd,
+                 exa_searches = excluded.exa_searches,
+                 exa_fetches = excluded.exa_fetches,
+                 word_count = excluded.word_count,
+                 notes = excluded.notes""",
+            (
+                update["date"],
+                metrics.get("started_at"),
+                metrics.get("completed_at"),
+                metrics.get("duration_sec"),
+                agent_name,
+                AGENT_RUNTIME,
+                metrics.get("tokens_input"),
+                metrics.get("tokens_output"),
+                metrics.get("tokens_cached"),
+                metrics.get("cost_usd"),
+                metrics.get("exa_searches", 0),
+                metrics.get("exa_fetches", 0),
+                metrics.get("word_count"),
+                f"Agent Provider update. Log: {safe_rel_path(log_path)}",
+            ),
+        )
+        con.execute(
+            """INSERT INTO meta (key, value) VALUES ('last_updated', ?)
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value""",
+            (generated_at,),
+        )
+        con.commit()
+    except Exception:
+        con.rollback()
+        raise
+    finally:
+        con.close()
+
+    changelogs_dir.mkdir(parents=True, exist_ok=True)
+    changelog_path.write_text(markdown, encoding="utf-8")
+    export_metrics_csv(db_path, csv_path)
+
+
+def current_state(db_path: Path) -> dict[str, Any]:
+    con = sqlite3.connect(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        last_updated = con.execute("SELECT value FROM meta WHERE key = 'last_updated'").fetchone()
+        models = con.execute("SELECT * FROM v_models_latest ORDER BY vendor, name").fetchall()
+        changelogs = con.execute(
+            """SELECT date, title, summary, new_models_json
+               FROM changelogs ORDER BY date DESC LIMIT 5"""
+        ).fetchall()
+        return {
+            "last_updated": last_updated["value"] if last_updated else None,
+            "models": [dict(row) for row in models],
+            "recent_changelogs": [dict(row) for row in changelogs],
+        }
+    finally:
+        con.close()
+
+
+def usage_metrics(result: Any) -> dict[str, Any]:
+    totals = {"tokens_input": None, "tokens_output": None, "tokens_cached": None, "cost_usd": None}
+    seen: set[int] = set()
+
+    def add_usage(usage: Any) -> None:
+        if not usage:
+            return
+        if isinstance(usage, dict):
+            input_tokens = usage.get("input_tokens", usage.get("prompt_tokens"))
+            output_tokens = usage.get("output_tokens", usage.get("completion_tokens"))
+            cached_tokens = usage.get("cached_tokens")
+            details = usage.get("prompt_tokens_details") or usage.get("input_tokens_details") or {}
+            if cached_tokens is None and isinstance(details, dict):
+                cached_tokens = details.get("cached_tokens")
+        else:
+            input_tokens = getattr(usage, "input_tokens", None) or getattr(usage, "prompt_tokens", None)
+            output_tokens = getattr(usage, "output_tokens", None) or getattr(usage, "completion_tokens", None)
+            cached_tokens = getattr(usage, "cached_tokens", None)
+            details = getattr(usage, "prompt_tokens_details", None) or getattr(usage, "input_tokens_details", None)
+            if cached_tokens is None and details is not None:
+                cached_tokens = getattr(details, "cached_tokens", None)
+        for key, value in (
+            ("tokens_input", input_tokens),
+            ("tokens_output", output_tokens),
+            ("tokens_cached", cached_tokens),
+        ):
+            if value is not None:
+                totals[key] = (totals[key] or 0) + int(value)
+
+    def walk(obj: Any, depth: int = 0) -> None:
+        if obj is None or depth > 5:
+            return
+        obj_id = id(obj)
+        if obj_id in seen:
+            return
+        seen.add(obj_id)
+        if isinstance(obj, dict):
+            if "usage" in obj:
+                add_usage(obj["usage"])
+            for key in ("raw_responses", "responses", "items", "data"):
+                walk(obj.get(key), depth + 1)
+        elif isinstance(obj, (list, tuple)):
+            for item in obj:
+                walk(item, depth + 1)
+        else:
+            if hasattr(obj, "usage"):
+                add_usage(getattr(obj, "usage"))
+            for key in ("raw_responses", "responses", "items", "data"):
+                if hasattr(obj, key):
+                    walk(getattr(obj, key), depth + 1)
+
+    walk(result)
+    return totals
+
+
+async def run_agent_once(model_name: str, prompt: str, exa_key: str, log_path: Path) -> tuple[str, dict[str, Any]]:
+    from agents import Agent, AsyncOpenAI, OpenAIChatCompletionsModel, Runner, set_tracing_disabled
+
+    bundle = load_provider_bundle()
+    set_tracing_disabled(disabled=True)
+    client = AsyncOpenAI(
+        api_key=bundle.secrets.api_key,
+        base_url=provider_api_base(bundle.config.base_url),
+        default_headers=bundle.config.request_headers or None,
+    )
+    model = OpenAIChatCompletionsModel(model=model_name, openai_client=client)
+
+    mcp_servers = []
+    server_cm = None
+    if exa_key:
+        try:
+            from agents.mcp import MCPServerStreamableHttp
+
+            server_cm = MCPServerStreamableHttp(
+                name="exa",
+                params={
+                    "url": EXA_MCP_URL,
+                    "headers": {"x-api-key": exa_key},
+                },
+                cache_tools_list=True,
+                require_approval="never",
+            )
+        except Exception as exc:
+            write_log(log_path, f"exa_mcp_setup_error={type(exc).__name__}: {exc}")
+
+    def make_agent(mcp_servers: list[Any] | None = None) -> Any:
+        return Agent(
+            name="LLM-Dash update agent",
+            instructions=(
+                "Follow the supplied SKILL.md contract for research and scoring. "
+                "Return only valid JSON matching the requested diff schema. "
+                "Do not write files or mutate the database yourself."
+            ),
+            model=model,
+            mcp_servers=mcp_servers or [],
+        )
+
+    if server_cm is not None:
+        async with server_cm as server:
+            agent = make_agent([server])
+            result = await Runner.run(agent, prompt)
+    else:
+        agent = make_agent()
+        result = await Runner.run(agent, prompt)
+
+    return str(result.final_output), usage_metrics(result)
+
+
+async def generate_diff(log_path: Path) -> tuple[dict[str, Any], dict[str, Any], str]:
+    bundle = load_provider_bundle()
+    if not bundle.has_provider:
+        raise ConfigError("Agent Provider requires base_url, api_key, and default_model")
+    state = current_state(DB_PATH)
+    skill = SKILL_PATH.read_text(encoding="utf-8")
+    exa_key = load_exa_api_key()
+    prompt = "\n\n".join(
+        [
+            "Produce today's LLM-Dash update diff as JSON only.",
+            f"Today: {local_date()}",
+            "Current dashboard state JSON:",
+            json.dumps(state, ensure_ascii=False),
+            "SKILL.md contract:",
+            skill,
+            "Required JSON keys: date, title, summary, new_models, score_updates, status_changes, changelog_markdown.",
+        ]
+    )
+
+    errors: list[str] = []
+    for model_name in [bundle.config.default_model, bundle.config.backup_model]:
+        if not model_name:
+            continue
+        try:
+            write_log(
+                log_path,
+                "agent_start "
+                + json.dumps(
+                    {
+                        "model": model_name,
+                        "base_url": bundle.config.base_url,
+                        "headers": redact_headers(bundle.config.request_headers),
+                        "exa_mcp": bool(exa_key),
+                    }
+                ),
+            )
+            output, usage = await run_agent_once(model_name, prompt, exa_key, log_path)
+            return parse_json_output(output), usage, model_name
+        except Exception as exc:
+            errors.append(f"{model_name}: {type(exc).__name__}: {exc}")
+            write_log(log_path, f"agent_error model={model_name} error={type(exc).__name__}: {exc}")
+    raise RunUpdateError("All configured models failed: " + " | ".join(errors))
+
+
+def dry_run(log_path: Path) -> None:
+    bundle = load_provider_bundle()
+    if not bundle.has_provider:
+        raise ConfigError("Agent Provider requires base_url, api_key, and default_model")
+    try:
+        import agents  # noqa: F401
+    except Exception as exc:
+        raise RunUpdateError(f"openai-agents import failed: {exc}") from exc
+    safe = {
+        "base_url": bundle.config.base_url,
+        "chat_endpoint": bundle.chat_endpoint,
+        "models_endpoint": bundle.models_endpoint,
+        "default_model": bundle.config.default_model,
+        "backup_model": bundle.config.backup_model,
+        "provider_key": redact_value(bundle.secrets.api_key),
+        "headers": redact_headers(build_auth_headers(bundle)),
+        "exa_configured": bool(load_exa_api_key()),
+    }
+    write_log(log_path, "dry_run " + json.dumps(safe))
+    print(json.dumps({"ok": True, **safe}, indent=2))
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--dry-run", action="store_true", help="validate config without DB writes")
+    parser.add_argument("--db-path", default=str(DB_PATH), help="SQLite database path")
+    parser.add_argument("--log-path", default="", help="log file path")
+    parser.add_argument("--diff-json", default="", help="apply an existing diff JSON file instead of calling the model")
+    args = parser.parse_args()
+
+    log_path = Path(args.log_path) if args.log_path else default_log_path()
+    db_path = Path(args.db_path)
+    changelogs_dir = CHANGELOGS_DIR if db_path.resolve() == DB_PATH.resolve() else db_path.parent / "changelogs"
+    csv_path = ROOT / "data" / "run_metrics.csv" if db_path.resolve() == DB_PATH.resolve() else db_path.parent / "run_metrics.csv"
+    started = utc_now()
+    start_time = time.monotonic()
+    write_log(log_path, "run_start")
+    try:
+        if args.dry_run:
+            dry_run(log_path)
+            write_log(log_path, "run_complete dry_run=true")
+            return 0
+
+        if not db_path.exists():
+            raise RunUpdateError(f"Missing database: {db_path}")
+
+        if args.diff_json:
+            update = json.loads(Path(args.diff_json).read_text(encoding="utf-8"))
+            usage = {"tokens_input": None, "tokens_output": None, "tokens_cached": None, "cost_usd": None}
+            agent_name = "diff-json"
+        else:
+            update, usage, agent_name = asyncio.run(generate_diff(log_path))
+
+        completed = utc_now()
+        metrics = {
+            "started_at": iso_z(started),
+            "completed_at": iso_z(completed),
+            "duration_sec": round(time.monotonic() - start_time, 3),
+            "agent_name": agent_name,
+            "exa_searches": 0,
+            "exa_fetches": 0,
+            **usage,
+        }
+        apply_update(update, metrics, db_path, log_path, changelogs_dir, csv_path)
+        write_log(log_path, "run_complete")
+        print(json.dumps({"ok": True, "date": update.get("date"), "log_path": str(log_path)}, indent=2))
+        return 0
+    except (ConfigError, RunUpdateError, sqlite3.Error, json.JSONDecodeError) as exc:
+        write_log(log_path, f"run_error {type(exc).__name__}: {exc}")
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        write_log(log_path, "run_error " + traceback.format_exc().replace("\n", " | "))
+        print(f"error: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

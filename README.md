@@ -4,9 +4,11 @@ A no-build, click-to-launch local dashboard for tracking LLM benchmarks and
 daily changelogs. Voidware aesthetic, JetBrains Mono everywhere, dark-only.
 
 The app is a pure static HTML/CSS/JS bundle served by a tiny FastAPI server.
-Daily research and changelog writing is performed by **any AI agent** (Claude
-Code, Codex, Gemini CLI, …) following the agent-agnostic procedure in
-[skill/SKILL.md](skill/SKILL.md). The UI is read-only.
+Daily research and changelog writing can run through the configured **Agent
+Provider** (BYOK OpenAI-compatible endpoint via the OpenAI Agents SDK) or
+through any CLI agent (Claude Code, Codex, Gemini CLI, …) following
+[skill/SKILL.md](skill/SKILL.md). The UI is still read-only until the Phase 6.5
+controls land.
 
 ## What this is
 
@@ -20,11 +22,10 @@ Code, Codex, Gemini CLI, …) following the agent-agnostic procedure in
 - **Changelogs live on disk.** Every update produces `changelogs/YYYY-MM-DD.md`
   with a YAML frontmatter header and a required `## Run Metadata` footer
   (tokens, cost, duration, word count). Append-only — never overwritten.
-- **Daily updates via any AI agent.** A Claude Code `/schedule` trigger can
-  fire once a day with the prompt "follow skill/SKILL.md." On demand, click
-  **Refresh** in the UI — it copies a ready-to-paste prompt to your clipboard
-  and offers to open a terminal. Paste into `claude`, `codex`, `gemini`,
-  whatever.
+- **Daily updates via an Agent Provider or any CLI agent.** The backend now has
+  secret-safe BYOK provider APIs and an OpenAI Agents SDK runner. Until the
+  Phase 6.5 UI is wired, click **Refresh** to copy a ready-to-paste prompt and
+  run it in `claude`, `codex`, `gemini`, whatever.
 - **CSV exports.** Download the filtered models table; download
   `run_metrics.csv` from the Stats page.
 - **Stats dashboard.** Dedicated page for cost / token / duration totals,
@@ -43,7 +44,8 @@ run.bat           # Windows (double-click or from a cmd shell)
 Both launchers:
 
 1. Create a repo-local `.venv` if missing (nothing touches your system Python).
-2. Install `fastapi` + `uvicorn` inside that venv.
+2. Install the FastAPI server, Agent Provider, keyring, and HTTP dependencies
+   inside that venv.
 3. Start `uvicorn server:app` on `127.0.0.1:8787` (override with
    `LLM_DASH_PORT`).
 4. Open the URL in your default browser once the server responds.
@@ -83,10 +85,24 @@ codex  (Get-Clipboard)
 
 When the agent finishes, refresh the browser page — no live polling (yet).
 
+## Agent Provider backend
+
+M6 adds the backend API for BYOK providers. `POST /api/provider` saves
+`base_url`, `api_key`, default/backup models, optional model-list override, and
+request headers. Secrets go to the OS keychain first, then
+`~/.shxdow/auth.json`; public config goes to
+`~/.shxdow/config/shxdow.llmdash.json`. `GET /api/provider` never returns raw
+keys.
+
+`scripts/run_update.py` runs the update through `openai-agents==0.14.6`.
+`POST /api/run-update` starts it in the background and
+`GET /api/run-update/{id}` polls state and a sanitized log tail.
+
 ## Scheduling daily updates
 
-The recommended automated path is Claude Code's `/schedule` slash command.
-Full setup (prompt text, cron cadence, dry-run checklist) lives in
+The old documented path is Claude Code's `/schedule` slash command. It remains
+as a manual CLI escape hatch, but Phase 7 is replacing it with an OS-level job
+that invokes the Agent Provider runner. Historical setup notes live in
 [docs/scheduling.md](docs/scheduling.md). Short version:
 
 - Cadence: `0 9 * * *` local time.
@@ -102,7 +118,7 @@ LLM-Dash/
 ├── AGENTS.md                    # pointer for any AI agent (same)
 ├── TODO.md
 ├── LOGBOOK.md
-├── requirements.txt             # fastapi, uvicorn
+├── requirements.txt             # FastAPI, uvicorn, keyring, httpx, Agents SDK
 ├── server.py                    # FastAPI app (static mount + /api/* routes)
 ├── run.sh                       # POSIX launcher (creates .venv, starts server)
 ├── run.bat                      # Windows launcher (same)
@@ -123,6 +139,8 @@ LLM-Dash/
 ├── changelogs/                  # YYYY-MM-DD.md files, append-only
 └── scripts/
     ├── schema.sql
+    ├── config.py                # Agent Provider config + credentials
+    ├── run_update.py            # OpenAI Agents SDK update runner
     ├── init_db.py               # seed DB from the 34-model dataset
     └── export_metrics_csv.py    # regenerate run_metrics.csv from SQLite
 ```

@@ -1,0 +1,349 @@
+#!/usr/bin/env python3
+"""LLM-Dash Agent Provider config and credential helpers."""
+
+from __future__ import annotations
+
+import json
+import os
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+from urllib.parse import urlparse
+
+APP_NAME = "llmdash"
+KEYRING_SERVICE = "shxdow.llmdash"
+PROVIDER_KEY_NAME = "LLM_DASH_PROVIDER_API_KEY"
+EXA_KEY_NAME = "EXA_API_KEY"
+CONFIG_ENV_PREFIX = "LLM_DASH_"
+
+PROVIDER_BASE_URL_ENVS = ("LLM_DASH_BASE_URL", "LLM_DASH_PROVIDER_BASE_URL", "BASE_URL")
+PROVIDER_API_KEY_ENVS = ("LLM_DASH_API_KEY", "LLM_DASH_PROVIDER_API_KEY", "API_KEY")
+MODELS_OVERRIDE_URL_ENVS = ("LLM_DASH_MODELS_OVERRIDE_URL", "MODELS_OVERRIDE_URL")
+DEFAULT_MODEL_ENVS = ("LLM_DASH_DEFAULT_MODEL", "DEFAULT_MODEL")
+BACKUP_MODEL_ENVS = ("LLM_DASH_BACKUP_MODEL", "BACKUP_MODEL")
+REQUEST_HEADERS_ENV = "LLM_DASH_REQUEST_HEADERS_JSON"
+EXA_API_KEY_ENVS = ("EXA_API_KEY", "LLM_DASH_EXA_API_KEY")
+
+SENSITIVE_HEADER_PARTS = ("authorization", "api-key", "apikey", "x-api-key", "token", "secret", "key")
+
+
+class ConfigError(ValueError):
+    pass
+
+
+@dataclass(frozen=True)
+class ProviderConfig:
+    base_url: str = ""
+    models_override_url: str = ""
+    default_model: str = ""
+    backup_model: str = ""
+    request_headers: dict[str, str] | None = None
+
+
+@dataclass(frozen=True)
+class ProviderSecrets:
+    api_key: str = ""
+
+
+@dataclass(frozen=True)
+class ProviderBundle:
+    config: ProviderConfig
+    secrets: ProviderSecrets
+
+    @property
+    def has_provider(self) -> bool:
+        return bool(self.config.base_url and self.config.default_model and self.secrets.api_key)
+
+    @property
+    def chat_endpoint(self) -> str:
+        return chat_endpoint(self.config.base_url) if self.config.base_url else ""
+
+    @property
+    def models_endpoint(self) -> str:
+        base = self.config.models_override_url or self.config.base_url
+        return models_endpoint(base) if base else ""
+
+
+def shxdow_root() -> Path:
+    return Path.home() / ".shxdow"
+
+
+def auth_path() -> Path:
+    return shxdow_root() / "auth.json"
+
+
+def config_path() -> Path:
+    return shxdow_root() / "config" / "shxdow.llmdash.json"
+
+
+def _read_json(path: Path) -> dict[str, Any]:
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except FileNotFoundError:
+        return {}
+    except json.JSONDecodeError as exc:
+        raise ConfigError(f"Invalid JSON in {path}: {exc}") from exc
+
+
+def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent), text=True)
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, sort_keys=True)
+            f.write("\n")
+        tmp.replace(path)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+
+
+def _env_first(names: tuple[str, ...]) -> str:
+    for name in names:
+        value = os.environ.get(name)
+        if value:
+            return value.strip()
+    return ""
+
+
+def _load_config_file() -> dict[str, Any]:
+    data = _read_json(config_path())
+    if "provider" in data:
+        return data
+    if APP_NAME in data and isinstance(data[APP_NAME], dict):
+        return data[APP_NAME]
+    return data
+
+
+def _load_auth_file() -> dict[str, Any]:
+    data = _read_json(auth_path())
+    credentials = data.get("credentials")
+    return credentials if isinstance(credentials, dict) else {}
+
+
+def _credential_from_auth_file(name: str) -> str:
+    item = _load_auth_file().get(name)
+    if isinstance(item, dict):
+        return str(item.get("secret") or "")
+    if isinstance(item, str):
+        return item
+    return ""
+
+
+def _keyring_get(name: str) -> str:
+    try:
+        import keyring
+    except Exception:
+        return ""
+    try:
+        return keyring.get_password(KEYRING_SERVICE, name) or ""
+    except Exception:
+        return ""
+
+
+def _keyring_set_verified(name: str, secret: str) -> bool:
+    try:
+        import keyring
+    except Exception:
+        return False
+    try:
+        keyring.set_password(KEYRING_SERVICE, name, secret)
+        return keyring.get_password(KEYRING_SERVICE, name) == secret
+    except Exception:
+        return False
+
+
+def _save_auth_file_secret(name: str, secret: str, meta: dict[str, Any] | None = None) -> None:
+    data = _read_json(auth_path()) or {"version": 2, "credentials": {}}
+    data["version"] = 2
+    credentials = data.setdefault("credentials", {})
+    item: dict[str, Any] = {"name": name, "secret": secret}
+    if meta:
+        item["meta"] = meta
+    credentials[name] = item
+    _atomic_write_json(auth_path(), data)
+
+
+def _read_secret(envs: tuple[str, ...], key_name: str) -> str:
+    return _env_first(envs) or _keyring_get(key_name) or _credential_from_auth_file(key_name)
+
+
+def _normalize_header_map(raw: Any) -> dict[str, str]:
+    if raw in (None, ""):
+        return {}
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ConfigError(f"{REQUEST_HEADERS_ENV} must be valid JSON") from exc
+    if not isinstance(raw, dict):
+        raise ConfigError("request_headers must be an object")
+    headers: dict[str, str] = {}
+    for key, value in raw.items():
+        name = str(key).strip()
+        if not name:
+            continue
+        if "\n" in name or "\r" in name:
+            raise ConfigError("request header names cannot contain newlines")
+        val = str(value).strip()
+        if "\n" in val or "\r" in val:
+            raise ConfigError("request header values cannot contain newlines")
+        headers[name] = val
+    return headers
+
+
+def normalize_base_url(value: str, *, field: str = "base_url") -> str:
+    url = str(value or "").strip().rstrip("/")
+    if not url:
+        return ""
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ConfigError(f"{field} must be an absolute http(s) URL")
+    if parsed.path.rstrip("/").endswith("/v1"):
+        raise ConfigError(f"{field} must not include /v1")
+    if parsed.params or parsed.query or parsed.fragment:
+        raise ConfigError(f"{field} must not include params, query, or fragment")
+    return url
+
+
+def chat_endpoint(base_url: str) -> str:
+    return f"{normalize_base_url(base_url)}/v1/chat/completions"
+
+
+def models_endpoint(base_url: str) -> str:
+    return f"{normalize_base_url(base_url)}/v1/models"
+
+
+def provider_api_base(base_url: str) -> str:
+    return f"{normalize_base_url(base_url)}/v1"
+
+
+def is_sensitive_header(name: str) -> bool:
+    lowered = name.lower()
+    return any(part in lowered for part in SENSITIVE_HEADER_PARTS)
+
+
+def redact_value(value: str, *, keep: int = 4) -> str:
+    if not value:
+        return ""
+    if len(value) <= keep:
+        return "***"
+    return f"***{value[-keep:]}"
+
+
+def redact_headers(headers: dict[str, str] | None) -> dict[str, str]:
+    return {
+        key: (redact_value(value) if is_sensitive_header(key) else value)
+        for key, value in (headers or {}).items()
+    }
+
+
+def build_auth_headers(bundle: ProviderBundle) -> dict[str, str]:
+    headers = dict(bundle.config.request_headers or {})
+    if not any(is_sensitive_header(name) for name in headers):
+        headers["Authorization"] = f"Bearer {bundle.secrets.api_key}"
+    return headers
+
+
+def public_provider_state() -> dict[str, Any]:
+    bundle = load_provider_bundle()
+    return {
+        "has_provider": bundle.has_provider,
+        "base_url": bundle.config.base_url,
+        "chat_endpoint": bundle.chat_endpoint,
+        "models_endpoint": bundle.models_endpoint,
+        "default_model": bundle.config.default_model,
+        "backup_model": bundle.config.backup_model,
+        "exa_configured": bool(load_exa_api_key()),
+    }
+
+
+def load_provider_config() -> ProviderConfig:
+    data = _load_config_file()
+    provider = data.get("provider", data)
+    if not isinstance(provider, dict):
+        provider = {}
+
+    base_url = _env_first(PROVIDER_BASE_URL_ENVS) or str(provider.get("base_url") or "")
+    models_override_url = _env_first(MODELS_OVERRIDE_URL_ENVS) or str(provider.get("models_override_url") or "")
+    default_model = _env_first(DEFAULT_MODEL_ENVS) or str(provider.get("default_model") or "")
+    backup_model = _env_first(BACKUP_MODEL_ENVS) or str(provider.get("backup_model") or "")
+    request_headers = provider.get("request_headers") or {}
+    if os.environ.get(REQUEST_HEADERS_ENV):
+        request_headers = os.environ[REQUEST_HEADERS_ENV]
+
+    return ProviderConfig(
+        base_url=normalize_base_url(base_url) if base_url else "",
+        models_override_url=normalize_base_url(models_override_url, field="models_override_url")
+        if models_override_url
+        else "",
+        default_model=default_model.strip(),
+        backup_model=backup_model.strip(),
+        request_headers=_normalize_header_map(request_headers),
+    )
+
+
+def load_provider_bundle() -> ProviderBundle:
+    return ProviderBundle(
+        config=load_provider_config(),
+        secrets=ProviderSecrets(api_key=_read_secret(PROVIDER_API_KEY_ENVS, PROVIDER_KEY_NAME)),
+    )
+
+
+def save_provider(
+    *,
+    base_url: str,
+    api_key: str | None = None,
+    models_override_url: str = "",
+    default_model: str = "",
+    backup_model: str = "",
+    request_headers: dict[str, str] | None = None,
+) -> ProviderBundle:
+    normalized = ProviderConfig(
+        base_url=normalize_base_url(base_url),
+        models_override_url=normalize_base_url(models_override_url, field="models_override_url")
+        if models_override_url
+        else "",
+        default_model=str(default_model or "").strip(),
+        backup_model=str(backup_model or "").strip(),
+        request_headers=_normalize_header_map(request_headers or {}),
+    )
+    data = _load_config_file()
+    data["version"] = 1
+    data["app"] = APP_NAME
+    data["provider"] = {
+        "base_url": normalized.base_url,
+        "models_override_url": normalized.models_override_url,
+        "default_model": normalized.default_model,
+        "backup_model": normalized.backup_model,
+        "request_headers": normalized.request_headers or {},
+    }
+    _atomic_write_json(config_path(), data)
+
+    if api_key:
+        save_provider_api_key(api_key)
+    return load_provider_bundle()
+
+
+def save_provider_api_key(api_key: str) -> None:
+    secret = str(api_key or "").strip()
+    if not secret:
+        raise ConfigError("api_key is required")
+    if not _keyring_set_verified(PROVIDER_KEY_NAME, secret):
+        _save_auth_file_secret(PROVIDER_KEY_NAME, secret, {"app": APP_NAME, "kind": "agent-provider"})
+
+
+def load_exa_api_key() -> str:
+    return _read_secret(EXA_API_KEY_ENVS, EXA_KEY_NAME)
+
+
+def save_exa_api_key(api_key: str) -> None:
+    secret = str(api_key or "").strip()
+    if not secret:
+        raise ConfigError("api_key is required")
+    if not _keyring_set_verified(EXA_KEY_NAME, secret):
+        _save_auth_file_secret(EXA_KEY_NAME, secret, {"app": APP_NAME, "kind": "exa"})

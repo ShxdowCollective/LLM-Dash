@@ -223,8 +223,8 @@ Rules:
   guesses.
 - Identify yourself honestly. `agent` is the specific model
   (`claude-opus-4-7`, `gpt-5-4`, `gemini-3-pro`, `qwen3-6-plus`, …).
-  `agent_runtime` is the CLI/harness (`claude-code`, `codex-cli`,
-  `gemini-cli`, `cline`, …).
+  `agent_runtime` is the legacy metadata field for the CLI/SDK harness
+  (`claude-code`, `codex-cli`, `gemini-cli`, `cline`, `openai-agents`, …).
 
 ## 7. Record run metrics to SQLite
 

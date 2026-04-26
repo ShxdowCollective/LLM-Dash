@@ -23,8 +23,8 @@ Triggers that mean "follow SKILL.md":
   load-bearing.
 - Every run writes a new `changelogs/YYYY-MM-DD.md`, inserts a `run_metrics`
   row, regenerates `data/run_metrics.csv`, and bumps `meta.last_updated`.
-- Every run records tokens and duration. Record `cost_usd` when your runtime
-  exposes it (Claude Code `/cost`, or compute from `message.usage` +
+- Every run records tokens and duration. Record `cost_usd` when your CLI/runtime
+  harness exposes it (Claude Code `/cost`, or compute from `message.usage` +
   per-model pricing). **No budget cap** — but everything is logged so
   regressions are obvious on the Stats page.
 - Metadata goes **both** in the `## Run Metadata` footer of the `.md` **and**

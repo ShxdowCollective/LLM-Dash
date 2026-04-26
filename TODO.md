@@ -12,7 +12,7 @@ Rough execution order. Newest decisions at the top.
 - [x] Decision: daily scheduling = Claude Code `/schedule` skill only
 - [x] Decision: no cost cap; full token/cost/duration logging instead
 - [x] Decision: Refresh button = clipboard prompt + Open Terminal (UI stays read-only)
-- [x] Decision: Refresh modal prompt text = agent-neutral; runtime examples live in hint copy only
+- [x] Decision: Refresh modal prompt text = agent-neutral; CLI examples live in hint copy only
 - [x] Decision: Windows desktop shortcut = document only; do not ship a repo `.lnk`
 - [x] Decision: first-run bootstrap = `server.py` auto-runs `scripts/init_db.py`; UI shows a spinner until ready
 
@@ -124,43 +124,43 @@ Planning:
 ### Milestones
 
 **M6.1 — Rename runtime → Agent Provider**
-- [ ] Sweep README, SKILL.md, `docs/plans/IMPLEMENTATION_PLAN.md`,
+- [x] Sweep README, SKILL.md, `docs/plans/IMPLEMENTATION_PLAN.md`,
   `docs/scheduling.md`, all UI copy. Future logbook entries use the new
   term; old entries stay as-is.
-- [ ] Update `/api/prompt` body + any response field names that leak the
+- [x] Update `/api/prompt` body + any response field names that leak the
   old "runtime" label.
 
 **M6.2 — Config + credential layer (backend)**
-- [ ] `scripts/config.py` — unified reader/writer honoring the precedence
+- [x] `scripts/config.py` — unified reader/writer honoring the precedence
   order above.
-- [ ] Keychain integration via the `keyring` Python package; graceful
+- [x] Keychain integration via the `keyring` Python package; graceful
   degrade to auth.json when the backend is unavailable (headless Linux).
-- [ ] Voidware helpers for `~/.shxdow/auth.json` +
+- [x] Voidware helpers for `~/.shxdow/auth.json` +
   `~/.shxdow/config/shxdow.llmdash.json`.
-- [ ] `API_KEY` never appears in any API response, log line, or on-disk
+- [x] `API_KEY` never appears in any API response, log line, or on-disk
   trace outside the credential store.
 
 **M6.3 — Agents SDK plumbing (backend)**
-- [ ] Add `openai-agents` to `requirements.txt` with a pinned version.
-- [ ] `scripts/run_update.py` — executes SKILL.md end-to-end via the Agents
+- [x] Add `openai-agents` to `requirements.txt` with a pinned version.
+- [x] `scripts/run_update.py` — executes SKILL.md end-to-end via the Agents
   SDK. Default model first, backup model on failure, optional headers
   applied. Emits the same side effects as a manual CLI agent run (new
   `changelogs/YYYY-MM-DD.md`, `run_metrics` row, CSV regen, `meta.last_updated`).
-- [ ] Wire Exa as a Remote MCP server in the Agents SDK session config.
-- [ ] Per-run log file under `logs/` for debugging.
+- [x] Wire Exa as a Remote MCP server in the Agents SDK session config.
+- [x] Per-run log file under `logs/` for debugging.
 
 **M6.4 — API routes**
-- [ ] `GET /api/provider` → `{ has_provider, base_url, chat_endpoint,
+- [x] `GET /api/provider` → `{ has_provider, base_url, chat_endpoint,
   models_endpoint, default_model, backup_model, exa_configured }` (no
   secrets, ever).
-- [ ] `POST /api/provider` — write config per voidware spec.
-- [ ] `GET /api/provider/test-connection` — `GET` models endpoint; pass iff
+- [x] `POST /api/provider` — write config per voidware spec.
+- [x] `GET /api/provider/test-connection` — `GET` models endpoint; pass iff
   200 OK.
-- [ ] `GET /api/provider/models` — proxy + normalize for the wizard.
-- [ ] `POST /api/provider/test-model` — short-prompt roundtrip for
+- [x] `GET /api/provider/models` — proxy + normalize for the wizard.
+- [x] `POST /api/provider/test-model` — short-prompt roundtrip for
   `{default, backup}`.
-- [ ] `POST /api/exa` — save Exa API key per voidware spec.
-- [ ] `POST /api/run-update` + `GET /api/run-update/{id}` — kick off + poll
+- [x] `POST /api/exa` — save Exa API key per voidware spec.
+- [x] `POST /api/run-update` + `GET /api/run-update/{id}` — kick off + poll
   a background `run_update.py` job.
 
 **M6.5 — UI integration**
@@ -171,7 +171,7 @@ Planning:
   the agent-neutral prompt, copy button, "Open Terminal", and the paste
   hint. This is the manual-CLI escape hatch, deliberately separate from
   Refresh.
-- [ ] Replace any remaining "runtime" label in the UI.
+- [x] Replace any remaining "runtime" label in the UI.
 
 **M6.6 — Provider preset catalog**
 - [ ] JSON list of popular providers (OpenAI, Anthropic-OpenAI-compat,

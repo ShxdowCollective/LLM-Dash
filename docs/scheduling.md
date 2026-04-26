@@ -1,8 +1,9 @@
-# Daily updates via Claude Code `/schedule`
+# Legacy CLI scheduling via Claude Code `/schedule`
 
 LLM-Dash's daily refresh runs through **any** AI agent, but the supported
-automated path is Claude Code's `/schedule` slash command. The repo can't
-version-control a `/schedule` trigger (it lives in your local Claude Code
+first-party path is now the BYOK **Agent Provider** runner added in Phase 6.
+This page documents the older Claude Code `/schedule` escape hatch. The repo
+can't version-control a `/schedule` trigger (it lives in your local Claude Code
 settings), so this doc pins the prompt and cadence you register yourself.
 
 ## Prerequisites
@@ -53,6 +54,8 @@ curl -s http://127.0.0.1:8787/api/prompt | python3 -c "import json,sys; print(js
    - fresh row in `run_metrics` (and mirrored in `data/run_metrics.csv`)
    - `meta.last_updated` moved forward
 4. If that passes, the `/schedule` trigger will do the same thing unattended.
+   For new installs, prefer the Phase 7 OS-level scheduled job once it lands;
+   it invokes `scripts/run_update.py` through your configured Agent Provider.
 
 ## Changing cadence or prompt
 
@@ -63,7 +66,8 @@ slate, `/schedule` also exposes a delete action.
 ## What the repo owns vs. what you own
 
 - **Repo owns:** `skill/SKILL.md` (the procedure), `/api/prompt` (the prompt
-  text), `run.sh` / `run.bat` (local launch).
+  text), Agent Provider config APIs, `scripts/run_update.py`, `run.sh` /
+  `run.bat` (local launch).
 - **You own:** the `/schedule` trigger in your Claude Code install, plus the
   absolute repo path it points at.
 

@@ -321,8 +321,8 @@
 
   function formatAgentLabel(row) {
     const agent = row.agent_name || "unknown";
-    const runtime = row.agent_runtime || "unknown";
-    return agent + " · " + runtime;
+    const provider = row.agent_runtime || "unknown";
+    return agent + " · " + provider;
   }
 
   function normalizeAssetPath(path) {
@@ -1507,7 +1507,7 @@
       h("section", { class: "stats-section" }, [
         h("div", { class: "section-head" }, [
           h("h2", null, "Totals"),
-          h("p", null, "Raw spend, tokens, runtime, and words across the filtered runs."),
+          h("p", null, "Raw spend, tokens, Agent Provider, and words across the filtered runs."),
         ]),
         h("div", { class: "stats-grid" }, [
           statCard("Runs", formatNumber(totals.runs, 0), "Changelogs with recorded run metadata"),
@@ -1526,7 +1526,7 @@
         ]),
         h("div", { class: "stats-grid" }, [
           statCard("Cost / run", formatCurrency(averages.cost), "Average across rows with known cost"),
-          statCard("Duration / run", formatDuration(averages.duration), "Average wall-clock runtime"),
+          statCard("Duration / run", formatDuration(averages.duration), "Average wall-clock duration"),
           statCard("Input / run", formatCompactNumber(averages.input), averages.input !== null ? FULL_NUMBER.format(Math.round(averages.input)) : "—"),
           statCard("Output / run", formatCompactNumber(averages.output), averages.output !== null ? FULL_NUMBER.format(Math.round(averages.output)) : "—"),
           statCard("Words / run", formatNumber(averages.words, 0), "Body word count only"),
@@ -1560,7 +1560,7 @@
       h("section", { class: "stats-section" }, [
         h("div", { class: "section-head" }, [
           h("h2", null, "Per-Agent Breakdown"),
-          h("p", null, "Grouped by agent model + runtime so comparisons stay honest."),
+          h("p", null, "Grouped by agent model + Agent Provider so comparisons stay honest."),
         ]),
         renderAgentBreakdown(rows),
       ]),

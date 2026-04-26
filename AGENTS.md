@@ -40,7 +40,7 @@ yourself honestly:
 | field | value examples |
 |---|---|
 | `agent` | `claude-opus-4-7`, `claude-sonnet-4-6`, `gpt-5-4`, `gemini-3-pro`, `qwen3-6-plus` |
-| `agent_runtime` | `claude-code`, `codex-cli`, `gemini-cli`, `cline`, `cursor` |
+| `agent_runtime` | `claude-code`, `codex-cli`, `gemini-cli`, `cline`, `cursor`, `openai-agents` |
 
-The Stats dashboard aggregates by agent + runtime so comparisons stay
-meaningful. Don't spoof.
+The Stats dashboard shows this as agent + Agent Provider. `agent_runtime` is
+the legacy storage/frontmatter field for the CLI or SDK harness. Don't spoof.
