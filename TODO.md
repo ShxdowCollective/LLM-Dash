@@ -116,6 +116,11 @@ Decisions locked:
 - **Exa** attaches as a **Remote MCP server** registered with the Agents
   SDK. No local Exa client lib.
 
+Planning:
+
+- [x] M6.1-M6.4 implementation plan written:
+  [docs/plans/M6_AGENT_PROVIDER_BACKEND_PLAN.md](docs/plans/M6_AGENT_PROVIDER_BACKEND_PLAN.md).
+
 ### Milestones
 
 **M6.1 — Rename runtime → Agent Provider**
