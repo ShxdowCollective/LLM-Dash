@@ -50,6 +50,8 @@
   });
   const BOOTSTRAP_POLL_MS = 1000;
   const RUN_UPDATE_POLL_MS = 3000;
+  const WIZARD_STEPS = ["Provider", "Models", "Test", "Exa", "Schedule", "Summary"];
+  const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   const PASTE_HINT = [
     'macOS: claude "$(pbpaste)"  |  codex "$(pbpaste)"  |  gemini "$(pbpaste)"',
     'Linux: claude "$(xclip -selection clipboard -o)"  or  claude "$(wl-paste)"',
@@ -107,6 +109,64 @@
       endpoint_mode: "append_v1",
       exa_configured: false,
       _fetching: false,
+    },
+    providerPresets: {
+      loaded: false,
+      loading: false,
+      providers: [],
+      endpoint_modes: {},
+    },
+    schedule: {
+      loaded: false,
+      loading: false,
+      enabled: false,
+      cadence: "off",
+      time_local: "09:00",
+      day_of_week: 1,
+      day_of_month: 1,
+      utc_echo: "17:00 UTC",
+      platform: "",
+      manager: "",
+      job_id: "",
+      log_path: "",
+      error: "",
+    },
+    wizard: {
+      open: false,
+      step: 0,
+      mode: "setup",
+      presetId: "",
+      preset: null,
+      baseUrl: "",
+      apiKey: "",
+      modelsOverrideUrl: "",
+      endpointMode: "append_v1",
+      requestHeaders: [],
+      advancedOpen: false,
+      connectionTestState: "idle",
+      connectionTestError: "",
+      connectionTestStatus: "",
+      connectionTestSkipped: false,
+      availableModels: [],
+      modelsLoading: false,
+      modelsError: "",
+      defaultModel: "",
+      backupModel: "",
+      customDefaultConfirmed: false,
+      customBackupConfirmed: false,
+      modelTestState: "idle",
+      modelTestResults: { default: null, backup: null },
+      exaKey: "",
+      exaSkipped: false,
+      exaAlreadyConfigured: false,
+      scheduleCadence: "off",
+      scheduleDayOfWeek: 1,
+      scheduleDayOfMonth: 1,
+      scheduleTimeLocal: "09:00",
+      scheduleState: "idle",
+      scheduleError: "",
+      saving: false,
+      saveError: "",
     },
     runUpdate: {
       active: false,
@@ -506,6 +566,390 @@
     }
   }
 
+  async function fetchProviderPresets() {
+    if (state.providerPresets.loaded || state.providerPresets.loading) return;
+    state.providerPresets.loading = true;
+    try {
+      const payload = await fetchJson("/api/provider-presets");
+      state.providerPresets.providers = Array.isArray(payload.providers) ? payload.providers : [];
+      state.providerPresets.endpoint_modes = payload.endpoint_modes || {};
+      state.providerPresets.loaded = true;
+    } catch (_) {
+      state.providerPresets.loaded = true;
+    } finally {
+      state.providerPresets.loading = false;
+    }
+  }
+
+  async function fetchSchedule() {
+    if (state.schedule.loading) return;
+    state.schedule.loading = true;
+    try {
+      const payload = await fetchJson("/api/schedule");
+      Object.assign(state.schedule, payload, { loaded: true, loading: false, error: "" });
+    } catch (error) {
+      state.schedule.loaded = true;
+      state.schedule.loading = false;
+      state.schedule.error = String((error && error.message) || error);
+    }
+  }
+
+  function providerById(id) {
+    return state.providerPresets.providers.find((preset) => preset.id === id) || null;
+  }
+
+  function stripTrailingSlash(value) {
+    return String(value || "").trim().replace(/\/+$/, "");
+  }
+
+  function endpointPreview(baseUrl, endpointMode) {
+    const base = stripTrailingSlash(baseUrl);
+    if (!base) return { chat: "—", models: "—" };
+    const root = endpointMode === "root" ? base : base + "/v1";
+    return {
+      chat: root + "/chat/completions",
+      models: root + "/models",
+    };
+  }
+
+  function wizardScheduleUtcEcho() {
+    const parts = String(state.wizard.scheduleTimeLocal || "09:00").split(":");
+    const date = new Date();
+    date.setHours(Number(parts[0] || 9), Number(parts[1] || 0), 0, 0);
+    return date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: "UTC",
+      timeZoneName: "short",
+    });
+  }
+
+  function redactSecret(value) {
+    const text = String(value || "");
+    if (!text) return "not shown";
+    return text.length > 4 ? "***" + text.slice(-4) : "***";
+  }
+
+  function wizardPayload(includeModels) {
+    const headers = {};
+    for (const row of state.wizard.requestHeaders) {
+      const name = String(row.name || "").trim();
+      const value = String(row.value || "").trim();
+      if (name && value) headers[name] = value;
+    }
+    return {
+      base_url: state.wizard.baseUrl.trim(),
+      api_key: state.wizard.apiKey.trim() || null,
+      models_override_url: state.wizard.modelsOverrideUrl.trim(),
+      endpoint_mode: state.wizard.endpointMode || "append_v1",
+      request_headers: headers,
+      default_model: includeModels || state.provider.has_provider ? state.wizard.defaultModel.trim() : "",
+      backup_model: includeModels || state.provider.has_provider ? state.wizard.backupModel.trim() : "",
+    };
+  }
+
+  function modelExamples() {
+    const preset = state.wizard.preset;
+    if (!preset) return [];
+    if (Array.isArray(preset.model_examples) && preset.model_examples.length) return preset.model_examples;
+    const examples = Array.isArray(preset.examples) ? preset.examples.flatMap((item) => item.model_examples || []) : [];
+    return [...new Set(examples)];
+  }
+
+  function modelExists(modelId) {
+    if (!modelId) return true;
+    return state.wizard.availableModels.some((model) => model.id === modelId);
+  }
+
+  function resetWizardFromCurrent(startStep) {
+    const scheduleCadence = state.schedule.enabled ? (state.schedule.cadence || "off") : "off";
+    Object.assign(state.wizard, {
+      open: true,
+      step: startStep || 0,
+      mode: state.provider.has_provider ? "reconfigure" : "setup",
+      presetId: "",
+      preset: null,
+      baseUrl: state.provider.base_url || "",
+      apiKey: "",
+      modelsOverrideUrl: "",
+      endpointMode: state.provider.endpoint_mode || "append_v1",
+      requestHeaders: [],
+      advancedOpen: false,
+      connectionTestState: "idle",
+      connectionTestError: "",
+      connectionTestStatus: "",
+      connectionTestSkipped: false,
+      availableModels: [],
+      modelsLoading: false,
+      modelsError: "",
+      defaultModel: state.provider.default_model || "",
+      backupModel: state.provider.backup_model || "",
+      customDefaultConfirmed: false,
+      customBackupConfirmed: false,
+      modelTestState: "idle",
+      modelTestResults: { default: null, backup: null },
+      exaKey: "",
+      exaSkipped: false,
+      exaAlreadyConfigured: Boolean(state.provider.exa_configured),
+      scheduleCadence,
+      scheduleDayOfWeek: Number(state.schedule.day_of_week || 1),
+      scheduleDayOfMonth: Number(state.schedule.day_of_month || 1),
+      scheduleTimeLocal: state.schedule.time_local || "09:00",
+      scheduleState: "idle",
+      scheduleError: "",
+      saving: false,
+      saveError: "",
+    });
+  }
+
+  async function openWizard(startStep) {
+    await Promise.all([fetchProviderPresets(), fetchSchedule()]);
+    resetWizardFromCurrent(startStep || 0);
+    if (!state.wizard.baseUrl && state.providerPresets.providers.length) {
+      applyWizardPreset(state.providerPresets.providers[0].id, false);
+    }
+    render();
+    if (state.wizard.step === 1) ensureWizardModelsLoaded();
+  }
+
+  function closeWizard() {
+    state.wizard.open = false;
+    state.wizard.saving = false;
+    state.wizard.saveError = "";
+    render();
+  }
+
+  function applyWizardPreset(presetId, shouldRender) {
+    const preset = providerById(presetId);
+    state.wizard.presetId = presetId;
+    state.wizard.preset = preset;
+    if (preset) {
+      state.wizard.baseUrl = preset.default_base_url || "";
+      state.wizard.modelsOverrideUrl = preset.models_override_url || "";
+      state.wizard.endpointMode = preset.endpoint_mode || "append_v1";
+      state.wizard.connectionTestState = "idle";
+      state.wizard.connectionTestError = "";
+      state.wizard.connectionTestSkipped = false;
+      state.wizard.availableModels = [];
+      state.wizard.modelsError = "";
+      const examples = modelExamples();
+      if (!state.wizard.defaultModel && examples[0]) state.wizard.defaultModel = examples[0];
+      if (!state.wizard.backupModel && examples[1]) state.wizard.backupModel = examples[1];
+    }
+    if (shouldRender !== false) render();
+  }
+
+  async function testWizardConnection() {
+    state.wizard.connectionTestState = "testing";
+    state.wizard.connectionTestError = "";
+    state.wizard.connectionTestStatus = "";
+    render();
+    try {
+      const payload = await fetchJson("/api/provider/test-connection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(wizardPayload(false)),
+      });
+      state.wizard.connectionTestState = payload.ok ? "success" : "failed";
+      state.wizard.connectionTestStatus = payload.models_count !== undefined
+        ? payload.models_count + " models visible"
+        : "Connection returned HTTP " + payload.status_code;
+      if (!payload.ok) state.wizard.connectionTestError = "Models endpoint returned HTTP " + payload.status_code + ".";
+    } catch (error) {
+      state.wizard.connectionTestState = "failed";
+      state.wizard.connectionTestError = String((error && error.message) || error);
+    }
+    render();
+  }
+
+  async function saveProviderFromWizard(includeModels) {
+    const payload = wizardPayload(includeModels);
+    if (!payload.base_url) throw new Error("BASE_URL is required.");
+    if (!state.provider.has_provider && !payload.api_key) throw new Error("API_KEY is required.");
+    if (includeModels && !payload.default_model) throw new Error("Default model is required.");
+    const saved = await fetchJson("/api/provider", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    Object.assign(state.provider, saved, { loaded: true });
+  }
+
+  async function ensureWizardModelsLoaded() {
+    if (state.wizard.modelsLoading || state.wizard.availableModels.length) return;
+    state.wizard.modelsLoading = true;
+    state.wizard.modelsError = "";
+    render();
+    try {
+      const payload = await fetchJson("/api/provider/models");
+      state.wizard.availableModels = Array.isArray(payload.models) ? payload.models : [];
+    } catch (error) {
+      state.wizard.modelsError = String((error && error.message) || error);
+      state.wizard.availableModels = modelExamples().map((id) => ({ id, name: id }));
+    } finally {
+      state.wizard.modelsLoading = false;
+      render();
+    }
+  }
+
+  async function runWizardModelTests() {
+    state.wizard.modelTestState = "testing";
+    state.wizard.modelTestResults = {
+      default: { state: "testing", message: "Testing " + state.wizard.defaultModel },
+      backup: state.wizard.backupModel ? { state: "pending", message: "Queued" } : { state: "success", message: "No backup model set." },
+    };
+    render();
+    for (const target of ["default", "backup"]) {
+      if (target === "backup" && !state.wizard.backupModel) continue;
+      state.wizard.modelTestResults[target] = { state: "testing", message: "Testing " + (target === "default" ? state.wizard.defaultModel : state.wizard.backupModel) };
+      render();
+      try {
+        const payload = await fetchJson("/api/provider/test-model", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ target }),
+        });
+        state.wizard.modelTestResults[target] = {
+          state: payload.ok ? "success" : "failed",
+          message: payload.ok ? "HTTP " + payload.status_code + " · " + (payload.output || "ok") : "HTTP " + payload.status_code,
+        };
+        if (!payload.ok) throw new Error(target + " model failed.");
+      } catch (error) {
+        state.wizard.modelTestResults[target] = { state: "failed", message: String((error && error.message) || error) };
+        state.wizard.modelTestState = "failed";
+        render();
+        return;
+      }
+    }
+    state.wizard.modelTestState = "success";
+    render();
+  }
+
+  async function saveWizardExa() {
+    if (!state.wizard.exaKey.trim() || state.wizard.exaAlreadyConfigured || state.wizard.exaSkipped) return;
+    const payload = await fetchJson("/api/exa", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: state.wizard.exaKey.trim() }),
+    });
+    state.provider.exa_configured = Boolean(payload.exa_configured);
+    state.wizard.exaAlreadyConfigured = state.provider.exa_configured;
+  }
+
+  async function saveWizardSchedule() {
+    state.wizard.scheduleState = "saving";
+    state.wizard.scheduleError = "";
+    render();
+    try {
+      const payload = {
+        cadence: state.wizard.scheduleCadence,
+        time_local: state.wizard.scheduleTimeLocal,
+        day_of_week: Number(state.wizard.scheduleDayOfWeek || 1),
+        day_of_month: Number(state.wizard.scheduleDayOfMonth || 1),
+      };
+      const saved = payload.cadence === "off"
+        ? await fetchJson("/api/schedule", { method: "DELETE" })
+        : await fetchJson("/api/schedule", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+      Object.assign(state.schedule, saved, { loaded: true, error: "" });
+      state.wizard.scheduleState = "success";
+    } catch (error) {
+      state.wizard.scheduleState = "failed";
+      state.wizard.scheduleError = String((error && error.message) || error);
+      throw error;
+    } finally {
+      render();
+    }
+  }
+
+  async function wizardNext() {
+    if (state.wizard.saving) return;
+    state.wizard.saveError = "";
+    try {
+      if (state.wizard.step === 0) {
+        await saveProviderFromWizard(false);
+        state.wizard.step = 1;
+        render();
+        ensureWizardModelsLoaded();
+        return;
+      }
+      if (state.wizard.step === 1) {
+        if (!modelExists(state.wizard.defaultModel) && !state.wizard.customDefaultConfirmed) {
+          state.wizard.saveError = "Confirm the custom default model ID.";
+          render();
+          return;
+        }
+        if (state.wizard.backupModel && !modelExists(state.wizard.backupModel) && !state.wizard.customBackupConfirmed) {
+          state.wizard.saveError = "Confirm the custom backup model ID.";
+          render();
+          return;
+        }
+        await saveProviderFromWizard(true);
+        state.wizard.step = 2;
+        render();
+        runWizardModelTests();
+        return;
+      }
+      if (state.wizard.step === 2) {
+        if (state.wizard.modelTestState !== "success") return;
+        state.wizard.step = state.wizard.exaAlreadyConfigured ? 4 : 3;
+        render();
+        return;
+      }
+      if (state.wizard.step === 3) {
+        await saveWizardExa();
+        state.wizard.step = 4;
+        render();
+        return;
+      }
+      if (state.wizard.step === 4) {
+        await saveWizardSchedule();
+        state.wizard.step = 5;
+        render();
+        return;
+      }
+      if (state.wizard.step === 5) {
+        state.wizard.saving = true;
+        render();
+        await fetchProvider();
+        await fetchSchedule();
+        closeWizard();
+        startRunUpdate();
+      }
+    } catch (error) {
+      state.wizard.saving = false;
+      state.wizard.saveError = String((error && error.message) || error);
+      render();
+    }
+  }
+
+  function wizardBack() {
+    if (state.wizard.saving || state.wizard.step === 0) return;
+    state.wizard.step -= 1;
+    render();
+    if (state.wizard.step === 1) ensureWizardModelsLoaded();
+  }
+
+  function wizardSkip() {
+    if (state.wizard.step === 0 && state.wizard.connectionTestState === "failed") {
+      state.wizard.connectionTestSkipped = true;
+      wizardNext();
+    } else if (state.wizard.step === 3) {
+      if (window.confirm("Skip Exa? Updates can still run, but web research may hit provider limits.")) {
+        state.wizard.exaSkipped = true;
+        state.wizard.step = 4;
+        render();
+      }
+    } else if (state.wizard.step === 4) {
+      state.wizard.scheduleCadence = "off";
+      wizardNext();
+    }
+  }
+
   async function waitForBootstrapReady() {
     const first = await fetchBootstrapStatus();
     if (!first) return;
@@ -726,7 +1170,7 @@
       state.runUpdate._starting = false;
       if (error && error.status === 400) {
         state.provider.has_provider = false;
-        await openManualRefreshModal();
+        await openWizard(0);
         return;
       }
       state.runUpdate.error = String((error && error.message) || error);
@@ -748,7 +1192,7 @@
     if (state.provider.has_provider) {
       startRunUpdate();
     } else {
-      openManualRefreshModal();
+      openWizard(0);
     }
   }
 
@@ -1384,6 +1828,417 @@
     if (content) slot.appendChild(content);
   }
 
+  function wizardStatusChip(stateValue, text) {
+    const cls = stateValue === "success"
+      ? "vw-status-chip vw-status-success"
+      : stateValue === "failed" || stateValue === "error"
+        ? "vw-status-chip vw-status-error"
+        : stateValue === "testing" || stateValue === "saving"
+          ? "vw-status-chip vw-status-generating"
+          : "vw-status-chip";
+    return h("span", { class: cls }, text);
+  }
+
+  function renderWizardProgress() {
+    const nodes = [];
+    WIZARD_STEPS.forEach((label, index) => {
+      const classes = ["vw-wizard-step"];
+      if (index === state.wizard.step) classes.push("active");
+      if (index < state.wizard.step) classes.push("completed");
+      nodes.push(h("div", { class: classes.join(" ") }, [
+        h("div", { class: "vw-wizard-dot" }, index < state.wizard.step ? "" : String(index + 1)),
+        h("div", { class: "vw-wizard-label" }, label),
+      ]));
+      if (index < WIZARD_STEPS.length - 1) {
+        nodes.push(h("div", { class: "vw-wizard-line" + (index < state.wizard.step ? " completed" : "") }));
+      }
+    });
+    return h("div", { class: "vw-wizard-progress" }, nodes);
+  }
+
+  function wizardField(label, control, hint) {
+    return h("label", { class: "vw-field" }, [
+      h("span", { class: "vw-label" }, label),
+      control,
+      hint ? h("span", { class: "vw-hint" }, hint) : null,
+    ]);
+  }
+
+  function renderHeaderEditor() {
+    const rows = state.wizard.requestHeaders.length ? state.wizard.requestHeaders : [{ name: "", value: "" }];
+    return h("div", { class: "wizard-header-editor" }, [
+      ...rows.map((row, index) => h("div", { class: "wizard-header-row" }, [
+        h("input", {
+          id: "wizard-header-name-" + index,
+          class: "vw-input",
+          placeholder: "Header",
+          value: row.name || "",
+          oninput: (event) => {
+            state.wizard.requestHeaders[index] = Object.assign({}, row, { name: event.target.value });
+            state.wizard.connectionTestState = "idle";
+            state.wizard.connectionTestSkipped = false;
+            render();
+          },
+        }),
+        h("input", {
+          id: "wizard-header-value-" + index,
+          class: "vw-input",
+          placeholder: "Value",
+          value: row.value || "",
+          oninput: (event) => {
+            state.wizard.requestHeaders[index] = Object.assign({}, row, { value: event.target.value });
+            state.wizard.connectionTestState = "idle";
+            state.wizard.connectionTestSkipped = false;
+            render();
+          },
+        }),
+        h("button", {
+          class: "vw-btn vw-btn-icon",
+          type: "button",
+          "aria-label": "Remove header",
+          onclick: () => {
+            state.wizard.requestHeaders.splice(index, 1);
+            render();
+          },
+        }, "×"),
+      ])),
+      h("button", {
+        class: "vw-btn vw-btn-tertiary",
+        type: "button",
+        onclick: () => {
+          state.wizard.requestHeaders.push({ name: "", value: "" });
+          render();
+        },
+      }, "Add header"),
+    ]);
+  }
+
+  function renderWizardProviderStep() {
+    const preview = endpointPreview(state.wizard.baseUrl, state.wizard.endpointMode);
+    const presets = state.providerPresets.providers;
+    return h("div", { class: "wizard-step-body" }, [
+      wizardField("Preset", h("select", {
+        class: "vw-select",
+        value: state.wizard.presetId,
+        onchange: (event) => applyWizardPreset(event.target.value),
+      }, [
+        h("option", { value: "" }, "Choose a provider"),
+        ...presets.map((preset) => h("option", {
+          value: preset.id,
+          selected: state.wizard.presetId === preset.id,
+        }, preset.label)),
+      ])),
+      wizardField("BASE_URL", h("input", {
+        id: "wizard-base-url",
+        class: "vw-input",
+        value: state.wizard.baseUrl,
+        placeholder: "https://api.openai.com",
+        oninput: (event) => {
+          state.wizard.baseUrl = event.target.value;
+          state.wizard.connectionTestState = "idle";
+          state.wizard.connectionTestSkipped = false;
+          render();
+        },
+      })),
+      wizardField("API_KEY", h("input", {
+        id: "wizard-api-key",
+        class: "vw-input",
+        type: "password",
+        value: state.wizard.apiKey,
+        placeholder: state.provider.has_provider ? "Leave blank to keep stored key" : "sk-...",
+        oninput: (event) => {
+          state.wizard.apiKey = event.target.value;
+          state.wizard.connectionTestState = "idle";
+          state.wizard.connectionTestSkipped = false;
+          render();
+        },
+      })),
+      h("div", { class: "wizard-preview vw-card-compact" }, [
+        h("span", null, "Chat: " + preview.chat),
+        h("span", null, "Models: " + preview.models),
+      ]),
+      h("details", {
+        class: "wizard-advanced",
+        open: state.wizard.advancedOpen,
+        ontoggle: (event) => {
+          state.wizard.advancedOpen = event.currentTarget.open;
+        },
+      }, [
+        h("summary", null, "Advanced"),
+        wizardField("MODELS_OVERRIDE_URL", h("input", {
+          id: "wizard-models-override",
+          class: "vw-input",
+          value: state.wizard.modelsOverrideUrl,
+          placeholder: "Optional",
+          oninput: (event) => {
+            state.wizard.modelsOverrideUrl = event.target.value;
+            state.wizard.connectionTestState = "idle";
+            state.wizard.connectionTestSkipped = false;
+            render();
+          },
+        })),
+        wizardField("Endpoint mode", h("select", {
+          id: "wizard-endpoint-mode",
+          class: "vw-select",
+          value: state.wizard.endpointMode,
+          onchange: (event) => {
+            state.wizard.endpointMode = event.target.value;
+            state.wizard.connectionTestState = "idle";
+            state.wizard.connectionTestSkipped = false;
+            render();
+          },
+        }, [
+          h("option", { value: "append_v1", selected: state.wizard.endpointMode === "append_v1" }, "OpenAI /v1"),
+          h("option", { value: "root", selected: state.wizard.endpointMode === "root" }, "Provider root"),
+        ])),
+        renderHeaderEditor(),
+      ]),
+      h("div", { class: "wizard-test-row" }, [
+        h("button", {
+          class: "vw-btn vw-btn-secondary",
+          type: "button",
+          disabled: state.wizard.connectionTestState === "testing" || !state.wizard.baseUrl || (!state.provider.has_provider && !state.wizard.apiKey),
+          onclick: testWizardConnection,
+        }, state.wizard.connectionTestState === "testing" ? "Testing..." : "Test Connection"),
+        state.wizard.connectionTestState !== "idle"
+          ? wizardStatusChip(state.wizard.connectionTestState, state.wizard.connectionTestStatus || state.wizard.connectionTestState)
+          : null,
+      ]),
+      state.wizard.connectionTestError ? h("p", { class: "wizard-error" }, state.wizard.connectionTestError) : null,
+    ]);
+  }
+
+  function renderModelInput(kind, label) {
+    const valueKey = kind === "default" ? "defaultModel" : "backupModel";
+    const confirmKey = kind === "default" ? "customDefaultConfirmed" : "customBackupConfirmed";
+    const value = state.wizard[valueKey];
+    const custom = Boolean(value && !modelExists(value));
+    return h("div", { class: "vw-field" }, [
+      h("span", { class: "vw-label" }, label),
+      h("input", {
+        id: "wizard-model-" + kind,
+        class: "vw-input",
+        list: "wizard-model-options",
+        value,
+        placeholder: kind === "backup" ? "Optional backup model" : "Model ID",
+        oninput: (event) => {
+          state.wizard[valueKey] = event.target.value;
+          state.wizard[confirmKey] = false;
+          render();
+        },
+      }),
+      custom ? h("label", { class: "wizard-confirm" }, [
+        h("input", {
+          type: "checkbox",
+          checked: state.wizard[confirmKey],
+          onchange: (event) => {
+            state.wizard[confirmKey] = event.target.checked;
+            render();
+          },
+        }),
+        "Use custom model ID",
+      ]) : null,
+    ]);
+  }
+
+  function renderWizardModelsStep() {
+    const options = state.wizard.availableModels.length
+      ? state.wizard.availableModels
+      : modelExamples().map((id) => ({ id, name: id }));
+    return h("div", { class: "wizard-step-body" }, [
+      state.wizard.modelsLoading ? wizardStatusChip("testing", "Loading models") : null,
+      state.wizard.modelsError ? h("p", { class: "wizard-error" }, state.wizard.modelsError) : null,
+      h("datalist", { id: "wizard-model-options" }, options.map((model) => h("option", { value: model.id }, model.name || model.id))),
+      renderModelInput("default", "Default model"),
+      renderModelInput("backup", "Backup model"),
+    ]);
+  }
+
+  function renderWizardTestStep() {
+    const defaultResult = state.wizard.modelTestResults.default;
+    const backupResult = state.wizard.modelTestResults.backup;
+    return h("div", { class: "wizard-step-body" }, [
+      h("div", { class: "wizard-test-list" }, [
+        h("div", { class: "vw-card-compact wizard-test-item" }, [
+          h("strong", null, "Default"),
+          wizardStatusChip(defaultResult?.state || "idle", defaultResult?.message || "Waiting"),
+        ]),
+        h("div", { class: "vw-card-compact wizard-test-item" }, [
+          h("strong", null, "Backup"),
+          wizardStatusChip(backupResult?.state || "idle", backupResult?.message || "Waiting"),
+        ]),
+      ]),
+      state.wizard.modelTestState === "failed"
+        ? h("div", { class: "wizard-test-row" }, [
+            h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: runWizardModelTests }, "Retry"),
+            h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: () => { state.wizard.step = 0; render(); } }, "Restart"),
+          ])
+        : null,
+    ]);
+  }
+
+  function renderWizardExaStep() {
+    if (state.wizard.exaAlreadyConfigured) {
+      return h("div", { class: "wizard-step-body" }, [
+        wizardStatusChip("success", "Exa already configured"),
+      ]);
+    }
+    return h("div", { class: "wizard-step-body" }, [
+      wizardField("Exa API key", h("input", {
+        id: "wizard-exa-key",
+        class: "vw-input",
+        type: "password",
+        value: state.wizard.exaKey,
+        placeholder: "exa_...",
+        oninput: (event) => {
+          state.wizard.exaKey = event.target.value;
+          render();
+        },
+      }), "Used by the update agent for web research."),
+      h("a", { class: "wizard-link", href: "https://exa.ai", target: "_blank", rel: "noreferrer" }, "Sign up at exa.ai"),
+    ]);
+  }
+
+  function renderWizardScheduleStep() {
+    return h("div", { class: "wizard-step-body" }, [
+      h("div", { class: "wizard-segmented" }, ["off", "daily", "weekly", "monthly"].map((cadence) => h("button", {
+        class: "view-btn",
+        type: "button",
+        "aria-pressed": state.wizard.scheduleCadence === cadence ? "true" : "false",
+        onclick: () => {
+          state.wizard.scheduleCadence = cadence;
+          render();
+        },
+      }, cadence[0].toUpperCase() + cadence.slice(1)))),
+      state.wizard.scheduleCadence !== "off" ? wizardField("Local time", h("input", {
+        id: "wizard-schedule-time",
+        class: "vw-input",
+        type: "time",
+        value: state.wizard.scheduleTimeLocal,
+        oninput: (event) => {
+          state.wizard.scheduleTimeLocal = event.target.value;
+          render();
+        },
+      }), "Runs at " + wizardScheduleUtcEcho()) : null,
+      state.wizard.scheduleCadence === "weekly" ? wizardField("Day", h("select", {
+        class: "vw-select",
+        value: String(state.wizard.scheduleDayOfWeek),
+        onchange: (event) => {
+          state.wizard.scheduleDayOfWeek = Number(event.target.value);
+        },
+      }, WEEKDAYS.map((day, index) => h("option", {
+        value: String(index + 1),
+        selected: state.wizard.scheduleDayOfWeek === index + 1,
+      }, day)))) : null,
+      state.wizard.scheduleCadence === "monthly" ? wizardField("Day of month", h("input", {
+        class: "vw-input",
+        type: "number",
+        min: "1",
+        max: "28",
+        value: String(state.wizard.scheduleDayOfMonth),
+        oninput: (event) => {
+          state.wizard.scheduleDayOfMonth = Number(event.target.value || 1);
+        },
+      }), "Limited to 1-28 so every month works.") : null,
+      state.wizard.scheduleError ? h("p", { class: "wizard-error" }, state.wizard.scheduleError) : null,
+    ]);
+  }
+
+  function renderWizardSummaryStep() {
+    const scheduleText = state.wizard.scheduleCadence === "off"
+      ? "Off"
+      : state.wizard.scheduleCadence + " at " + state.wizard.scheduleTimeLocal + " (" + wizardScheduleUtcEcho() + ")";
+    return h("div", { class: "wizard-step-body" }, [
+      h("div", { class: "wizard-summary-grid" }, [
+        h("div", null, [h("span", null, "Provider"), h("strong", null, state.wizard.preset?.label || state.wizard.baseUrl || "Custom")]),
+        h("div", null, [h("span", null, "BASE_URL"), h("strong", null, state.wizard.baseUrl || "—")]),
+        h("div", null, [h("span", null, "API_KEY"), h("strong", null, state.wizard.apiKey ? redactSecret(state.wizard.apiKey) : "stored key")]),
+        h("div", null, [h("span", null, "Default"), h("strong", null, state.wizard.defaultModel || "—")]),
+        h("div", null, [h("span", null, "Backup"), h("strong", null, state.wizard.backupModel || "—")]),
+        h("div", null, [h("span", null, "Exa"), h("strong", null, state.wizard.exaAlreadyConfigured ? "Configured" : state.wizard.exaSkipped ? "Skipped" : state.wizard.exaKey ? redactSecret(state.wizard.exaKey) : "Skipped")]),
+        h("div", null, [h("span", null, "Schedule"), h("strong", null, scheduleText)]),
+      ]),
+    ]);
+  }
+
+  function renderWizardContent() {
+    if (state.wizard.step === 0) return renderWizardProviderStep();
+    if (state.wizard.step === 1) return renderWizardModelsStep();
+    if (state.wizard.step === 2) return renderWizardTestStep();
+    if (state.wizard.step === 3) return renderWizardExaStep();
+    if (state.wizard.step === 4) return renderWizardScheduleStep();
+    return renderWizardSummaryStep();
+  }
+
+  function wizardCanNext() {
+    if (state.wizard.saving) return false;
+    if (state.wizard.step === 0) {
+      return Boolean(
+        state.wizard.baseUrl &&
+        (state.provider.has_provider || state.wizard.apiKey) &&
+        (state.wizard.connectionTestState === "success" || state.wizard.connectionTestSkipped)
+      );
+    }
+    if (state.wizard.step === 1) return Boolean(state.wizard.defaultModel && !state.wizard.modelsLoading);
+    if (state.wizard.step === 2) return state.wizard.modelTestState === "success";
+    if (state.wizard.step === 3) return state.wizard.exaAlreadyConfigured || Boolean(state.wizard.exaKey);
+    return true;
+  }
+
+  function renderWizardFooter() {
+    const skipVisible = (state.wizard.step === 0 && state.wizard.connectionTestState === "failed") ||
+      state.wizard.step === 3 ||
+      state.wizard.step === 4;
+    const label = state.wizard.step === 5
+      ? state.wizard.saving ? "Finishing..." : "Finish"
+      : state.wizard.step === 4
+        ? state.wizard.scheduleState === "saving" ? "Saving..." : "Next"
+        : "Next";
+    return h("div", { class: "vw-modal-footer wizard-footer" }, [
+      h("button", {
+        class: "vw-btn vw-btn-tertiary",
+        type: "button",
+        disabled: state.wizard.step === 0 || state.wizard.saving,
+        onclick: wizardBack,
+      }, "Back"),
+      h("div", { class: "wizard-footer-actions" }, [
+        skipVisible ? h("button", {
+          class: "vw-btn vw-btn-secondary",
+          type: "button",
+          disabled: state.wizard.saving,
+          onclick: wizardSkip,
+        }, "Skip") : null,
+        h("button", {
+          class: "vw-btn vw-btn-primary",
+          type: "button",
+          disabled: !wizardCanNext(),
+          onclick: wizardNext,
+        }, label),
+      ]),
+    ]);
+  }
+
+  function renderWizard() {
+    const title = state.wizard.mode === "reconfigure" ? "Configure Agent Provider" : "Set Up Agent Provider";
+    return h("div", { class: "vw-modal-backdrop wizard-backdrop" }, h("div", {
+      class: "vw-modal wizard-modal",
+      style: { maxWidth: "var(--vw-setup-max-width)" },
+      role: "dialog",
+      "aria-modal": "true",
+      "aria-labelledby": "wizard-title",
+    }, [
+      h("div", { class: "vw-modal-header" }, [
+        h("h2", { id: "wizard-title" }, title),
+        renderWizardProgress(),
+      ]),
+      h("div", { class: "vw-modal-body" }, [
+        state.wizard.saveError ? h("p", { class: "wizard-error" }, state.wizard.saveError) : null,
+        renderWizardContent(),
+      ]),
+      renderWizardFooter(),
+    ]));
+  }
+
   function renderManualRefreshModal() {
     const body = state.manualRefreshModal.loading
       ? h("p", { class: "status-msg" }, "loading prompt…")
@@ -1554,8 +2409,9 @@
     if (!slot) return;
     const nodes = [];
     if (state.bootstrap.state === "initializing") nodes.push(renderBootstrapOverlay());
-    if (state.manualRefreshModal.open) nodes.push(renderManualRefreshModal());
-    if (state.runUpdate.active) nodes.push(renderRunUpdateOverlay());
+    else if (state.wizard.open) nodes.push(renderWizard());
+    else if (state.runUpdate.active) nodes.push(renderRunUpdateOverlay());
+    else if (state.manualRefreshModal.open) nodes.push(renderManualRefreshModal());
     slot.replaceChildren(...nodes);
     document.body.classList.toggle("has-overlay", nodes.length > 0);
   }
@@ -1569,10 +2425,12 @@
       checking ||
       state.runUpdate.active ||
       state.runUpdate._starting ||
+      state.wizard.open ||
       state.manualRefreshModal.loading;
     if (state.bootstrap.state === "initializing") button.textContent = "Loading...";
     else if (checking) button.textContent = "Checking...";
     else if (state.runUpdate.active || state.runUpdate._starting) button.textContent = "Running...";
+    else if (state.wizard.open) button.textContent = "Configuring...";
     else if (state.manualRefreshModal.loading) button.textContent = "Loading...";
     else button.textContent = "Refresh";
     button.title = state.runUpdate.error && !state.runUpdate.active ? state.runUpdate.error : "";
@@ -1947,49 +2805,71 @@
 
   function renderDataView() {
     if (!state.dataPromptLoaded && !state.dataPromptLoading) fetchDataPrompt();
+    if (!state.schedule.loaded && !state.schedule.loading) fetchSchedule();
     const promptText = state.dataPromptLoading ? "Loading prompt..." : state.dataPrompt;
-    return h("div", { class: "data-view" }, h("section", { class: "data-card prompt-card" }, [
-      h("div", { class: "data-card-head" }, [
-        h("h3", null, "AI Prompt for updating"),
-        h("p", null, "Copy this prompt and paste it into any AI coding agent to run today's dashboard update manually."),
-      ]),
-      h("div", { class: "data-card-body" }, [
-        h("textarea", {
-          id: "data-prompt",
-          class: "prompt-display",
-          readonly: "readonly",
-        }, promptText),
+    const scheduleLabel = !state.schedule.enabled || state.schedule.cadence === "off"
+      ? "Off"
+      : state.schedule.cadence + " · " + state.schedule.time_local + " (" + state.schedule.utc_echo + ")";
+    return h("div", { class: "data-view" }, [
+      h("section", { class: "data-card provider-card vw-card" }, [
+        h("div", { class: "data-card-head" }, [
+          h("h3", null, "Agent Provider"),
+          h("p", null, state.provider.has_provider ? state.provider.default_model + " via " + state.provider.base_url : "Not configured"),
+        ]),
+        h("div", { class: "provider-status-grid" }, [
+          h("div", null, [h("span", null, "Chat"), h("strong", null, state.provider.chat_endpoint || "—")]),
+          h("div", null, [h("span", null, "Models"), h("strong", null, state.provider.models_endpoint || "—")]),
+          h("div", null, [h("span", null, "Exa"), h("strong", null, state.provider.exa_configured ? "Configured" : "Not set")]),
+          h("div", null, [h("span", null, "Schedule"), h("strong", null, scheduleLabel)]),
+        ]),
         h("div", { class: "prompt-actions" }, [
-          h("button", {
-            class: "action-btn",
-            type: "button",
-            disabled: state.dataPromptLoading || !state.dataPrompt,
-            onclick: copyDataPrompt,
-          }, "Copy prompt"),
-          h("button", {
-            class: "action-btn primary",
-            type: "button",
-            disabled: state.dataTerminalMessage === "Opening terminal...",
-            onclick: openTerminalForData,
-          }, "Open Terminal"),
-        ]),
-        h("p", { class: "paste-hint" }, PASTE_HINT),
-        h("div", { class: "data-card-status" }, [
-          state.dataCopyMessage
-            ? h("p", {
-                id: "data-copy-state",
-                dataset: { tone: state.dataCopyState || "idle" },
-              }, state.dataCopyMessage)
-            : null,
-          state.dataTerminalMessage
-            ? h("p", {
-                id: "data-terminal-state",
-                dataset: { tone: state.dataTerminalState || "idle" },
-              }, state.dataTerminalMessage)
-            : null,
+          h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: () => openWizard(0) }, "Reconfigure"),
+          h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: () => openWizard(4) }, "Manage Schedule"),
         ]),
       ]),
-    ]));
+      h("section", { class: "data-card prompt-card" }, [
+        h("div", { class: "data-card-head" }, [
+          h("h3", null, "AI Prompt for updating"),
+          h("p", null, "Copy this prompt and paste it into any AI coding agent to run today's dashboard update manually."),
+        ]),
+        h("div", { class: "data-card-body" }, [
+          h("textarea", {
+            id: "data-prompt",
+            class: "prompt-display",
+            readonly: "readonly",
+          }, promptText),
+          h("div", { class: "prompt-actions" }, [
+            h("button", {
+              class: "action-btn",
+              type: "button",
+              disabled: state.dataPromptLoading || !state.dataPrompt,
+              onclick: copyDataPrompt,
+            }, "Copy prompt"),
+            h("button", {
+              class: "action-btn primary",
+              type: "button",
+              disabled: state.dataTerminalMessage === "Opening terminal...",
+              onclick: openTerminalForData,
+            }, "Open Terminal"),
+          ]),
+          h("p", { class: "paste-hint" }, PASTE_HINT),
+          h("div", { class: "data-card-status" }, [
+            state.dataCopyMessage
+              ? h("p", {
+                  id: "data-copy-state",
+                  dataset: { tone: state.dataCopyState || "idle" },
+                }, state.dataCopyMessage)
+              : null,
+            state.dataTerminalMessage
+              ? h("p", {
+                  id: "data-terminal-state",
+                  dataset: { tone: state.dataTerminalState || "idle" },
+                }, state.dataTerminalMessage)
+              : null,
+          ]),
+        ]),
+      ]),
+    ]);
   }
 
   function buildSeriesData(rows, field) {
@@ -2228,7 +3108,7 @@
       viewSlot.replaceChildren(state.error);
       renderDetailPanel(null);
       updateFreshness();
-      if (!state.manualRefreshModal.open && !state.runUpdate.active && state.bootstrap.state !== "initializing") restoreFocus(focus);
+      if (state.wizard.open || (!state.manualRefreshModal.open && !state.runUpdate.active && state.bootstrap.state !== "initializing")) restoreFocus(focus);
       return;
     }
     if (!state.ready) {
@@ -2237,7 +3117,7 @@
       ));
       renderDetailPanel(null);
       updateFreshness();
-      if (!state.manualRefreshModal.open && !state.runUpdate.active && state.bootstrap.state !== "initializing") restoreFocus(focus);
+      if (state.wizard.open || (!state.manualRefreshModal.open && !state.runUpdate.active && state.bootstrap.state !== "initializing")) restoreFocus(focus);
       return;
     }
 
@@ -2263,7 +3143,7 @@
     });
 
     updateFreshness();
-    if (!state.manualRefreshModal.open && !state.runUpdate.active && state.bootstrap.state !== "initializing") restoreFocus(focus);
+    if (state.wizard.open || (!state.manualRefreshModal.open && !state.runUpdate.active && state.bootstrap.state !== "initializing")) restoreFocus(focus);
     if (state.manualRefreshModal.open && !state.manualRefreshModal.loading) {
       const promptField = document.getElementById("refresh-prompt");
       if (promptField && state.manualRefreshModal.selectPrompt) {
@@ -2294,6 +3174,7 @@
     window.addEventListener("resize", scheduleChartDraw);
     window.addEventListener("keydown", (event) => {
       if (event.key !== "Escape") return;
+      if (state.wizard.open) return;
       if (state.runUpdate.state === "running") return;
       if (state.runUpdate.active && state.runUpdate.state !== "running") {
         closeRunUpdateOverlay();
@@ -2315,7 +3196,11 @@
       loadStaticState();
       state.bootstrap.state = state.bootstrap.supported ? "ready" : state.bootstrap.state;
       await fetchProvider();
+      await fetchSchedule();
       state.ready = true;
+      if (!state.provider.has_provider) {
+        await openWizard(0);
+      }
       window.setInterval(updateFreshness, 60000);
     } catch (error) {
       console.error("LLM-Dash boot failed:", error);

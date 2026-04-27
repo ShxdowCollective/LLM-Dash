@@ -19,13 +19,19 @@ from pydantic import BaseModel, Field
 
 from scripts.config import (
     ConfigError,
+    ProviderBundle,
+    ProviderConfig,
+    ProviderSecrets,
     build_auth_headers,
     load_exa_api_key,
     load_provider_bundle,
+    normalize_base_url,
+    normalize_endpoint_mode,
     public_provider_state,
     save_exa_api_key,
     save_provider,
 )
+from scripts.schedule_job import ScheduleError, apply_schedule, remove_schedule, status as schedule_status
 
 ROOT = Path(__file__).resolve().parent
 WEB_DIR = ROOT / "web"
@@ -69,6 +75,13 @@ class TestModelPayload(BaseModel):
 
 class ExaPayload(BaseModel):
     api_key: str
+
+
+class SchedulePayload(BaseModel):
+    cadence: str = "off"
+    time_local: str = "09:00"
+    day_of_week: int = 1
+    day_of_month: int = 1
 
 
 def _set_bootstrap_state(state: str, message: str, detail: str = "") -> None:
@@ -157,19 +170,48 @@ def _normalize_models(payload: Any) -> list[dict[str, str]]:
     return models
 
 
-async def _fetch_provider_models() -> tuple[int, Any]:
+def _bundle_from_payload(payload: ProviderPayload) -> ProviderBundle:
+    mode = normalize_endpoint_mode(payload.endpoint_mode)
+    stored = load_provider_bundle()
+    return ProviderBundle(
+        config=ProviderConfig(
+            base_url=normalize_base_url(payload.base_url, allow_v1=mode == "root"),
+            models_override_url=normalize_base_url(
+                payload.models_override_url,
+                field="models_override_url",
+                allow_v1=mode == "root",
+            )
+            if payload.models_override_url
+            else "",
+            default_model=payload.default_model.strip(),
+            backup_model=payload.backup_model.strip(),
+            endpoint_mode=mode,
+            request_headers=payload.request_headers,
+        ),
+        secrets=ProviderSecrets(api_key=(payload.api_key or "").strip() or stored.secrets.api_key),
+    )
+
+
+async def _fetch_models_for_bundle(bundle: ProviderBundle) -> tuple[int, Any]:
     import httpx
 
-    bundle = load_provider_bundle()
     if not bundle.config.base_url:
         raise ConfigError("Agent Provider base_url is not configured.")
+    if not bundle.secrets.api_key:
+        raise ConfigError("Agent Provider API key is not configured.")
+    headers = build_auth_headers(bundle)
+    headers.setdefault("Accept", "application/json")
     async with httpx.AsyncClient(timeout=20) as client:
-        response = await client.get(bundle.models_endpoint, headers=_provider_headers())
+        response = await client.get(bundle.models_endpoint, headers=headers)
     try:
         payload: Any = response.json()
     except ValueError:
         payload = {"text": response.text[:500]}
     return response.status_code, payload
+
+
+async def _fetch_provider_models() -> tuple[int, Any]:
+    return await _fetch_models_for_bundle(load_provider_bundle())
 
 
 def _job_log_path(job_id: str) -> Path:
@@ -398,6 +440,17 @@ async def test_provider_connection() -> dict[str, Any]:
     return {"ok": status_code == 200, "status_code": status_code, "models_count": len(_normalize_models(payload))}
 
 
+@app.post("/api/provider/test-connection")
+async def test_provider_connection_payload(payload: ProviderPayload) -> dict[str, Any]:
+    try:
+        status_code, body = await _fetch_models_for_bundle(_bundle_from_payload(payload))
+    except ConfigError as exc:
+        raise _http_error(exc)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    return {"ok": status_code == 200, "status_code": status_code, "models_count": len(_normalize_models(body))}
+
+
 @app.get("/api/provider/models")
 async def provider_models() -> dict[str, Any]:
     try:
@@ -463,6 +516,31 @@ def post_exa(payload: ExaPayload) -> dict[str, Any]:
         return {"exa_configured": True}
     except ConfigError as exc:
         raise _http_error(exc)
+
+
+@app.get("/api/schedule")
+def get_schedule() -> dict[str, Any]:
+    return schedule_status()
+
+
+@app.post("/api/schedule")
+def post_schedule(payload: SchedulePayload) -> dict[str, Any]:
+    try:
+        return apply_schedule(payload.dict())
+    except ScheduleError as exc:
+        raise _http_error(exc)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.delete("/api/schedule")
+def delete_schedule() -> dict[str, Any]:
+    try:
+        return remove_schedule()
+    except ScheduleError as exc:
+        raise _http_error(exc)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.post("/api/run-update")

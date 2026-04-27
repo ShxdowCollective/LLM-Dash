@@ -223,58 +223,58 @@ Triggers:
 ### Part B — Setup Wizard
 
 **M7.1 — Wizard shell**
-- [ ] Six-step state machine, progress indicator, back / next / skip
+- [x] Six-step state machine, progress indicator, back / next / skip
   controls, Voidware wizard CSS.
-- [ ] Auto-open on first load when no provider; manual entry point in Data
+- [x] Auto-open on first load when no provider; manual entry point in Data
   tab; entry from Refresh button when no provider.
 
 **M7.2 — Step 0: Provider + Credentials**
-- [ ] Preset dropdown from M6.6 catalog (`GET /api/provider-presets`).
-- [ ] Fields: `BASE_URL`, `API_KEY` (password), `MODELS_OVERRIDE_URL`
+- [x] Preset dropdown from M6.6 catalog (`GET /api/provider-presets`).
+- [x] Fields: `BASE_URL`, `API_KEY` (password), `MODELS_OVERRIDE_URL`
   (optional), endpoint mode from preset, optional request-headers editor.
-- [ ] Live endpoint preview (chat + models URLs) updates on keystroke.
-- [ ] "Test Connection" → `GET /api/provider/test-connection`.
-- [ ] "Skip" appears **only after** a failed test.
-- [ ] Collapsed "Advanced" section for endpoint mode, headers, models
+- [x] Live endpoint preview (chat + models URLs) updates on keystroke.
+- [x] "Test Connection" → `POST /api/provider/test-connection` for transient credentials.
+- [x] "Skip" appears **only after** a failed test.
+- [x] Collapsed "Advanced" section for endpoint mode, headers, models
   override URL.
-- [ ] On continue: credentials written via `POST /api/provider`.
+- [x] On continue: credentials written via `POST /api/provider`.
 
 **M7.3 — Step 1: Model Selection**
-- [ ] Two searchable dropdowns (default + backup) populated from
+- [x] Two searchable dropdowns (default + backup) populated from
   `GET /api/provider/models`.
-- [ ] Fallback to manual entry when provider has no models endpoint
+- [x] Fallback to manual entry when provider has no models endpoint
   (pre-fill from preset `model_examples`).
-- [ ] Custom model ID confirmation inline.
+- [x] Custom model ID confirmation inline.
 
 **M7.4 — Step 2: Model Connection Test (unskippable)**
-- [ ] Sequential `POST /api/provider/test-model` for default then backup.
-- [ ] Per-model status: pending → testing → success / failed.
-- [ ] On failure: Retry or Restart (back to Step 0).
+- [x] Sequential `POST /api/provider/test-model` for default then backup.
+- [x] Per-model status: pending → testing → success / failed.
+- [x] On failure: Retry or Restart (back to Step 0).
 
 **M7.5 — Step 3: Exa**
-- [ ] Auto-skip when `state.provider.exa_configured === true`.
-- [ ] Single password input + "Sign up at exa.ai" link.
-- [ ] Skip allowed with rate-limit warning confirmation.
+- [x] Auto-skip when `state.provider.exa_configured === true`.
+- [x] Single password input + "Sign up at exa.ai" link.
+- [x] Skip allowed with rate-limit warning confirmation.
 
 **M7.6 — Step 4: Scheduling (optional)**
-- [ ] Cadence picker: Off / Daily / Weekly / Monthly segmented control.
-- [ ] Time-of-day in local time with UTC echo.
-- [ ] `scripts/schedule_job.py` with platform branches:
+- [x] Cadence picker: Off / Daily / Weekly / Monthly segmented control.
+- [x] Time-of-day in local time with UTC echo.
+- [x] `scripts/schedule_job.py` with platform branches:
   - Linux / WSL → systemd user timer (detect WSL systemd availability).
   - macOS → launchd plist in `~/Library/LaunchAgents/`.
   - Windows → Task Scheduler via `schtasks /create /xml`.
-- [ ] Job invokes `scripts/run_update.py`; per-platform log path.
-- [ ] API: `GET` / `POST` / `DELETE /api/schedule`. "Off" removes the job.
+- [x] Job invokes `scripts/run_update.py`; per-platform log path.
+- [x] API: `GET` / `POST` / `DELETE /api/schedule`. "Off" removes the job.
 
 **M7.7 — Step 5: Summary + Finalize**
-- [ ] Review screen (creds hint only — `sk-...xxxx`).
-- [ ] Finish → persist config + close wizard + re-fetch provider state +
+- [x] Review screen (creds hint only — `sk-...xxxx`).
+- [x] Finish → persist config + close wizard + re-fetch provider state +
   immediate `POST /api/run-update`.
 
 **M7.8 — UI Integration**
-- [ ] Refresh button: no provider → open wizard (not manual refresh modal).
-- [ ] Data view: provider status card with Reconfigure + Manage Schedule.
-- [ ] `renderOverlay()` priority: bootstrap > wizard > run-update >
+- [x] Refresh button: no provider → open wizard (not manual refresh modal).
+- [x] Data view: provider status card with Reconfigure + Manage Schedule.
+- [x] `renderOverlay()` priority: bootstrap > wizard > run-update >
   manual refresh.
 
 **M7.9 — Smoke + Verification**
