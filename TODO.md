@@ -1,6 +1,10 @@
 # TODO
 
+# LLM-Dash Task Board
+
 Rough execution order. Newest decisions at the top.
+
+Use `[x]` for done and `[ ]` for still-open. New work should start at the top.
 
 ## Phase 8 — UI polish (this session)
 

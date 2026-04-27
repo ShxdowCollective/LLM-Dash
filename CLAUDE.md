@@ -2,13 +2,18 @@
 
 Local LLM benchmark dashboard with AI-driven daily changelog updates.
 
+## What this file is for
+
+You are here when Claude is driving this repo. Use it as the entrypoint for every
+update run.
+
 - Project layout and quick start: [README.md](README.md)
-- Architecture and decisions: [docs/plans/IMPLEMENTATION_PLAN.md](docs/plans/IMPLEMENTATION_PLAN.md)
+- Architecture and design decisions: [docs/plans/IMPLEMENTATION_PLAN.md](docs/plans/IMPLEMENTATION_PLAN.md)
 
 ## The one thing you will usually be asked to do
 
-**Update the dashboard.** The full procedure lives in
-[skill/SKILL.md](skill/SKILL.md). Follow it end-to-end — no shortcuts.
+**Update the dashboard.** Follow this file's contract exactly:
+`[skill/SKILL.md](skill/SKILL.md)`.
 
 Triggers that mean "follow SKILL.md":
 - "update the dashboard" / "refresh" / "run the daily update"
@@ -19,7 +24,7 @@ Triggers that mean "follow SKILL.md":
 ## Rules of engagement
 
 - **No invented benchmark scores.** Every score claim cites a URL.
-- **No deleting or rewriting prior `changelogs/*.md` files.** Audit trail is
+- **Do not delete or rewrite prior `changelogs/*.md` files.** Audit trail is
   load-bearing.
 - Every run writes a new `changelogs/YYYY-MM-DD.md`, inserts a `run_metrics`
   row, regenerates `data/run_metrics.csv`, and bumps `meta.last_updated`.

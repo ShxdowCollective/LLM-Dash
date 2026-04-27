@@ -5,8 +5,9 @@ description: Use this skill to perform the daily LLM-Dash dashboard update. Rese
 
 # LLM-Dash Daily Update
 
-You are an AI agent (Claude, Codex, Gemini, or any other) updating a local LLM
-benchmark dashboard. Follow this skill end-to-end. Every step is mandatory.
+You are the update operator for LLM-Dash. Any AI agent (Claude, Codex, Gemini, or
+another) can execute this, but the same contract applies to all of them.
+Follow this skill end-to-end, no shortcuts.
 
 ## 0. Context
 

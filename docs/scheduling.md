@@ -2,9 +2,18 @@
 
 LLM-Dash's daily refresh runs through **any** AI agent, but the supported
 first-party path is now the BYOK **Agent Provider** runner added in Phase 6.
-This page documents the older Claude Code `/schedule` escape hatch. The repo
-can't version-control a `/schedule` trigger (it lives in your local Claude Code
-settings), so this doc pins the prompt and cadence you register yourself.
+This page documents the older Claude Code `/schedule` escape hatch and
+existing-day-operations fallback.
+
+The repo can't version-control a `/schedule` trigger (it lives in your local
+Claude Code settings), so this doc pins the prompt and cadence you register
+yourself.
+
+## Why this still exists
+
+- It is useful for environments that are not yet wired to the Phase 7 wizard.
+- It helps with ad-hoc replay and testing of the old prompt flow.
+- It does not own the schedule — your local Claude Code install does.
 
 ## Prerequisites
 
@@ -53,21 +62,21 @@ curl -s http://127.0.0.1:8787/api/prompt | python3 -c "import json,sys; print(js
    - new `changelogs/YYYY-MM-DD.md` with a `## Run Metadata` footer
    - fresh row in `run_metrics` (and mirrored in `data/run_metrics.csv`)
    - `meta.last_updated` moved forward
-4. If that passes, the `/schedule` trigger will do the same thing unattended.
+4. If that passes, the `/schedule` trigger should do the same thing unattended.
    For new installs, prefer the Phase 7 OS-level scheduled job once it lands;
-   it invokes `scripts/run_update.py` through your configured Agent Provider.
+   that path calls `scripts/run_update.py` through your configured Agent Provider.
 
 ## Changing cadence or prompt
 
 Re-run `/schedule` with the same name to edit the trigger; Claude Code will
-overwrite the prior entry. If you break the schedule and want to wipe the
-slate, `/schedule` also exposes a delete action.
+overwrite the prior entry. If the trigger is stale or broken, use `/schedule`
+again and choose delete.
 
 ## What the repo owns vs. what you own
 
-- **Repo owns:** `skill/SKILL.md` (the procedure), `/api/prompt` (the prompt
-  text), Agent Provider config APIs, `scripts/run_update.py`, `run.sh` /
-  `run.bat` (local launch).
+- **Repo owns:** `skill/SKILL.md` (the procedure), `/api/prompt` (prompt text),
+  Agent Provider config APIs, `scripts/run_update.py`, and local launchers
+  (`run.sh` / `run.bat`).
 - **You own:** the `/schedule` trigger in your Claude Code install, plus the
   absolute repo path it points at.
 

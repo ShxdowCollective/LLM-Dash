@@ -7,11 +7,17 @@ Continue, Cursor, etc.
 - Project layout: [README.md](README.md)
 - Architecture: [docs/plans/IMPLEMENTATION_PLAN.md](docs/plans/IMPLEMENTATION_PLAN.md)
 
+## Use this document when:
+
+- You are helping with repository updates.
+- You need the single source of truth for daily benchmark updates.
+- You are uncertain about procedure drift across agents.
+
 ## Primary task: update the dashboard
 
-**Follow [skill/SKILL.md](skill/SKILL.md) end-to-end.** That file is the
+**Follow [skill/SKILL.md](skill/SKILL.md) end-to-end.** It is the
 single source of truth. Every agent running an update reads it, follows it,
-records its own tokens / cost / duration / word_count, and finishes with the
+tracks its own token/cost/duration metadata, and finishes with the
 verification checklist in §10.
 
 ## Triggers
