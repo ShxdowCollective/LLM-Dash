@@ -57,6 +57,7 @@
     'Linux: claude "$(xclip -selection clipboard -o)"  or  claude "$(wl-paste)"',
     "Windows PowerShell: claude (Get-Clipboard)  |  codex (Get-Clipboard)",
   ].join("\n");
+  const UI_STATE_KEY = "llm-dash-ui-state-v1";
 
   const state = {
     db: null,
@@ -65,6 +66,11 @@
     error: null,
     view: "table",
     sortBy: "overall",
+    ui: {
+      modelFiltersCollapsed: false,
+      statsFiltersCollapsed: false,
+      modelInfoCollapsed: false,
+    },
     selectedModelId: null,
     models: [],
     totalModelCount: 0,
@@ -322,6 +328,92 @@
         // noop
       }
     }
+  }
+
+  function getStoredUIState() {
+    try {
+      const raw = window.localStorage.getItem(UI_STATE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return typeof parsed === "object" && parsed ? parsed : {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function applyStoredUIState() {
+    const stored = getStoredUIState();
+    if (typeof stored.modelFiltersCollapsed === "boolean") {
+      state.ui.modelFiltersCollapsed = stored.modelFiltersCollapsed;
+    }
+    if (typeof stored.statsFiltersCollapsed === "boolean") {
+      state.ui.statsFiltersCollapsed = stored.statsFiltersCollapsed;
+    }
+    if (typeof stored.modelInfoCollapsed === "boolean") {
+      state.ui.modelInfoCollapsed = stored.modelInfoCollapsed;
+    }
+  }
+
+  function persistUIState() {
+    try {
+      window.localStorage.setItem(UI_STATE_KEY, JSON.stringify(state.ui));
+    } catch (error) {
+      // localStorage is best-effort here; no action needed if unavailable.
+    }
+  }
+
+  function toggleModelFiltersCollapsed() {
+    state.ui.modelFiltersCollapsed = !state.ui.modelFiltersCollapsed;
+    persistUIState();
+    render();
+  }
+
+  function toggleStatsFiltersCollapsed() {
+    state.ui.statsFiltersCollapsed = !state.ui.statsFiltersCollapsed;
+    persistUIState();
+    render();
+  }
+
+  function toggleModelInfoCollapsed() {
+    state.ui.modelInfoCollapsed = !state.ui.modelInfoCollapsed;
+    persistUIState();
+    render();
+  }
+
+  function renderCollapsiblePanel({
+    id,
+    title,
+    summary,
+    actions,
+    collapsed,
+    onToggle,
+    children,
+  }) {
+    const nodes = [
+      h("div", { class: "panel-head" }, [
+        h("div", { class: "panel-head-left" }, [
+          h("h3", { class: "panel-title" }, title),
+          summary ? h("div", { class: "panel-summary" }, summary) : null,
+        ]),
+        h("div", { class: "panel-head-right" }, [
+          ...(actions || []),
+          h("button", {
+            class: "action-btn panel-toggle-btn",
+            type: "button",
+            "aria-expanded": String(!collapsed),
+            "aria-controls": id + "-body",
+            onclick: onToggle,
+            "aria-label": collapsed ? `Expand ${title}` : `Collapse ${title}`,
+          }, collapsed ? "Expand" : "Collapse"),
+        ]),
+      ]),
+      h("div", {
+        class: "panel-body" + (collapsed ? " is-hidden" : ""),
+        id: id + "-body",
+        hidden: collapsed,
+      }, children),
+    ];
+    return h("section", { class: "panel-shell", id: id }, nodes);
   }
 
   function humanAge(ms) {
@@ -1639,46 +1731,59 @@
       model.status && model.status !== "active" ? model.status : null,
     ].filter(Boolean);
 
-    slot.replaceChildren(h("div", { class: "detail-panel" }, [
-      h("div", { class: "detail-head" }, [
-        h("div", null, [
-          h("div", { class: "detail-name" }, [
-            h("div", {
-              class: "dot",
-              style: {
-                width: "10px",
-                height: "10px",
-                borderRadius: "50%",
-                backgroundColor: safeHex(model.color, "#888"),
-              },
-            }),
-            h("h2", null, model.name),
-            statusBadge(model.status),
+    slot.replaceChildren(renderCollapsiblePanel({
+      id: "model-info",
+      title: "Model info",
+      summary: [
+        model.name,
+        " · ",
+        overall !== null ? "overall " + overall.toFixed(1) : "overall N/A",
+      ],
+      actions: [
+        h("button", {
+          class: "action-btn subtle",
+          type: "button",
+          onclick: () => {
+            state.selectedModelId = null;
+            render();
+          },
+        }, "Close"),
+      ],
+      collapsed: state.ui.modelInfoCollapsed,
+      onToggle: toggleModelInfoCollapsed,
+      children: h("div", { class: "detail-panel" }, [
+        h("div", { class: "detail-head" }, [
+          h("div", null, [
+            h("div", { class: "detail-name" }, [
+              h("div", {
+                class: "dot",
+                style: {
+                  width: "10px",
+                  height: "10px",
+                  borderRadius: "50%",
+                  backgroundColor: safeHex(model.color, "#888"),
+                },
+              }),
+              h("h2", null, model.name),
+              statusBadge(model.status),
+            ]),
+            h("div", { class: "detail-meta" }, metaParts.join(" · ")),
           ]),
-          h("div", { class: "detail-meta" }, metaParts.join(" · ")),
+          h("div", { class: "detail-scores" }, [
+            h("div", { class: "detail-score-card" }, [
+              h("div", { class: "label" }, "Overall"),
+              h("div", { class: "value " + tier(overall).cls }, overall !== null ? overall.toFixed(1) : "N/A"),
+            ]),
+            h("div", { class: "detail-score-card" }, [
+              h("div", { class: "label" }, "Value"),
+              h("div", { class: "value " + tier(value).cls }, value !== null ? value.toFixed(1) : "N/A"),
+            ]),
+          ]),
         ]),
-        h("div", { class: "detail-scores" }, [
-          h("div", { class: "detail-score-card" }, [
-            h("div", { class: "label" }, "Overall"),
-            h("div", { class: "value " + tier(overall).cls }, overall !== null ? overall.toFixed(1) : "N/A"),
-          ]),
-          h("div", { class: "detail-score-card" }, [
-            h("div", { class: "label" }, "Value"),
-            h("div", { class: "value " + tier(value).cls }, value !== null ? value.toFixed(1) : "N/A"),
-          ]),
-        ]),
+        h("div", { class: "detail-grid" }, metricRows),
+        model.notes ? h("p", { class: "detail-notes" }, model.notes) : null,
       ]),
-      h("div", { class: "detail-grid" }, metricRows),
-      model.notes ? h("p", { class: "detail-notes" }, model.notes) : null,
-      h("button", {
-        class: "detail-close",
-        type: "button",
-        onclick: () => {
-          state.selectedModelId = null;
-          render();
-        },
-      }, "close"),
-    ]));
+    }));
   }
 
   function renderEmptyState(title, copy) {
@@ -1722,103 +1827,133 @@
 
   function renderModelFilters() {
     const active = filterCount();
-    return h("div", { class: "filter-panel" }, [
-      h("div", { class: "filter-summary" }, [
-        h("div", { class: "filter-summary-copy" }, [
-          h("span", { class: "summary-pill" }, state.models.length + " / " + state.totalModelCount + " models"),
-          h("span", { class: "summary-note" }, active ? active + " filters active" : "all filters open"),
-        ]),
+    return renderCollapsiblePanel({
+      id: "model-filters",
+      title: "Model filters",
+      summary: [
+        state.models.length + " / " + state.totalModelCount + " models",
+        " · ",
+        active ? active + " filters active" : "no filters",
+      ],
+      actions: [
         h("button", {
           class: "action-btn subtle",
           type: "button",
           onclick: resetModelFilters,
         }, "Reset filters"),
-      ]),
-      h("div", { class: "filter-card" }, [
-        h("label", { class: "control-label stacked", for: "model-search" }, "search"),
-        h("div", { class: "search-shell" }, h("input", {
-          id: "model-search",
-          class: "search-input",
-          type: "search",
-          placeholder: "Search name, vendor, notes, params",
-          value: state.filter.text,
-          oninput: (event) => setTextFilter(event.target.value),
-        })),
-      ]),
-      h("div", { class: "filter-card" }, [
-        h("div", { class: "control-label stacked" }, "vendors"),
-        h("div", { class: "chip-group" }, state.vendorOptions.map((vendor) =>
-          h("button", {
-            class: "filter-chip" + (state.filter.vendors.has(vendor) ? " is-active" : ""),
-            type: "button",
-            "aria-pressed": state.filter.vendors.has(vendor) ? "true" : "false",
-            onclick: () => toggleVendor(vendor),
-          }, vendor)
-        )),
-      ]),
-      h("div", { class: "filter-card" }, [
-        h("div", { class: "control-label stacked" }, "tier"),
-        h("div", { class: "chip-group tier-chip-group" }, TIER_FILTERS.map((item) =>
-          h("button", {
-            class: "filter-chip tier-filter-chip" + (state.filter.tier === item.key ? " is-active" : ""),
-            type: "button",
-            "aria-pressed": state.filter.tier === item.key ? "true" : "false",
-            onclick: () => setTierFilter(item.key),
-          }, item.label)
-        )),
-      ]),
-      h("div", { class: "range-grid" }, METRIC_KEYS.map(renderRangeCard)),
-    ]);
+      ],
+      collapsed: state.ui.modelFiltersCollapsed,
+      onToggle: toggleModelFiltersCollapsed,
+      children: [
+        h("div", { class: "filter-panel" }, [
+          h("div", { class: "filter-summary" }, [
+            h("div", { class: "filter-summary-copy" }, [
+              h("span", { class: "summary-pill" }, state.models.length + " / " + state.totalModelCount + " models"),
+              h("span", { class: "summary-note" }, active ? active + " filters active" : "all filters open"),
+            ]),
+          ]),
+          h("div", { class: "filter-card" }, [
+            h("label", { class: "control-label stacked", for: "model-search" }, "search"),
+            h("div", { class: "search-shell" }, h("input", {
+              id: "model-search",
+              class: "search-input",
+              type: "search",
+              placeholder: "Search name, vendor, notes, params",
+              value: state.filter.text,
+              oninput: (event) => setTextFilter(event.target.value),
+            })),
+          ]),
+          h("div", { class: "filter-card" }, [
+            h("div", { class: "control-label stacked" }, "vendors"),
+            h("div", { class: "chip-group" }, state.vendorOptions.map((vendor) =>
+              h("button", {
+                class: "filter-chip" + (state.filter.vendors.has(vendor) ? " is-active" : ""),
+                type: "button",
+                "aria-pressed": state.filter.vendors.has(vendor) ? "true" : "false",
+                onclick: () => toggleVendor(vendor),
+              }, vendor)
+            )),
+          ]),
+          h("div", { class: "filter-card" }, [
+            h("div", { class: "control-label stacked" }, "tier"),
+            h("div", { class: "chip-group tier-chip-group" }, TIER_FILTERS.map((item) =>
+              h("button", {
+                class: "filter-chip tier-filter-chip" + (state.filter.tier === item.key ? " is-active" : ""),
+                type: "button",
+                "aria-pressed": state.filter.tier === item.key ? "true" : "false",
+                onclick: () => setTierFilter(item.key),
+              }, item.label)
+            )),
+          ]),
+          h("div", { class: "range-grid" }, METRIC_KEYS.map(renderRangeCard)),
+        ]),
+      ],
+    });
   }
 
   function renderStatsFilters() {
-    return h("div", { class: "filter-panel stats-filter-panel" }, [
-      h("div", { class: "filter-summary" }, [
-        h("div", { class: "filter-summary-copy" }, [
-          h("span", { class: "summary-pill" }, getFilteredMetrics().length + " runs"),
-          h("span", { class: "summary-note" }, state.statsFilter.agent ? "filtered by agent + date" : "all recorded runs"),
-        ]),
+    return renderCollapsiblePanel({
+      id: "stats-filters",
+      title: "Stats filters",
+      summary: [
+        getFilteredMetrics().length + " runs",
+        " · ",
+        state.statsFilter.agent ? "filtered by agent + date" : "all recorded runs",
+      ],
+      actions: [
         h("button", {
           class: "action-btn subtle",
           type: "button",
           onclick: resetStatsFilters,
         }, "Reset filters"),
-      ]),
-      h("div", { class: "stats-filter-grid" }, [
-        h("label", { class: "field-block", for: "stats-from" }, [
-          h("span", { class: "control-label stacked" }, "from"),
-          h("input", {
-            id: "stats-from",
-            class: "text-input",
-            type: "date",
-            value: state.statsFilter.from,
-            onchange: (event) => setStatsFilter("from", event.target.value),
-          }),
-        ]),
-        h("label", { class: "field-block", for: "stats-to" }, [
-          h("span", { class: "control-label stacked" }, "to"),
-          h("input", {
-            id: "stats-to",
-            class: "text-input",
-            type: "date",
-            value: state.statsFilter.to,
-            onchange: (event) => setStatsFilter("to", event.target.value),
-          }),
-        ]),
-        h("label", { class: "field-block", for: "stats-agent" }, [
-          h("span", { class: "control-label stacked" }, "agent"),
-          h("select", {
-            id: "stats-agent",
-            class: "text-input",
-            value: state.statsFilter.agent,
-            onchange: (event) => setStatsFilter("agent", event.target.value),
-          }, [
-            h("option", { value: "" }, "All agents"),
-            ...metricsAgentOptions().map(([key, label]) => h("option", { value: key, selected: state.statsFilter.agent === key }, label)),
+      ],
+      collapsed: state.ui.statsFiltersCollapsed,
+      onToggle: toggleStatsFiltersCollapsed,
+      children: [
+        h("div", { class: "filter-panel stats-filter-panel" }, [
+          h("div", { class: "filter-summary" }, [
+            h("div", { class: "filter-summary-copy" }, [
+              h("span", { class: "summary-pill" }, getFilteredMetrics().length + " runs"),
+              h("span", { class: "summary-note" }, state.statsFilter.agent ? "filtered by agent + date" : "all recorded runs"),
+            ]),
+          ]),
+          h("div", { class: "stats-filter-grid" }, [
+            h("label", { class: "field-block", for: "stats-from" }, [
+              h("span", { class: "control-label stacked" }, "from"),
+              h("input", {
+                id: "stats-from",
+                class: "text-input",
+                type: "date",
+                value: state.statsFilter.from,
+                onchange: (event) => setStatsFilter("from", event.target.value),
+              }),
+            ]),
+            h("label", { class: "field-block", for: "stats-to" }, [
+              h("span", { class: "control-label stacked" }, "to"),
+              h("input", {
+                id: "stats-to",
+                class: "text-input",
+                type: "date",
+                value: state.statsFilter.to,
+                onchange: (event) => setStatsFilter("to", event.target.value),
+              }),
+            ]),
+            h("label", { class: "field-block", for: "stats-agent" }, [
+              h("span", { class: "control-label stacked" }, "agent"),
+              h("select", {
+                id: "stats-agent",
+                class: "text-input",
+                value: state.statsFilter.agent,
+                onchange: (event) => setStatsFilter("agent", event.target.value),
+              }, [
+                h("option", { value: "" }, "All agents"),
+                ...metricsAgentOptions().map(([key, label]) => h("option", { value: key, selected: state.statsFilter.agent === key }, label)),
+              ]),
+            ]),
           ]),
         ]),
-      ]),
-    ]);
+      ],
+    });
   }
 
   function renderActionBar() {
@@ -2975,7 +3110,7 @@
           grid: { stroke: "rgba(255,255,255,0.06)" },
           ticks: { stroke: "rgba(255,255,255,0.12)" },
           values: (_u, splits) => splits.map((s) => formatShortDate(new Date(s * 1000).toISOString().slice(0, 10))),
-          font: '10px "JetBrains Mono", monospace',
+          font: "10px var(--vw-font-body)",
         },
         {
           stroke: "#72726b",
@@ -2983,7 +3118,7 @@
           ticks: { stroke: "rgba(255,255,255,0.12)" },
           size: 56,
           values: (_u, splits) => splits.map((s) => options.axis(s)),
-          font: '10px "JetBrains Mono", monospace',
+          font: "10px var(--vw-font-body)",
         },
       ],
       series,
@@ -3208,6 +3343,7 @@
     try {
       await waitForBootstrapReady();
       state.db = await loadDB();
+      applyStoredUIState();
       loadStaticState();
       state.bootstrap.state = state.bootstrap.supported ? "ready" : state.bootstrap.state;
       await fetchProvider();

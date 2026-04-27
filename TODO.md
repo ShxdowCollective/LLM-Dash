@@ -2,6 +2,13 @@
 
 Rough execution order. Newest decisions at the top.
 
+## Phase 8 — UI polish (this session)
+
+- [x] Switch dashboard typography from mono-heavy UI defaults to Voidware standard body/display stack (`--vw-font-body`, `--vw-font-mono` aligned to SUSE/Roboto).
+- [x] Make pre-leaderboard UI surfaces collapsible: model filters, stats filters, and model info panel.
+- [x] Persist each panel's collapse state in localStorage (`llm-dash-ui-state-v1`) so preferences survive reload.
+- [x] Update stats chart axis typography to the same body font family.
+
 ## Phase 0 — Scaffold (this PR)
 
 - [x] Repo structure, README, LOGBOOK, full implementation plan
