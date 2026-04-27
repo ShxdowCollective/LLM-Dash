@@ -6,6 +6,22 @@ Rough execution order. Newest decisions at the top.
 
 Use `[x]` for done and `[ ]` for still-open. New work should start at the top.
 
+## Phase 8.1 — Silent background launcher
+
+Goal: add a `--silent` mode for startup tasks so the dashboard server detaches,
+survives terminal close, skips browser launch, and prints the reachable URL.
+
+- [x] `run.sh`: parse `--silent`, support `LLM_DASH_HOST`, detach uvicorn with
+  logs under `logs/server.log`, wait for readiness, print only the server URL on
+  success.
+- [x] `run.bat`: mirror `--silent` behavior through the shared Python launcher,
+  log redirection, readiness polling, and URL-only success output.
+- [x] README: document foreground vs silent launch, LAN binding with
+  `LLM_DASH_HOST=0.0.0.0`, and the server log path.
+- [x] Verification: shell syntax check, Python compile check, Windows help check,
+  POSIX silent smokes against non-default localhost/LAN-bound ports, and a
+  loopback-vs-wildcard port collision check.
+
 ## Phase 8 — UI polish (this session)
 
 - [x] Switch dashboard typography from mono-heavy UI defaults to Voidware standard body/display stack (`--vw-font-body`, `--vw-font-mono` aligned to SUSE/Roboto).

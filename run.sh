@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # LLM-Dash — POSIX launcher.
 # Creates/uses a repo-local .venv, installs deps, starts uvicorn, opens the browser.
+# Use --silent to detach the server and print the URL for startup tasks.
 
 set -euo pipefail
 
@@ -8,8 +9,33 @@ HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$HERE"
 
 PORT="${LLM_DASH_PORT:-8787}"
-URL="http://127.0.0.1:${PORT}"
+HOST="${LLM_DASH_HOST:-127.0.0.1}"
+URL="http://${HOST}:${PORT}"
 VENV="${HERE}/.venv"
+SILENT=0
+
+usage() {
+  echo "Usage: ./run.sh [--silent]"
+  echo "Environment: LLM_DASH_HOST=127.0.0.1 LLM_DASH_PORT=8787"
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --silent)
+      SILENT=1
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "LLM-Dash: unknown argument: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
 
 pick_python() {
   for candidate in python3 python; do
@@ -28,7 +54,9 @@ if [ -z "${SYS_PY}" ]; then
 fi
 
 if [ ! -x "${VENV}/bin/python" ]; then
-  echo "LLM-Dash: creating virtualenv at ${VENV}"
+  if [ "${SILENT}" -eq 0 ]; then
+    echo "LLM-Dash: creating virtualenv at ${VENV}"
+  fi
   if ! "${SYS_PY}" -m venv "${VENV}" 2>/dev/null; then
     echo "LLM-Dash: 'python -m venv' failed. On Debian/Ubuntu try 'sudo apt install python3-venv'." >&2
     exit 1
@@ -40,6 +68,10 @@ PIP="${VENV}/bin/pip"
 
 "${PY}" -m pip install --quiet --upgrade pip >/dev/null
 "${PIP}" install --quiet -r requirements.txt
+
+if [ "${SILENT}" -eq 1 ]; then
+  exec "${PY}" scripts/launch_server.py --host "${HOST}" --port "${PORT}"
+fi
 
 open_browser() {
   local url="$1"
@@ -64,7 +96,7 @@ wait_for_server() {
 }
 
 echo "LLM-Dash: starting uvicorn on ${URL}"
-"${PY}" -m uvicorn server:app --host 127.0.0.1 --port "${PORT}" &
+"${PY}" -m uvicorn server:app --host "${HOST}" --port "${PORT}" &
 SERVER_PID=$!
 
 cleanup() {

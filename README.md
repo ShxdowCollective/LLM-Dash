@@ -33,18 +33,46 @@ daily model changelogs.
 ### Launch
 
 ```bash
-./run.sh          # macOS/Linux
-run.bat           # Windows
+./run.sh           # macOS/Linux
+run.bat            # Windows
 ```
 
 Both launchers do the same thing:
 
 1. Create/activate a local `.venv`.
 2. Install dependencies from `requirements.txt`.
-3. Start `uvicorn server:app` on `127.0.0.1:8787` (`LLM_DASH_PORT` overrides).
+3. Start `uvicorn server:app` on `127.0.0.1:8787`
+   (`LLM_DASH_HOST` / `LLM_DASH_PORT` override).
 4. Open the dashboard in your default browser.
 
 The server keeps running in the foreground; close the terminal to stop it.
+
+### Silent background launch
+
+Use `--silent` for startup tasks or long-running server sessions:
+
+```bash
+./run.sh --silent     # macOS/Linux
+run.bat --silent      # Windows
+```
+
+Silent mode starts the server in a detached background process, skips browser
+launch, and prints the dashboard URL as the only success output. Server output
+goes to `logs/server.log`; the last spawned process ID is written to
+`logs/server.pid`.
+
+For LAN access, bind to all interfaces:
+
+```bash
+LLM_DASH_HOST=0.0.0.0 ./run.sh --silent
+```
+
+On Windows:
+
+```bat
+set LLM_DASH_HOST=0.0.0.0
+run.bat --silent
+```
 
 ## Desktop launch shortcuts
 
@@ -146,6 +174,7 @@ LLM-Dash/
 ├── scripts/
 │   ├── schema.sql
 │   ├── config.py
+│   ├── launch_server.py
 │   ├── run_update.py
 │   ├── init_db.py
 │   ├── export_metrics_csv.py
@@ -160,6 +189,8 @@ LLM-Dash/
 - `python -m venv` missing on Debian/Ubuntu: install `python3-venv` and rerun
   the launcher.
 - Port 8787 in use: run with `LLM_DASH_PORT=9000 ./run.sh`.
+- LAN access fails: start with `LLM_DASH_HOST=0.0.0.0 ./run.sh --silent` and
+  allow the port through the host firewall.
 - Browser did not open: read the URL printed by the launcher; open it manually.
 - First-run spinner hangs: check launcher logs and `scripts/init_db.py` output.
 
