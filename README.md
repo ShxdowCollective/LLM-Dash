@@ -1,3 +1,9 @@
+<p align="right">
+  <a href="https://buymeacoffee.com/shxdowenby">
+    <img src=".github/bmc-button.png" alt="Buy Me a Coffee" height="40">
+  </a>
+</p>
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://fonts.gstatic.com/s/i/short-term/release/googlesymbols/dashboard/default/48px.svg">
   <img alt="LLM-Dash" height="48" src="https://fonts.gstatic.com/s/i/short-term/release/googlesymbols/dashboard/default/48px.svg">
