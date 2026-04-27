@@ -108,10 +108,11 @@ Decisions locked:
   `~/.shxdow/auth.json` → `~/.shxdow/config/shxdow.llmdash.json`. Voidware
   spec is authoritative for the last two.
 - **Provider fields:** `BASE_URL` (required), `API_KEY` (required),
-  `MODELS_OVERRIDE_URL` (optional). Endpoints resolve to
-  `{BASE_URL}/v1/chat/completions` and
-  `{MODELS_OVERRIDE_URL or BASE_URL}/v1/models` — app never accepts a
-  `BASE_URL` that already contains `/v1`.
+  `MODELS_OVERRIDE_URL` (optional). Default endpoint mode is `append_v1`,
+  resolving to `{BASE_URL}/v1/chat/completions` and
+  `{MODELS_OVERRIDE_URL or BASE_URL}/v1/models`; provider-root mode resolves
+  to `{BASE_URL}/chat/completions` and `{MODELS_OVERRIDE_URL or BASE_URL}/models`
+  for APIs like Google AI Studio and Kilo Gateway.
 - **App fields:** default model, backup model, optional request-headers map.
 - **Exa** attaches as a **Remote MCP server** registered with the Agents
   SDK. No local Exa client lib.
@@ -182,8 +183,15 @@ Planning:
 - [x] Replace any remaining "runtime" label in the UI.
 
 **M6.6 — Provider preset catalog**
-- [ ] JSON list of popular providers (OpenAI, Anthropic-OpenAI-compat,
-  Google AI Studio, OpenRouter, Kilo Gateway, local Ollama / llama.cpp). Consumed by the wizard (Phase 7).
+- [x] Plan: add a static JSON catalog for OpenAI, Anthropic OpenAI-compatible,
+  Google AI Studio, OpenRouter, Kilo Gateway, NanoGPT, and Custom
+  OpenAI-compatible; expose it through FastAPI; add endpoint-mode support so
+  presets can preview/test the right chat/models URLs; update docs and verify
+  config/API smokes.
+- [x] JSON list of popular providers (OpenAI, Anthropic-OpenAI-compat,
+  Google AI Studio, OpenRouter, Kilo Gateway, NanoGPT, Custom OpenAI-compatible
+  with local Ollama / llama.cpp / LM Studio examples). Consumed by the wizard
+  (Phase 7).
 
 ## Phase 7 — Setup wizard + OS-level scheduling
 
@@ -204,10 +212,11 @@ Triggers:
 - [ ] Preset dropdown = M6.6 catalog merged with saved profiles read from
   keychain / auth.json.
 - [ ] Fields: `BASE_URL`, `API_KEY` (hidden), `MODELS_OVERRIDE_URL`
-  (optional), optional request-headers key/value list.
-- [ ] Live endpoint preview: `Chat: {BASE_URL}/v1/chat/completions` and
-  `Models: {MODELS_OVERRIDE_URL or BASE_URL}/v1/models`. Inline hint: "do
-  not include `/v1` in BASE_URL".
+  (optional), endpoint mode from the preset, optional request-headers
+  key/value list.
+- [ ] Live endpoint preview follows the preset endpoint mode: `append_v1`
+  providers append `/v1`; provider-root presets append `/chat/completions` and
+  `/models` directly.
 - [ ] "Test connection" → `GET /api/provider/test-connection`.
 - [ ] "Skip" button appears **only after** a failed test.
 - [ ] On continue: credentials written per voidware spec (M6.2).

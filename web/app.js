@@ -104,6 +104,7 @@
       models_endpoint: "",
       default_model: "",
       backup_model: "",
+      endpoint_mode: "append_v1",
       exa_configured: false,
       _fetching: false,
     },

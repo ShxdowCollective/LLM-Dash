@@ -23,9 +23,13 @@ MODELS_OVERRIDE_URL_ENVS = ("LLM_DASH_MODELS_OVERRIDE_URL", "MODELS_OVERRIDE_URL
 DEFAULT_MODEL_ENVS = ("LLM_DASH_DEFAULT_MODEL", "DEFAULT_MODEL")
 BACKUP_MODEL_ENVS = ("LLM_DASH_BACKUP_MODEL", "BACKUP_MODEL")
 REQUEST_HEADERS_ENV = "LLM_DASH_REQUEST_HEADERS_JSON"
+ENDPOINT_MODE_ENV = "LLM_DASH_ENDPOINT_MODE"
 EXA_API_KEY_ENVS = ("EXA_API_KEY", "LLM_DASH_EXA_API_KEY")
 
 SENSITIVE_HEADER_PARTS = ("authorization", "api-key", "apikey", "x-api-key", "token", "secret", "key")
+ENDPOINT_MODE_APPEND_V1 = "append_v1"
+ENDPOINT_MODE_ROOT = "root"
+ENDPOINT_MODES = {ENDPOINT_MODE_APPEND_V1, ENDPOINT_MODE_ROOT}
 
 
 class ConfigError(ValueError):
@@ -38,6 +42,7 @@ class ProviderConfig:
     models_override_url: str = ""
     default_model: str = ""
     backup_model: str = ""
+    endpoint_mode: str = ENDPOINT_MODE_APPEND_V1
     request_headers: dict[str, str] | None = None
 
 
@@ -57,12 +62,12 @@ class ProviderBundle:
 
     @property
     def chat_endpoint(self) -> str:
-        return chat_endpoint(self.config.base_url) if self.config.base_url else ""
+        return chat_endpoint(self.config.base_url, self.config.endpoint_mode) if self.config.base_url else ""
 
     @property
     def models_endpoint(self) -> str:
         base = self.config.models_override_url or self.config.base_url
-        return models_endpoint(base) if base else ""
+        return models_endpoint(base, self.config.endpoint_mode) if base else ""
 
 
 def shxdow_root() -> Path:
@@ -196,30 +201,54 @@ def _normalize_header_map(raw: Any) -> dict[str, str]:
     return headers
 
 
-def normalize_base_url(value: str, *, field: str = "base_url") -> str:
+def normalize_endpoint_mode(value: str | None) -> str:
+    mode = str(value or "").strip().lower().replace("-", "_")
+    aliases = {
+        "": ENDPOINT_MODE_APPEND_V1,
+        "v1": ENDPOINT_MODE_APPEND_V1,
+        "openai_v1": ENDPOINT_MODE_APPEND_V1,
+        "append_v1": ENDPOINT_MODE_APPEND_V1,
+        "provider_root": ENDPOINT_MODE_ROOT,
+        "passthrough": ENDPOINT_MODE_ROOT,
+        "root": ENDPOINT_MODE_ROOT,
+    }
+    normalized = aliases.get(mode, mode)
+    if normalized not in ENDPOINT_MODES:
+        raise ConfigError("endpoint_mode must be 'append_v1' or 'root'")
+    return normalized
+
+
+def normalize_base_url(value: str, *, field: str = "base_url", allow_v1: bool = False) -> str:
     url = str(value or "").strip().rstrip("/")
     if not url:
         return ""
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise ConfigError(f"{field} must be an absolute http(s) URL")
-    if parsed.path.rstrip("/").endswith("/v1"):
+    if not allow_v1 and parsed.path.rstrip("/").endswith("/v1"):
         raise ConfigError(f"{field} must not include /v1")
     if parsed.params or parsed.query or parsed.fragment:
         raise ConfigError(f"{field} must not include params, query, or fragment")
     return url
 
 
-def chat_endpoint(base_url: str) -> str:
-    return f"{normalize_base_url(base_url)}/v1/chat/completions"
-
-
-def models_endpoint(base_url: str) -> str:
-    return f"{normalize_base_url(base_url)}/v1/models"
-
-
-def provider_api_base(base_url: str) -> str:
+def _endpoint_base(base_url: str, endpoint_mode: str) -> str:
+    mode = normalize_endpoint_mode(endpoint_mode)
+    if mode == ENDPOINT_MODE_ROOT:
+        return normalize_base_url(base_url, allow_v1=True)
     return f"{normalize_base_url(base_url)}/v1"
+
+
+def chat_endpoint(base_url: str, endpoint_mode: str = ENDPOINT_MODE_APPEND_V1) -> str:
+    return f"{_endpoint_base(base_url, endpoint_mode)}/chat/completions"
+
+
+def models_endpoint(base_url: str, endpoint_mode: str = ENDPOINT_MODE_APPEND_V1) -> str:
+    return f"{_endpoint_base(base_url, endpoint_mode)}/models"
+
+
+def provider_api_base(base_url: str, endpoint_mode: str = ENDPOINT_MODE_APPEND_V1) -> str:
+    return _endpoint_base(base_url, endpoint_mode)
 
 
 def is_sensitive_header(name: str) -> bool:
@@ -258,6 +287,7 @@ def public_provider_state() -> dict[str, Any]:
         "models_endpoint": bundle.models_endpoint,
         "default_model": bundle.config.default_model,
         "backup_model": bundle.config.backup_model,
+        "endpoint_mode": bundle.config.endpoint_mode,
         "exa_configured": bool(load_exa_api_key()),
     }
 
@@ -272,17 +302,23 @@ def load_provider_config() -> ProviderConfig:
     models_override_url = _env_first(MODELS_OVERRIDE_URL_ENVS) or str(provider.get("models_override_url") or "")
     default_model = _env_first(DEFAULT_MODEL_ENVS) or str(provider.get("default_model") or "")
     backup_model = _env_first(BACKUP_MODEL_ENVS) or str(provider.get("backup_model") or "")
+    endpoint_mode = normalize_endpoint_mode(os.environ.get(ENDPOINT_MODE_ENV) or provider.get("endpoint_mode"))
     request_headers = provider.get("request_headers") or {}
     if os.environ.get(REQUEST_HEADERS_ENV):
         request_headers = os.environ[REQUEST_HEADERS_ENV]
 
     return ProviderConfig(
-        base_url=normalize_base_url(base_url) if base_url else "",
-        models_override_url=normalize_base_url(models_override_url, field="models_override_url")
+        base_url=normalize_base_url(base_url, allow_v1=endpoint_mode == ENDPOINT_MODE_ROOT) if base_url else "",
+        models_override_url=normalize_base_url(
+            models_override_url,
+            field="models_override_url",
+            allow_v1=endpoint_mode == ENDPOINT_MODE_ROOT,
+        )
         if models_override_url
         else "",
         default_model=default_model.strip(),
         backup_model=backup_model.strip(),
+        endpoint_mode=endpoint_mode,
         request_headers=_normalize_header_map(request_headers),
     )
 
@@ -301,15 +337,22 @@ def save_provider(
     models_override_url: str = "",
     default_model: str = "",
     backup_model: str = "",
+    endpoint_mode: str = ENDPOINT_MODE_APPEND_V1,
     request_headers: dict[str, str] | None = None,
 ) -> ProviderBundle:
+    mode = normalize_endpoint_mode(endpoint_mode)
     normalized = ProviderConfig(
-        base_url=normalize_base_url(base_url),
-        models_override_url=normalize_base_url(models_override_url, field="models_override_url")
+        base_url=normalize_base_url(base_url, allow_v1=mode == ENDPOINT_MODE_ROOT),
+        models_override_url=normalize_base_url(
+            models_override_url,
+            field="models_override_url",
+            allow_v1=mode == ENDPOINT_MODE_ROOT,
+        )
         if models_override_url
         else "",
         default_model=str(default_model or "").strip(),
         backup_model=str(backup_model or "").strip(),
+        endpoint_mode=mode,
         request_headers=_normalize_header_map(request_headers or {}),
     )
     data = _load_config_file()
@@ -320,6 +363,7 @@ def save_provider(
         "models_override_url": normalized.models_override_url,
         "default_model": normalized.default_model,
         "backup_model": normalized.backup_model,
+        "endpoint_mode": normalized.endpoint_mode,
         "request_headers": normalized.request_headers or {},
     }
     _atomic_write_json(config_path(), data)

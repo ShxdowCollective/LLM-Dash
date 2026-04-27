@@ -534,7 +534,7 @@ async def run_agent_once(model_name: str, prompt: str, exa_key: str, log_path: P
     set_tracing_disabled(disabled=True)
     client = AsyncOpenAI(
         api_key=bundle.secrets.api_key,
-        base_url=provider_api_base(bundle.config.base_url),
+        base_url=provider_api_base(bundle.config.base_url, bundle.config.endpoint_mode),
         default_headers=bundle.config.request_headers or None,
     )
     model = OpenAIChatCompletionsModel(model=model_name, openai_client=client)
@@ -611,6 +611,7 @@ async def generate_diff(log_path: Path) -> tuple[dict[str, Any], dict[str, Any],
                     {
                         "model": model_name,
                         "base_url": bundle.config.base_url,
+                        "endpoint_mode": bundle.config.endpoint_mode,
                         "headers": redact_headers(bundle.config.request_headers),
                         "exa_mcp": bool(exa_key),
                     }
@@ -636,6 +637,7 @@ def dry_run(log_path: Path) -> None:
         "base_url": bundle.config.base_url,
         "chat_endpoint": bundle.chat_endpoint,
         "models_endpoint": bundle.models_endpoint,
+        "endpoint_mode": bundle.config.endpoint_mode,
         "default_model": bundle.config.default_model,
         "backup_model": bundle.config.backup_model,
         "provider_key": redact_value(bundle.secrets.api_key),

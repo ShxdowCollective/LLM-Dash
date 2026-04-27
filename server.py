@@ -35,6 +35,7 @@ DB_PATH = DATA_DIR / "dash.sqlite"
 INIT_DB_PATH = ROOT / "scripts" / "init_db.py"
 RUN_UPDATE_PATH = ROOT / "scripts" / "run_update.py"
 LOGS_DIR = ROOT / "logs"
+PROVIDER_PRESETS_PATH = WEB_DIR / "provider-presets.json"
 
 DATA_DIR.mkdir(exist_ok=True)
 CHANGELOGS_DIR.mkdir(exist_ok=True)
@@ -58,6 +59,7 @@ class ProviderPayload(BaseModel):
     models_override_url: str = ""
     default_model: str = ""
     backup_model: str = ""
+    endpoint_mode: str = "append_v1"
     request_headers: dict[str, str] = Field(default_factory=dict)
 
 
@@ -112,6 +114,19 @@ def _redact_known_secrets(text: str) -> str:
 
 def _http_error(exc: Exception, status_code: int = 400) -> HTTPException:
     return HTTPException(status_code=status_code, detail=str(exc))
+
+
+def _provider_presets() -> dict[str, Any]:
+    try:
+        with PROVIDER_PRESETS_PATH.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=500, detail="Provider preset catalog is missing.") from exc
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=500, detail=f"Provider preset catalog is invalid JSON: {exc}") from exc
+    if not isinstance(data, dict) or not isinstance(data.get("providers"), list):
+        raise HTTPException(status_code=500, detail="Provider preset catalog has an invalid shape.")
+    return data
 
 
 def _provider_headers() -> dict[str, str]:
@@ -350,6 +365,11 @@ def get_provider() -> dict[str, Any]:
         raise _http_error(exc)
 
 
+@app.get("/api/provider-presets")
+def get_provider_presets() -> dict[str, Any]:
+    return _provider_presets()
+
+
 @app.post("/api/provider")
 def post_provider(payload: ProviderPayload) -> dict[str, Any]:
     try:
@@ -359,6 +379,7 @@ def post_provider(payload: ProviderPayload) -> dict[str, Any]:
             models_override_url=payload.models_override_url,
             default_model=payload.default_model,
             backup_model=payload.backup_model,
+            endpoint_mode=payload.endpoint_mode,
             request_headers=payload.request_headers,
         )
         return public_provider_state()

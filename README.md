@@ -89,10 +89,17 @@ When the agent finishes, refresh the browser page — no live polling (yet).
 
 M6 adds the backend API for BYOK providers. `POST /api/provider` saves
 `base_url`, `api_key`, default/backup models, optional model-list override, and
-request headers. Secrets go to the OS keychain first, then
+request headers. It also accepts `endpoint_mode`: `append_v1` for standard
+OpenAI-shaped roots, or `root` for providers whose documented base URL already
+includes the OpenAI-compatible API root. Secrets go to the OS keychain first, then
 `~/.shxdow/auth.json`; public config goes to
 `~/.shxdow/config/shxdow.llmdash.json`. `GET /api/provider` never returns raw
 keys.
+
+`GET /api/provider-presets` serves the Phase 7 wizard catalog from
+`web/provider-presets.json`: OpenAI, Anthropic OpenAI-compatible, Google AI
+Studio, OpenRouter, Kilo Gateway, NanoGPT, and Custom OpenAI-compatible for
+local servers like Ollama, llama.cpp, and LM Studio.
 
 `scripts/run_update.py` runs the update through `openai-agents==0.14.6`.
 `POST /api/run-update` starts it in the background and
