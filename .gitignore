@@ -3,3 +3,16 @@ __pycache__/
 *.pyc
 logs/
 .shxdow/
+
+# Local-only docs (kept on disk, not in repo)
+LOGBOOK.md
+docs/plans/
+docs/logbooks/
+
+# Generated data (recreated on first launch)
+data/dash.sqlite
+data/run_metrics.csv
+
+# Dev artifacts
+artifacts/
+references/

@@ -1,98 +1,126 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://fonts.gstatic.com/s/i/short-term/release/googlesymbols/dashboard/default/48px.svg">
+  <img alt="LLM-Dash" height="48" src="https://fonts.gstatic.com/s/i/short-term/release/googlesymbols/dashboard/default/48px.svg">
+</picture>
+
 # LLM-Dash
 
-A no-build, click-to-launch local dashboard for tracking LLM benchmark snapshots and
-daily model changelogs.
+**Local LLM benchmark dashboard with AI-driven daily changelog updates.**
 
-- Voidware-powered UI with append-only, searchable history.
-- SQLite source of truth with browser-side SQL queries via `sql.js`.
-- AI-driven updates written through the `skill/SKILL.md` contract.
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab?logo=python&logoColor=white)](https://www.python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org)
+[![sql.js](https://img.shields.io/badge/sql.js-WASM-4B32C3)](https://sql.js.org)
+[![voidware](https://img.shields.io/badge/voidware-v0.7.1-7c5cc4)](https://github.com/shxdow)
+[![License: MIT](https://img.shields.io/badge/license-MIT-a6f17b)](LICENSE)
+[![OpenAI Agents SDK](https://img.shields.io/badge/OpenAI_Agents-SDK-412991?logo=openai&logoColor=white)](https://github.com/openai/openai-agents-python)
 
-## What this is
+---
 
-- **Static frontend.** One HTML/CSS/JS app served from a tiny FastAPI server.
-  Run `./run.sh` (macOS/Linux) or `run.bat` (Windows) to open the dashboard.
-- **Source of truth in SQLite.** `data/dash.sqlite` stores every model, score
-  history, changelog index, and run metrics.
-- **Changelogs on disk.** Every update creates
-  `changelogs/YYYY-MM-DD.md` with required frontmatter and `## Run Metadata`
-  footer.
-- **Agent Provider update path.** Since Phase 6, the app can run updates through a
-  BYOK-compatible provider endpoint through the OpenAI Agents SDK.
-- **Legacy CLI fallback.** The old clipboard + terminal flow is still available as
-  an explicit fallback when provider automation is not configured.
-- **Read-only UI.** The frontend is currently for viewing and control; data is
-  written only by update runs and seeded scripts.
+<p align="center">
+  <code style="font-family: 'JetBrains Mono', monospace; font-size: 1.1em; letter-spacing: 0.04em; color: #f3f3ee;">
+    track · compare · update — entirely local
+  </code>
+</p>
 
-## Quick start
+---
+
+> A no-build, click-to-launch dashboard for tracking LLM benchmarks and daily
+> model changelogs. Voidware-powered dark UI. SQLite source of truth. AI agents
+> write the updates — you just watch.
+
+## Features
+
+- **Models leaderboard** — sortable table with five benchmark dimensions
+  (intelligence, coding, agents, speed, cost), tier grades S–F, and per-vendor
+  color coding.
+- **Interactive charts** — horizontal bar comparisons powered by uPlot.
+- **Changelog timeline** — append-only daily entries rendered from Markdown,
+  with full-text search.
+- **Stats & analytics** — token usage, cost tracking, duration metrics, and
+  per-agent breakdowns across every update run.
+- **Setup wizard** — first-run walkthrough configures your BYOK provider,
+  models, Exa API key, and OS-level scheduling in under two minutes.
+- **Agent-agnostic updates** — any AI agent (Claude, Codex, Gemini, etc.)
+  follows `skill/SKILL.md` to research, score, and commit new data.
+- **Zero build step** — vanilla HTML/CSS/JS served by a tiny FastAPI server.
+  No npm, no bundler, no node_modules.
+- **Works offline** — once launched, the dashboard runs entirely from local
+  SQLite + WASM. Internet is only needed for update runs.
+
+## Quick Start
 
 ### Requirements
 
 - Python 3.10+
-- Internet access for first-time dependency install and any scheduled model updates
+- Internet access for first-time dependency install and model updates
 
 ### Launch
 
 ```bash
-./run.sh           # macOS/Linux
-run.bat            # Windows
+# macOS / Linux
+./run.sh
+
+# Windows
+run.bat
 ```
 
-Both launchers do the same thing:
+The launcher handles everything:
 
-1. Create/activate a local `.venv`.
-2. Install dependencies from `requirements.txt`.
-3. Start `uvicorn server:app` on `127.0.0.1:8787`
-   (`LLM_DASH_HOST` / `LLM_DASH_PORT` override).
-4. Open the dashboard in your default browser.
+1. Creates and activates a local `.venv`
+2. Installs dependencies from `requirements.txt`
+3. Starts `uvicorn server:app` on `127.0.0.1:8787`
+4. Opens the dashboard in your default browser
 
-The server keeps running in the foreground; close the terminal to stop it.
+> **Override host/port:**
+> `LLM_DASH_HOST=0.0.0.0 LLM_DASH_PORT=9000 ./run.sh`
 
-### Silent background launch
-
-Use `--silent` for startup tasks or long-running server sessions:
+### Silent / Background Mode
 
 ```bash
-./run.sh --silent     # macOS/Linux
+./run.sh --silent     # macOS / Linux
 run.bat --silent      # Windows
 ```
 
-Silent mode starts the server in a detached background process, skips browser
-launch, and prints the dashboard URL as the only success output. Server output
-goes to `logs/server.log`; the last spawned process ID is written to
-`logs/server.pid`.
+Detaches the server, skips browser launch, logs to `logs/server.log`, and
+prints only the dashboard URL. Ideal for startup tasks or long-running sessions.
 
-For LAN access, bind to all interfaces:
+For LAN access:
 
 ```bash
 LLM_DASH_HOST=0.0.0.0 ./run.sh --silent
 ```
 
-On Windows:
+### Desktop Shortcuts
 
-```bat
-set LLM_DASH_HOST=0.0.0.0
-run.bat --silent
-```
+| Platform | How |
+|---|---|
+| **Windows** | Right-click `run.bat` → Create shortcut → pin to desktop |
+| **macOS** | Automator → Run Shell Script → `cd ~/Repos/LLM-Dash && ./run.sh` → save as `.app` |
+| **Linux** | Create a `.desktop` entry with `Exec=` pointing to your `run.sh` |
 
-## Desktop launch shortcuts
+## How Updates Work
 
-- **Windows:** right-click `run.bat` and create a shortcut, then pin it to your
-  desktop.
-- **macOS:** create an Automator app that runs
-  `cd "$HOME/Repos/LLM-Dash" && ./run.sh`, then save and pin it.
-- **Linux:** create a `.desktop` entry pointing `Exec=` at your absolute `run.sh`.
+LLM-Dash separates **reading** (the dashboard) from **writing** (AI agents).
+The UI is read-only; all data changes come from update runs.
 
-## Running an update manually (legacy path)
+### Automated (Agent Provider)
 
-In the dashboard, click **Refresh** to get the generated prompt and open a local
-terminal from the browser.
+After completing the setup wizard, click **Refresh** in the dashboard header.
+The app dispatches `skill/SKILL.md` to your configured provider via the OpenAI
+Agents SDK. Progress streams live in an overlay.
+
+### Manual (CLI Fallback)
+
+If no provider is configured, **Refresh** copies an agent-neutral prompt to
+your clipboard and offers to open a terminal:
 
 ```bash
 # macOS
 claude "$(pbpaste)"
 codex  "$(pbpaste)"
 
-# Linux (requires xclip or wl-paste)
+# Linux
 claude "$(xclip -selection clipboard -o)"
 
 # Windows PowerShell
@@ -100,103 +128,71 @@ claude (Get-Clipboard)
 codex  (Get-Clipboard)
 ```
 
-Paste the generated prompt into your agent CLI, run it, then refresh the page when
-the run is complete.
+### Scheduled
 
-## Agent Provider backend (Phase 6+)
+The setup wizard can install an OS-level scheduled job (systemd timer, launchd
+plist, or Windows Task Scheduler) to run updates automatically — daily, weekly,
+or monthly.
 
-`POST /api/provider` stores runtime config (secret-safe):
-
-- `base_url`, `api_key`, `endpoint_mode`
-- optional `models_override_url`
-- optional default/request headers
-- default and backup model IDs
-
-Credentials are written to OS keychain first, then `~/.shxdow/auth.json` as a
-fallback. Public config is stored in `~/.shxdow/config/shxdow.llmdash.json`.
-
-Helpful endpoints:
-
-- `GET /api/provider`
-- `GET /api/provider-presets`
-- `POST /api/provider-test-connection`
-- `POST /api/run-update`
-- `GET /api/run-update/{id}`
-- `POST /api/open-terminal`
-
-## Scheduling daily updates
-
-The dashboard currently documents two paths:
-
-- **Phase 7 setup wizard + OS job** (preferred).
-- **Claude Code `/schedule`** (legacy fallback) — still documented in
-  [docs/scheduling.md](docs/scheduling.md).
-
-### Legacy `/schedule` defaults
-
-- Cadence: `0 9 * * *`
-- Prompt: `Follow skill/SKILL.md end-to-end` with repo path and date context.
-
-## Project layout
+## Project Layout
 
 ```text
 LLM-Dash/
-├── README.md
-├── CLAUDE.md
-├── AGENTS.md
-├── LOGBOOK.md
-├── TODO.md
-├── requirements.txt
-├── server.py
-├── run.sh
-├── run.bat
-├── skill/
-│   └── SKILL.md
-├── docs/
-│   ├── scheduling.md
-│   └── plans/
-│       ├── IMPLEMENTATION_PLAN.md
-│       ├── M6_AGENT_PROVIDER_BACKEND_PLAN.md
-│       ├── M6_5_UI_INTEGRATION_PLAN.md
-│       └── M7_SETUP_WIZARD_PLAN.md
-├── web/
+├── server.py              # FastAPI app — API routes + static mounts
+├── run.sh / run.bat       # One-click launchers
+├── requirements.txt       # Python deps (FastAPI, uvicorn, openai-agents, ...)
+│
+├── web/                   # Static frontend (vanilla HTML/CSS/JS)
 │   ├── index.html
-│   ├── style.css
-│   ├── app.js
-│   └── vendor/
-│       ├── sql-wasm.js
-│       ├── sql-wasm.wasm
-│       ├── marked.min.js
-│       └── uplot.iife.min.js
+│   ├── style.css          # Voidware v0.7.1 design tokens
+│   ├── app.js             # sql.js bootstrap, state, rendering
+│   └── vendor/            # Vendored libs (sql-wasm, marked, uPlot)
+│
 ├── data/
-│   ├── dash.sqlite
-│   └── run_metrics.csv
+│   ├── dash.sqlite        # Source of truth
+│   └── run_metrics.csv    # Human-readable metrics mirror
+│
+├── changelogs/            # Append-only daily Markdown files
+│   └── YYYY-MM-DD.md
+│
 ├── scripts/
-│   ├── schema.sql
-│   ├── config.py
-│   ├── launch_server.py
-│   ├── run_update.py
-│   ├── init_db.py
+│   ├── schema.sql         # SQLite DDL
+│   ├── config.py          # Provider config + credential layer
+│   ├── init_db.py         # First-run DB seeder
+│   ├── run_update.py      # Agents SDK update executor
 │   ├── export_metrics_csv.py
-│   └── schedule_job.py
-├── logs/                  # per-run logs
-└── changelogs/
-    └── 2026-xx-xx.md...
+│   ├── schedule_job.py    # OS-level job installer
+│   └── launch_server.py   # Silent-mode server manager
+│
+├── skill/
+│   └── SKILL.md           # Agent-agnostic update contract
+│
+├── docs/
+│   ├── ARCHITECTURE.md    # System architecture deep-dive
+│   ├── DEVELOPMENT.md     # Developer / contributor guide
+│   └── scheduling.md      # Scheduling reference
+│
+├── CLAUDE.md              # Claude-specific agent instructions
+├── AGENTS.md              # Generic agent guide
+└── TODO.md                # Task board / roadmap
 ```
 
 ## Troubleshooting
 
-- `python -m venv` missing on Debian/Ubuntu: install `python3-venv` and rerun
-  the launcher.
-- Port 8787 in use: run with `LLM_DASH_PORT=9000 ./run.sh`.
-- LAN access fails: start with `LLM_DASH_HOST=0.0.0.0 ./run.sh --silent` and
-  allow the port through the host firewall.
-- Browser did not open: read the URL printed by the launcher; open it manually.
-- First-run spinner hangs: check launcher logs and `scripts/init_db.py` output.
+| Problem | Fix |
+|---|---|
+| `python -m venv` fails on Debian/Ubuntu | Install `python3-venv` and rerun the launcher |
+| Port 8787 already in use | `LLM_DASH_PORT=9000 ./run.sh` |
+| LAN access not working | Start with `LLM_DASH_HOST=0.0.0.0` and allow the port through your firewall |
+| Browser didn't open | Copy the URL from terminal output and open manually |
+| First-run spinner hangs | Check `logs/server.log` and `scripts/init_db.py` output |
+| Setup wizard won't connect | Verify your API key and base URL; check the "Test Connection" result |
 
-## Further reading
+## Documentation
 
-- [Implementation plan](docs/plans/IMPLEMENTATION_PLAN.md)
-- [Task queue / roadmap](TODO.md)
-- [Session notes](LOGBOOK.md)
-- [Run protocol](skill/SKILL.md)
+| Document | Audience | Contents |
+|---|---|---|
+| [Architecture](docs/ARCHITECTURE.md) | Developers | System design, data flow, schema, component map |
+| [Development](docs/DEVELOPMENT.md) | Contributors | Local setup, code conventions, testing, adding features |
+| [Update Protocol](skill/SKILL.md) | AI Agents | Step-by-step update contract |
+| [Task Board](TODO.md) | Everyone | Roadmap and progress tracker |
