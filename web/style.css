@@ -342,6 +342,14 @@ a {
   padding: 4px 12px;
 }
 
+.refresh-error {
+  flex-basis: 100%;
+  color: var(--vw-error);
+  font-family: var(--vw-font-mono);
+  font-size: 11px;
+  text-align: right;
+}
+
 .filter-slot:empty,
 .detail-slot:empty {
   display: none;
@@ -1241,6 +1249,91 @@ table.data-table thead th.num,
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
 }
 
+.data-view {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.data-card {
+  padding: 18px;
+  background: var(--vw-bg-soft);
+  border-radius: var(--vw-radius-lg);
+  box-shadow: 0 0 0 1px var(--vw-border);
+}
+
+.data-card-head {
+  margin-bottom: 12px;
+}
+
+.data-card-head h3 {
+  margin: 0;
+  font-family: var(--vw-font-mono);
+  font-size: 16px;
+}
+
+.data-card-head p {
+  margin: 6px 0 0;
+  color: var(--vw-text-muted);
+}
+
+.data-card-body {
+  display: grid;
+  gap: 12px;
+}
+
+.prompt-display {
+  width: 100%;
+  min-height: 220px;
+  resize: vertical;
+  padding: 12px;
+  border-radius: var(--vw-radius-sm);
+  background: var(--vw-surface-2);
+  color: var(--vw-text);
+  box-shadow: inset 0 0 0 1px var(--vw-border);
+  font-family: var(--vw-font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.prompt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.paste-hint {
+  margin: 0;
+  color: var(--vw-text-faint);
+  font-family: var(--vw-font-mono);
+  font-size: 11px;
+  line-height: 1.7;
+  white-space: pre-line;
+}
+
+.data-card-status {
+  display: grid;
+  gap: 6px;
+}
+
+.data-card-status p {
+  margin: 0;
+  font-family: var(--vw-font-mono);
+  font-size: 11px;
+  color: var(--vw-text-muted);
+}
+
+.data-card-status [data-tone="success"] {
+  color: var(--vw-success);
+}
+
+.data-card-status [data-tone="warning"] {
+  color: var(--vw-iridescent-5);
+}
+
+.data-card-status [data-tone="error"] {
+  color: var(--vw-error);
+}
+
 .chart-empty {
   display: flex;
   align-items: center;
@@ -1374,6 +1467,12 @@ table.data-table thead th.num,
   text-align: center;
 }
 
+.run-update-card {
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
 .modal-head {
   display: flex;
   align-items: flex-start;
@@ -1438,6 +1537,10 @@ table.data-table thead th.num,
   gap: 14px;
 }
 
+.run-update-card .modal-body {
+  min-height: 0;
+}
+
 .modal-body .status-msg {
   margin: 0;
 }
@@ -1457,6 +1560,7 @@ table.data-table thead th.num,
 }
 
 .modal-prompt:focus,
+.prompt-display:focus,
 .modal-close:focus,
 .action-btn:focus,
 .search-input:focus,
@@ -1472,6 +1576,7 @@ table.data-table thead th.num,
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  justify-content: flex-end;
 }
 
 .modal-hint {
@@ -1504,6 +1609,71 @@ table.data-table thead th.num,
   margin-top: 8px;
   color: var(--vw-text-faint);
   font-size: 12px;
+}
+
+.run-update-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--vw-text-muted);
+  font-family: var(--vw-font-mono);
+  font-size: 12px;
+}
+
+.progress-indicator {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 24px;
+  border: 2px solid var(--vw-surface-3);
+  border-top-color: var(--vw-accent);
+  border-radius: 50%;
+}
+
+.progress-indicator[data-state="running"] {
+  animation: spin 0.8s linear infinite;
+}
+
+.progress-indicator[data-state="succeeded"],
+.progress-indicator[data-state="failed"] {
+  border-color: currentColor;
+}
+
+.progress-indicator[data-state="succeeded"] {
+  color: var(--vw-success);
+}
+
+.progress-indicator[data-state="failed"] {
+  color: var(--vw-error);
+}
+
+.progress-indicator[data-state="succeeded"]::after {
+  content: "✓";
+  font-size: 13px;
+}
+
+.progress-indicator[data-state="failed"]::after {
+  content: "×";
+  font-size: 14px;
+}
+
+.run-update-log {
+  flex: 1;
+  min-height: 150px;
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 12px;
+  border-radius: var(--vw-radius-sm);
+  background: var(--vw-surface-2);
+  color: var(--vw-text-soft);
+  box-shadow: inset 0 0 0 1px var(--vw-border);
+  font-family: var(--vw-font-mono);
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 @keyframes spin {

@@ -49,6 +49,7 @@
     maximumFractionDigits: 2,
   });
   const BOOTSTRAP_POLL_MS = 1000;
+  const RUN_UPDATE_POLL_MS = 3000;
   const PASTE_HINT = [
     'macOS: claude "$(pbpaste)"  |  codex "$(pbpaste)"  |  gemini "$(pbpaste)"',
     'Linux: claude "$(xclip -selection clipboard -o)"  or  claude "$(wl-paste)"',
@@ -57,6 +58,7 @@
 
   const state = {
     db: null,
+    SQL: null,
     ready: false,
     error: null,
     view: "table",
@@ -94,7 +96,38 @@
       message: "",
       detail: "",
     },
-    refreshModal: {
+    provider: {
+      loaded: false,
+      has_provider: false,
+      base_url: "",
+      chat_endpoint: "",
+      models_endpoint: "",
+      default_model: "",
+      backup_model: "",
+      exa_configured: false,
+      _fetching: false,
+    },
+    runUpdate: {
+      active: false,
+      jobId: null,
+      state: "idle",
+      startedAt: null,
+      completedAt: null,
+      tail: "",
+      error: "",
+      _starting: false,
+      _pollInterval: null,
+      _timerInterval: null,
+      _raf: 0,
+    },
+    dataPrompt: "",
+    dataPromptLoaded: false,
+    dataPromptLoading: false,
+    dataCopyState: "idle",
+    dataCopyMessage: "",
+    dataTerminalState: "idle",
+    dataTerminalMessage: "",
+    manualRefreshModal: {
       open: false,
       loading: false,
       prompt: "",
@@ -325,6 +358,13 @@
     return agent + " · " + provider;
   }
 
+  function formatElapsed(ms) {
+    const total = Math.max(0, Math.floor(ms / 1000));
+    const minutes = Math.floor(total / 60);
+    const seconds = total % 60;
+    return minutes ? minutes + "m " + seconds + "s" : seconds + "s";
+  }
+
   function normalizeAssetPath(path) {
     if (!path) return "";
     if (/^(?:https?:)?\/\//.test(path)) return path;
@@ -421,6 +461,7 @@
     const SQL = await window.initSqlJs({
       locateFile: (filename) => "vendor/" + filename,
     });
+    state.SQL = SQL;
     const response = await fetch("/data/dash.sqlite", { cache: "no-store" });
     if (!response.ok) {
       const error = new Error("DB fetch failed: HTTP " + response.status);
@@ -455,6 +496,15 @@
     }
   }
 
+  async function fetchProvider() {
+    try {
+      const payload = await fetchJson("/api/provider");
+      Object.assign(state.provider, payload, { loaded: true });
+    } catch (_) {
+      state.provider.loaded = true;
+    }
+  }
+
   async function waitForBootstrapReady() {
     const first = await fetchBootstrapStatus();
     if (!first) return;
@@ -472,69 +522,286 @@
   }
 
   function applyCopyResult(result) {
-    state.refreshModal.copyState = result.tone;
-    state.refreshModal.copyMessage = result.message;
-    state.refreshModal.selectPrompt = !result.ok;
+    state.manualRefreshModal.copyState = result.tone;
+    state.manualRefreshModal.copyMessage = result.message;
+    state.manualRefreshModal.selectPrompt = !result.ok;
   }
 
-  function closeRefreshModal() {
-    state.refreshModal.open = false;
-    state.refreshModal.loading = false;
-    state.refreshModal.error = "";
-    state.refreshModal.terminalState = "idle";
-    state.refreshModal.terminalMessage = "";
-    state.refreshModal.selectPrompt = false;
+  function closeManualRefreshModal() {
+    state.manualRefreshModal.open = false;
+    state.manualRefreshModal.loading = false;
+    state.manualRefreshModal.error = "";
+    state.manualRefreshModal.terminalState = "idle";
+    state.manualRefreshModal.terminalMessage = "";
+    state.manualRefreshModal.selectPrompt = false;
     render();
   }
 
-  async function copyPromptAgain() {
-    if (!state.refreshModal.prompt) return;
-    const result = await copyText(state.refreshModal.prompt);
+  async function copyManualPromptAgain() {
+    if (!state.manualRefreshModal.prompt) return;
+    const result = await copyText(state.manualRefreshModal.prompt);
     applyCopyResult(result);
     render();
   }
 
-  async function openRefreshModal() {
-    state.refreshModal.open = true;
-    state.refreshModal.loading = true;
-    state.refreshModal.prompt = "";
-    state.refreshModal.error = "";
-    state.refreshModal.copyState = "idle";
-    state.refreshModal.copyMessage = "";
-    state.refreshModal.terminalState = "idle";
-    state.refreshModal.terminalMessage = "";
-    state.refreshModal.selectPrompt = false;
+  async function openManualRefreshModal() {
+    state.runUpdate.error = "";
+    state.manualRefreshModal.open = true;
+    state.manualRefreshModal.loading = true;
+    state.manualRefreshModal.prompt = "";
+    state.manualRefreshModal.error = "";
+    state.manualRefreshModal.copyState = "idle";
+    state.manualRefreshModal.copyMessage = "";
+    state.manualRefreshModal.terminalState = "idle";
+    state.manualRefreshModal.terminalMessage = "";
+    state.manualRefreshModal.selectPrompt = false;
     render();
 
     try {
       const payload = await fetchJson("/api/prompt");
-      state.refreshModal.prompt = payload.prompt || "";
-      state.refreshModal.loading = false;
-      const result = await copyText(state.refreshModal.prompt);
+      state.manualRefreshModal.prompt = payload.prompt || "";
+      state.manualRefreshModal.loading = false;
+      const result = await copyText(state.manualRefreshModal.prompt);
       applyCopyResult(result);
     } catch (error) {
-      state.refreshModal.loading = false;
-      state.refreshModal.error = String((error && error.message) || error);
-      state.refreshModal.copyState = "error";
-      state.refreshModal.copyMessage = "Couldn't fetch the update prompt.";
+      state.manualRefreshModal.loading = false;
+      state.manualRefreshModal.error = String((error && error.message) || error);
+      state.manualRefreshModal.copyState = "error";
+      state.manualRefreshModal.copyMessage = "Couldn't fetch the update prompt.";
     }
     render();
   }
 
-  async function openTerminal() {
-    state.refreshModal.terminalState = "warning";
-    state.refreshModal.terminalMessage = "Opening terminal…";
+  async function openTerminalForManual() {
+    state.manualRefreshModal.terminalState = "warning";
+    state.manualRefreshModal.terminalMessage = "Opening terminal...";
     render();
     try {
       const payload = await fetchJson("/api/open-terminal", { method: "POST" });
-      state.refreshModal.terminalState = "success";
-      state.refreshModal.terminalMessage = payload.launcher
+      state.manualRefreshModal.terminalState = "success";
+      state.manualRefreshModal.terminalMessage = payload.launcher
         ? "Opened " + payload.launcher + " in the repo."
         : "Opened a terminal in the repo.";
     } catch (error) {
-      state.refreshModal.terminalState = "error";
-      state.refreshModal.terminalMessage = String((error && error.message) || error);
+      state.manualRefreshModal.terminalState = "error";
+      state.manualRefreshModal.terminalMessage = String((error && error.message) || error);
     }
+    render();
+  }
+
+  async function openTerminalForData() {
+    state.dataTerminalState = "warning";
+    state.dataTerminalMessage = "Opening terminal...";
+    render();
+    try {
+      const payload = await fetchJson("/api/open-terminal", { method: "POST" });
+      state.dataTerminalState = "success";
+      state.dataTerminalMessage = payload.launcher
+        ? "Opened " + payload.launcher + " in the repo."
+        : "Opened a terminal in the repo.";
+    } catch (error) {
+      state.dataTerminalState = "error";
+      state.dataTerminalMessage = String((error && error.message) || error);
+    }
+    render();
+  }
+
+  function resetRunUpdate(keepError) {
+    if (state.runUpdate._pollInterval) window.clearInterval(state.runUpdate._pollInterval);
+    if (state.runUpdate._timerInterval) window.clearInterval(state.runUpdate._timerInterval);
+    if (state.runUpdate._raf) window.cancelAnimationFrame(state.runUpdate._raf);
+    const error = keepError ? state.runUpdate.error : "";
+    Object.assign(state.runUpdate, {
+      active: false,
+      jobId: null,
+      state: "idle",
+      startedAt: null,
+      completedAt: null,
+      tail: "",
+      error,
+      _starting: false,
+      _pollInterval: null,
+      _timerInterval: null,
+      _raf: 0,
+    });
+  }
+
+  function closeRunUpdateOverlay() {
+    if (state.runUpdate.state === "running") return;
+    resetRunUpdate(false);
+    render();
+    const refreshButton = document.getElementById("refresh-trigger");
+    if (refreshButton) refreshButton.focus({ preventScroll: true });
+  }
+
+  function retryRunUpdate() {
+    if (state.runUpdate.state === "running") return;
+    resetRunUpdate(false);
+    startRunUpdate();
+  }
+
+  function updateRunUpdateDom() {
+    state.runUpdate._raf = 0;
+    const elapsed = document.getElementById("ru-elapsed");
+    const log = document.getElementById("ru-log");
+    const status = document.getElementById("ru-status-text");
+    if (elapsed && state.runUpdate.startedAt) {
+      const end = state.runUpdate.completedAt || Date.now();
+      elapsed.textContent = formatElapsed(end - state.runUpdate.startedAt);
+    }
+    if (status) status.textContent = runUpdateStatusText();
+    if (log) {
+      log.textContent = state.runUpdate.tail || "Waiting for log output...";
+      log.scrollTop = log.scrollHeight;
+    }
+  }
+
+  function queueRunUpdateDomUpdate() {
+    if (state.runUpdate._raf) return;
+    state.runUpdate._raf = window.requestAnimationFrame(updateRunUpdateDom);
+  }
+
+  function startRunUpdateTimer() {
+    if (state.runUpdate._timerInterval) window.clearInterval(state.runUpdate._timerInterval);
+    state.runUpdate._timerInterval = window.setInterval(queueRunUpdateDomUpdate, 1000);
+  }
+
+  async function pollRunUpdateOnce() {
+    if (!state.runUpdate.jobId) return;
+    try {
+      const payload = await fetchJson("/api/run-update/" + encodeURIComponent(state.runUpdate.jobId));
+      const prior = state.runUpdate.state;
+      state.runUpdate.state = payload.state || "running";
+      state.runUpdate.tail = payload.tail || "";
+      state.runUpdate.error = state.runUpdate.state === "failed" ? "Update failed." : "";
+      if (payload.completed_at && !state.runUpdate.completedAt) state.runUpdate.completedAt = Date.now();
+      queueRunUpdateDomUpdate();
+      if (state.runUpdate.state !== "running") {
+        if (state.runUpdate._pollInterval) window.clearInterval(state.runUpdate._pollInterval);
+        if (state.runUpdate._timerInterval) window.clearInterval(state.runUpdate._timerInterval);
+        state.runUpdate._pollInterval = null;
+        state.runUpdate._timerInterval = null;
+        if (prior === "running") render();
+      }
+    } catch (error) {
+      state.runUpdate.state = "failed";
+      state.runUpdate.completedAt = Date.now();
+      state.runUpdate.error = String((error && error.message) || error);
+      if (state.runUpdate._pollInterval) window.clearInterval(state.runUpdate._pollInterval);
+      if (state.runUpdate._timerInterval) window.clearInterval(state.runUpdate._timerInterval);
+      state.runUpdate._pollInterval = null;
+      state.runUpdate._timerInterval = null;
+      render();
+    }
+  }
+
+  function startRunUpdatePolling() {
+    if (state.runUpdate._pollInterval) window.clearInterval(state.runUpdate._pollInterval);
+    state.runUpdate._pollInterval = window.setInterval(pollRunUpdateOnce, RUN_UPDATE_POLL_MS);
+    pollRunUpdateOnce();
+  }
+
+  async function startRunUpdate() {
+    if (state.runUpdate.active || state.runUpdate._starting) return;
+    resetRunUpdate(false);
+    state.runUpdate._starting = true;
+    render();
+    try {
+      const payload = await fetchJson("/api/run-update", { method: "POST" });
+      Object.assign(state.runUpdate, {
+        active: true,
+        _starting: false,
+        jobId: payload.id,
+        state: payload.state || "running",
+        startedAt: Date.now(),
+        completedAt: null,
+        tail: "",
+        error: "",
+      });
+      render();
+      startRunUpdateTimer();
+      startRunUpdatePolling();
+    } catch (error) {
+      state.runUpdate._starting = false;
+      if (error && error.status === 400) {
+        state.provider.has_provider = false;
+        await openManualRefreshModal();
+        return;
+      }
+      state.runUpdate.error = String((error && error.message) || error);
+      render();
+    }
+  }
+
+  async function handleRefresh() {
+    if (state.runUpdate.active || state.runUpdate._starting) return;
+    state.runUpdate.error = "";
+    if (!state.provider.loaded && !state.provider._fetching) {
+      state.provider._fetching = true;
+      render();
+      await fetchProvider();
+      state.provider._fetching = false;
+      render();
+    }
+    if (!state.provider.loaded) return;
+    if (state.provider.has_provider) {
+      startRunUpdate();
+    } else {
+      openManualRefreshModal();
+    }
+  }
+
+  async function reloadDB() {
+    const response = await fetch("/data/dash.sqlite?t=" + Date.now(), { cache: "no-store" });
+    if (!response.ok) throw new Error("Failed to reload database");
+    const buffer = new Uint8Array(await response.arrayBuffer());
+    if (state.db) state.db.close();
+    if (!state.SQL) throw new Error("sql.js module is not ready");
+    state.db = new state.SQL.Database(buffer);
+    state.activeChangelogDate = null;
+    state.changelogBodies = {};
+    state.dataPrompt = "";
+    state.dataPromptLoaded = false;
+    loadStaticState();
+    await fetchProvider();
+    resetRunUpdate(false);
+  }
+
+  async function reloadDashboardFromRunUpdate() {
+    state.runUpdate.error = "";
+    try {
+      await reloadDB();
+    } catch (error) {
+      state.runUpdate.active = true;
+      state.runUpdate.state = "failed";
+      state.runUpdate.error = String((error && error.message) || error);
+    }
+    render();
+  }
+
+  async function fetchDataPrompt() {
+    if (state.dataPromptLoaded || state.dataPromptLoading) return;
+    state.dataPromptLoading = true;
+    try {
+      const payload = await fetchJson("/api/prompt");
+      state.dataPrompt = payload.prompt || "";
+      state.dataPromptLoaded = true;
+      state.dataCopyState = "idle";
+      state.dataCopyMessage = "";
+    } catch (error) {
+      state.dataPromptLoaded = true;
+      state.dataCopyState = "error";
+      state.dataCopyMessage = String((error && error.message) || error);
+    } finally {
+      state.dataPromptLoading = false;
+      render();
+    }
+  }
+
+  async function copyDataPrompt() {
+    const result = await copyText(state.dataPrompt);
+    state.dataCopyState = result.tone;
+    state.dataCopyMessage = result.message;
     render();
   }
 
@@ -1116,21 +1383,21 @@
     if (content) slot.appendChild(content);
   }
 
-  function renderRefreshModal() {
-    const body = state.refreshModal.loading
+  function renderManualRefreshModal() {
+    const body = state.manualRefreshModal.loading
       ? h("p", { class: "status-msg" }, "loading prompt…")
-      : state.refreshModal.error
-        ? h("p", { class: "status-msg error" }, state.refreshModal.error)
+      : state.manualRefreshModal.error
+        ? h("p", { class: "status-msg error" }, state.manualRefreshModal.error)
         : h("textarea", {
             id: "refresh-prompt",
             class: "modal-prompt",
             readonly: "readonly",
-          }, state.refreshModal.prompt);
+          }, state.manualRefreshModal.prompt);
 
     return h("div", {
       class: "overlay-shell",
       onclick: (event) => {
-        if (event.target === event.currentTarget) closeRefreshModal();
+        if (event.target === event.currentTarget) closeManualRefreshModal();
       },
     }, h("div", {
       class: "modal-card",
@@ -1146,44 +1413,125 @@
         h("button", {
           class: "modal-close",
           type: "button",
-          onclick: closeRefreshModal,
+          onclick: closeManualRefreshModal,
           "aria-label": "Close refresh modal",
         }, "×"),
       ]),
       h("div", { class: "modal-body" }, [
-        state.refreshModal.copyMessage
+        state.manualRefreshModal.copyMessage
           ? h("p", {
               class: "modal-copy-state",
-              dataset: { tone: state.refreshModal.copyState || "idle" },
-            }, state.refreshModal.copyMessage)
+              dataset: { tone: state.manualRefreshModal.copyState || "idle" },
+            }, state.manualRefreshModal.copyMessage)
           : null,
         body,
         h("div", { class: "modal-actions" }, [
           h("button", {
             class: "action-btn",
             type: "button",
-            disabled: state.refreshModal.loading || !state.refreshModal.prompt,
-            onclick: copyPromptAgain,
+            disabled: state.manualRefreshModal.loading || !state.manualRefreshModal.prompt,
+            onclick: copyManualPromptAgain,
           }, "Copy again"),
           h("button", {
             class: "action-btn primary",
             type: "button",
             disabled:
-              state.refreshModal.loading ||
-              !state.refreshModal.prompt ||
-              state.refreshModal.terminalMessage === "Opening terminal…",
-            onclick: openTerminal,
+              state.manualRefreshModal.loading ||
+              !state.manualRefreshModal.prompt ||
+              state.manualRefreshModal.terminalMessage === "Opening terminal...",
+            onclick: openTerminalForManual,
           }, "Open Terminal"),
         ]),
-        state.refreshModal.terminalMessage
+        state.manualRefreshModal.terminalMessage
           ? h("p", {
               class: "modal-terminal-state",
-              dataset: { tone: state.refreshModal.terminalState || "idle" },
-            }, state.refreshModal.terminalMessage)
+              dataset: { tone: state.manualRefreshModal.terminalState || "idle" },
+            }, state.manualRefreshModal.terminalMessage)
           : null,
         h("p", { class: "modal-hint" }, PASTE_HINT),
       ]),
     ]));
+  }
+
+  function runUpdateTitle() {
+    if (state.runUpdate.state === "succeeded") return "Update complete";
+    if (state.runUpdate.state === "failed") return "Update failed";
+    return "Updating dashboard";
+  }
+
+  function runUpdateStatusText() {
+    if (state.runUpdate.state === "succeeded") return "Finished in";
+    if (state.runUpdate.state === "failed") return "Stopped after";
+    return "Running for";
+  }
+
+  function renderRunUpdateOverlay() {
+    const isRunning = state.runUpdate.state === "running";
+    const model = state.provider.default_model || "configured model";
+    const elapsed = state.runUpdate.startedAt
+      ? formatElapsed((state.runUpdate.completedAt || Date.now()) - state.runUpdate.startedAt)
+      : "0s";
+    const logText = state.runUpdate.tail || (isRunning ? "Waiting for log output..." : state.runUpdate.error || "No log output.");
+    const actions = isRunning
+      ? [h("button", { class: "action-btn", type: "button", disabled: true }, "Running...")]
+      : state.runUpdate.state === "succeeded"
+        ? [
+            h("button", { class: "action-btn primary", type: "button", onclick: reloadDashboardFromRunUpdate }, "Reload dashboard"),
+            h("button", { class: "action-btn", type: "button", onclick: closeRunUpdateOverlay }, "Close"),
+          ]
+        : [
+            h("button", { class: "action-btn primary", type: "button", onclick: retryRunUpdate }, "Retry"),
+            h("button", { class: "action-btn", type: "button", onclick: closeRunUpdateOverlay }, "Close"),
+          ];
+
+    const card = h("div", {
+      class: "modal-card run-update-card",
+      role: "dialog",
+      "aria-modal": "true",
+      "aria-labelledby": "ru-title",
+      "aria-busy": isRunning ? "true" : "false",
+      tabindex: "-1",
+    }, [
+      h("div", { class: "modal-head" }, [
+        h("div", null, [
+          h("h2", { id: "ru-title" }, runUpdateTitle()),
+          h("p", { id: "ru-model" }, model + " via Agent Provider"),
+        ]),
+        !isRunning ? h("button", {
+          class: "modal-close",
+          type: "button",
+          onclick: closeRunUpdateOverlay,
+          "aria-label": "Close update overlay",
+        }, "×") : null,
+      ]),
+      h("div", { class: "modal-body" }, [
+        state.runUpdate.error
+          ? h("p", { class: "modal-copy-state", dataset: { tone: "error" } }, state.runUpdate.error)
+          : null,
+        h("div", { class: "run-update-status" }, [
+          h("div", {
+            class: "progress-indicator",
+            dataset: { state: state.runUpdate.state },
+            "aria-hidden": "true",
+          }),
+          h("span", { id: "ru-status-text" }, runUpdateStatusText()),
+          h("span", { id: "ru-elapsed" }, elapsed),
+        ]),
+        h("pre", { id: "ru-log", class: "run-update-log" }, logText),
+        h("div", { class: "modal-actions" }, actions),
+      ]),
+    ]);
+
+    window.requestAnimationFrame(() => {
+      card.focus({ preventScroll: true });
+      updateRunUpdateDom();
+    });
+    return h("div", {
+      class: "overlay-shell",
+      onclick: (event) => {
+        if (!isRunning && event.target === event.currentTarget) closeRunUpdateOverlay();
+      },
+    }, card);
   }
 
   function renderBootstrapOverlay() {
@@ -1205,7 +1553,8 @@
     if (!slot) return;
     const nodes = [];
     if (state.bootstrap.state === "initializing") nodes.push(renderBootstrapOverlay());
-    if (state.refreshModal.open) nodes.push(renderRefreshModal());
+    if (state.manualRefreshModal.open) nodes.push(renderManualRefreshModal());
+    if (state.runUpdate.active) nodes.push(renderRunUpdateOverlay());
     slot.replaceChildren(...nodes);
     document.body.classList.toggle("has-overlay", nodes.length > 0);
   }
@@ -1213,8 +1562,29 @@
   function syncRefreshButton() {
     const button = document.getElementById("refresh-trigger");
     if (!button) return;
-    button.disabled = state.bootstrap.state === "initializing" || state.refreshModal.loading;
-    button.textContent = state.refreshModal.loading ? "Loading..." : "Refresh";
+    const checking = !state.provider.loaded || state.provider._fetching;
+    button.disabled =
+      state.bootstrap.state === "initializing" ||
+      checking ||
+      state.runUpdate.active ||
+      state.runUpdate._starting ||
+      state.manualRefreshModal.loading;
+    if (state.bootstrap.state === "initializing") button.textContent = "Loading...";
+    else if (checking) button.textContent = "Checking...";
+    else if (state.runUpdate.active || state.runUpdate._starting) button.textContent = "Running...";
+    else if (state.manualRefreshModal.loading) button.textContent = "Loading...";
+    else button.textContent = "Refresh";
+    button.title = state.runUpdate.error && !state.runUpdate.active ? state.runUpdate.error : "";
+    let error = document.getElementById("refresh-error");
+    if (state.runUpdate.error && !state.runUpdate.active) {
+      if (!error) {
+        error = h("span", { id: "refresh-error", class: "refresh-error", role: "status" });
+        button.parentElement.appendChild(error);
+      }
+      error.textContent = state.runUpdate.error;
+    } else if (error) {
+      error.remove();
+    }
   }
 
   function renderFilterSlot() {
@@ -1574,6 +1944,53 @@
     ]);
   }
 
+  function renderDataView() {
+    if (!state.dataPromptLoaded && !state.dataPromptLoading) fetchDataPrompt();
+    const promptText = state.dataPromptLoading ? "Loading prompt..." : state.dataPrompt;
+    return h("div", { class: "data-view" }, h("section", { class: "data-card prompt-card" }, [
+      h("div", { class: "data-card-head" }, [
+        h("h3", null, "AI Prompt for updating"),
+        h("p", null, "Copy this prompt and paste it into any AI coding agent to run today's dashboard update manually."),
+      ]),
+      h("div", { class: "data-card-body" }, [
+        h("textarea", {
+          id: "data-prompt",
+          class: "prompt-display",
+          readonly: "readonly",
+        }, promptText),
+        h("div", { class: "prompt-actions" }, [
+          h("button", {
+            class: "action-btn",
+            type: "button",
+            disabled: state.dataPromptLoading || !state.dataPrompt,
+            onclick: copyDataPrompt,
+          }, "Copy prompt"),
+          h("button", {
+            class: "action-btn primary",
+            type: "button",
+            disabled: state.dataTerminalMessage === "Opening terminal...",
+            onclick: openTerminalForData,
+          }, "Open Terminal"),
+        ]),
+        h("p", { class: "paste-hint" }, PASTE_HINT),
+        h("div", { class: "data-card-status" }, [
+          state.dataCopyMessage
+            ? h("p", {
+                id: "data-copy-state",
+                dataset: { tone: state.dataCopyState || "idle" },
+              }, state.dataCopyMessage)
+            : null,
+          state.dataTerminalMessage
+            ? h("p", {
+                id: "data-terminal-state",
+                dataset: { tone: state.dataTerminalState || "idle" },
+              }, state.dataTerminalMessage)
+            : null,
+        ]),
+      ]),
+    ]));
+  }
+
   function buildSeriesData(rows, field) {
     const points = [...rows]
       .sort((a, b) => String(a.changelog_date).localeCompare(String(b.changelog_date)))
@@ -1810,7 +2227,7 @@
       viewSlot.replaceChildren(state.error);
       renderDetailPanel(null);
       updateFreshness();
-      if (!state.refreshModal.open && state.bootstrap.state !== "initializing") restoreFocus(focus);
+      if (!state.manualRefreshModal.open && !state.runUpdate.active && state.bootstrap.state !== "initializing") restoreFocus(focus);
       return;
     }
     if (!state.ready) {
@@ -1819,7 +2236,7 @@
       ));
       renderDetailPanel(null);
       updateFreshness();
-      if (!state.refreshModal.open && state.bootstrap.state !== "initializing") restoreFocus(focus);
+      if (!state.manualRefreshModal.open && !state.runUpdate.active && state.bootstrap.state !== "initializing") restoreFocus(focus);
       return;
     }
 
@@ -1827,6 +2244,7 @@
     if (state.view === "chart") content = renderChart();
     else if (state.view === "changelog") content = renderChangelog();
     else if (state.view === "stats") content = renderStatsView();
+    else if (state.view === "data") content = renderDataView();
     else content = renderTable();
 
     viewSlot.replaceChildren(content);
@@ -1844,12 +2262,12 @@
     });
 
     updateFreshness();
-    if (!state.refreshModal.open && state.bootstrap.state !== "initializing") restoreFocus(focus);
-    if (state.refreshModal.open && !state.refreshModal.loading) {
+    if (!state.manualRefreshModal.open && !state.runUpdate.active && state.bootstrap.state !== "initializing") restoreFocus(focus);
+    if (state.manualRefreshModal.open && !state.manualRefreshModal.loading) {
       const promptField = document.getElementById("refresh-prompt");
-      if (promptField && state.refreshModal.selectPrompt) {
+      if (promptField && state.manualRefreshModal.selectPrompt) {
         selectText(promptField);
-        state.refreshModal.selectPrompt = false;
+        state.manualRefreshModal.selectPrompt = false;
       }
     }
     scheduleChartDraw();
@@ -1871,12 +2289,19 @@
       });
     });
     const refreshButton = document.getElementById("refresh-trigger");
-    if (refreshButton) refreshButton.addEventListener("click", openRefreshModal);
+    if (refreshButton) refreshButton.addEventListener("click", handleRefresh);
     window.addEventListener("resize", scheduleChartDraw);
     window.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && state.refreshModal.open) closeRefreshModal();
+      if (event.key !== "Escape") return;
+      if (state.runUpdate.state === "running") return;
+      if (state.runUpdate.active && state.runUpdate.state !== "running") {
+        closeRunUpdateOverlay();
+        return;
+      }
+      if (state.manualRefreshModal.open) closeManualRefreshModal();
     });
     window.addEventListener("beforeunload", () => {
+      resetRunUpdate(false);
       if (state.db) state.db.close();
     });
   }
@@ -1887,8 +2312,9 @@
       await waitForBootstrapReady();
       state.db = await loadDB();
       loadStaticState();
-      state.ready = true;
       state.bootstrap.state = state.bootstrap.supported ? "ready" : state.bootstrap.state;
+      await fetchProvider();
+      state.ready = true;
       window.setInterval(updateFreshness, 60000);
     } catch (error) {
       console.error("LLM-Dash boot failed:", error);

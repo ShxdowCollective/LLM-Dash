@@ -120,6 +120,8 @@ Planning:
 
 - [x] M6.1-M6.4 implementation plan written:
   [docs/plans/M6_AGENT_PROVIDER_BACKEND_PLAN.md](docs/plans/M6_AGENT_PROVIDER_BACKEND_PLAN.md).
+- [x] M6.5 UI integration plan written:
+  [docs/plans/M6_5_UI_INTEGRATION_PLAN.md](docs/plans/M6_5_UI_INTEGRATION_PLAN.md).
 
 ### Milestones
 
@@ -164,13 +166,19 @@ Planning:
   a background `run_update.py` job.
 
 **M6.5 — UI integration**
-- [ ] Refresh button: if `has_provider=true`, `POST /api/run-update` and
-  show a progress overlay; otherwise open the Phase 7 wizard. The
-  clipboard + Open-Terminal flow moves out of the modal.
-- [ ] New **"AI Prompt for updating"** card inside the Data tab — renders
-  the agent-neutral prompt, copy button, "Open Terminal", and the paste
+  Plan: [docs/plans/M6_5_UI_INTEGRATION_PLAN.md](docs/plans/M6_5_UI_INTEGRATION_PLAN.md)
+- [x] D1: Fetch provider state on boot (`GET /api/provider` → `state.provider`).
+- [x] D2: Bifurcate Refresh button — provider path → `startRunUpdate()`;
+  no-provider path → existing clipboard modal (Phase 7 replaces with wizard).
+- [x] D3: Run-update progress overlay — poll `GET /api/run-update/{id}`,
+  live log tail, elapsed timer, success/failure terminal states.
+- [x] D4: New **Data** view tab + **"AI Prompt for updating"** card —
+  renders the agent-neutral prompt, copy button, "Open Terminal", paste
   hint. This is the manual-CLI escape hatch, deliberately separate from
   Refresh.
+- [x] D5: Rename `refreshModal` → `manualRefreshModal` for naming clarity.
+- [x] D6: DB reload after successful run — re-fetch sqlite, reopen,
+  `loadStaticState()`, update freshness pill, no full page reload.
 - [x] Replace any remaining "runtime" label in the UI.
 
 **M6.6 — Provider preset catalog**
