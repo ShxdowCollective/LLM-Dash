@@ -22,10 +22,10 @@
     { key: "cost", label: "Cost" },
   ];
   const CHART_BARS = [
-    { key: "intelligence", label: "Intelligence", raw: "#ff5ec7" },
-    { key: "coding", label: "Coding", raw: "#79a7ff" },
+    { key: "intelligence", label: "Intelligence", raw: "#7c5cc4" },
+    { key: "coding", label: "Coding", raw: "#86a8ff" },
     { key: "agents", label: "Agents", raw: "#72f0d7" },
-    { key: "speed", label: "Speed", raw: "#ffd36a" },
+    { key: "speed", label: "Speed", raw: "#a6f17b" },
   ];
   const TIER_FILTERS = [
     { key: null, label: "All tiers" },
@@ -171,12 +171,12 @@
 
   function barColor(score) {
     if (score === null || score === undefined || Number.isNaN(score)) return "#3a3a3a";
-    if (score >= 9) return "#ff5ec7";
-    if (score >= 8) return "#79a7ff";
+    if (score >= 9) return "#7c5cc4";
+    if (score >= 8) return "#86a8ff";
     if (score >= 7) return "#72f0d7";
-    if (score >= 6) return "#ffd36a";
-    if (score >= 5) return "#fb923c";
-    return "#f87171";
+    if (score >= 6) return "#a6f17b";
+    if (score >= 5) return "#f1d47b";
+    return "#f2ad5b";
   }
 
   function clamp(value, lo, hi) {
@@ -2118,13 +2118,13 @@
       renderUplotChart("stats-chart-cost", rows, "cost_usd", {
         type: "bar",
         label: "Cost",
-        color: "#ff5ec7",
+        color: "#f17bb5",
         axis: (value) => formatCurrency(value),
       });
       renderUplotChart("stats-chart-duration", rows, "duration_sec", {
         type: "line",
         label: "Duration",
-        color: "#79a7ff",
+        color: "#86a8ff",
         axis: (value) => formatDuration(value),
       });
       renderUplotChart("stats-chart-output", rows, "tokens_output", {
@@ -2136,7 +2136,7 @@
       renderUplotChart("stats-chart-words", rows, "word_count", {
         type: "line",
         label: "Words",
-        color: "#ffd36a",
+        color: "#a6f17b",
         axis: (value) => formatCompactNumber(value),
       });
     });

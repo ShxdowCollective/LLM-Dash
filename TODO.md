@@ -193,76 +193,97 @@ Planning:
   with local Ollama / llama.cpp / LM Studio examples). Consumed by the wizard
   (Phase 7).
 
-## Phase 7 — Setup wizard + OS-level scheduling
+## Phase 7 — Setup Wizard + OS-Level Scheduling + Voidware Upgrade
 
-Goal: a first-run wizard that configures the Agent Provider end-to-end and
-finishes with an optional OS-level scheduled job.
+Goal: first-run wizard that configures the Agent Provider end-to-end,
+optional OS-level scheduled jobs, and upgrade from Voidware v0.4.1 to
+v0.7.1.
+
+Planning:
+
+- [x] Full implementation plan written:
+  [docs/plans/M7_SETUP_WIZARD_PLAN.md](docs/plans/M7_SETUP_WIZARD_PLAN.md).
 
 Triggers:
 - Dashboard load when `GET /api/provider` returns `has_provider=false`.
 - A "Configure Agent Provider" button inside the Data tab.
 
+### Part A — Voidware v0.4.1 → v0.7.1 Upgrade
+
+**M7.0 — Voidware upgrade (ships independently before wizard)**
+- [x] A.1: Update `:root` token contract — 7-color iridescent palette,
+  new surface-inverse / module-accent / weight / semantic / shadow / layout /
+  transition tokens.
+- [x] A.2: Gradient and color reference sweep — site title gradient, tier
+  color mapping, sort/filter active states, stale pill, focus rings
+  migrated to `outline` pattern.
+- [x] A.3: Port Voidware v0.7.1 component CSS — wizard progress, button
+  variants, input fields, cards, status chips, modals, animations.
+
+### Part B — Setup Wizard
+
 **M7.1 — Wizard shell**
 - [ ] Six-step state machine, progress indicator, back / next / skip
-  controls, Voidware-spec styling.
+  controls, Voidware wizard CSS.
 - [ ] Auto-open on first load when no provider; manual entry point in Data
-  tab.
+  tab; entry from Refresh button when no provider.
 
-**M7.2 — Step 1: Credentials**
-- [ ] Preset dropdown = M6.6 catalog merged with saved profiles read from
-  keychain / auth.json.
-- [ ] Fields: `BASE_URL`, `API_KEY` (hidden), `MODELS_OVERRIDE_URL`
-  (optional), endpoint mode from the preset, optional request-headers
-  key/value list.
-- [ ] Live endpoint preview follows the preset endpoint mode: `append_v1`
-  providers append `/v1`; provider-root presets append `/chat/completions` and
-  `/models` directly.
-- [ ] "Test connection" → `GET /api/provider/test-connection`.
-- [ ] "Skip" button appears **only after** a failed test.
-- [ ] On continue: credentials written per voidware spec (M6.2).
+**M7.2 — Step 0: Provider + Credentials**
+- [ ] Preset dropdown from M6.6 catalog (`GET /api/provider-presets`).
+- [ ] Fields: `BASE_URL`, `API_KEY` (password), `MODELS_OVERRIDE_URL`
+  (optional), endpoint mode from preset, optional request-headers editor.
+- [ ] Live endpoint preview (chat + models URLs) updates on keystroke.
+- [ ] "Test Connection" → `GET /api/provider/test-connection`.
+- [ ] "Skip" appears **only after** a failed test.
+- [ ] Collapsed "Advanced" section for endpoint mode, headers, models
+  override URL.
+- [ ] On continue: credentials written via `POST /api/provider`.
 
-**M7.3 — Step 2: Model selection**
+**M7.3 — Step 1: Model Selection**
 - [ ] Two searchable dropdowns (default + backup) populated from
-  `/api/provider/models`.
-- [ ] If the user types a model not in the fetched list: confirmation
-  modal before continuing.
+  `GET /api/provider/models`.
+- [ ] Fallback to manual entry when provider has no models endpoint
+  (pre-fill from preset `model_examples`).
+- [ ] Custom model ID confirmation inline.
 
-**M7.4 — Step 3: Model connection test (unskippable)**
-- [ ] Short-prompt roundtrip against default + backup via
-  `/api/provider/test-model`.
-- [ ] On failure: Retry or Restart. Restart wipes credentials + model
-  selection and drops the user back to Step 1.
+**M7.4 — Step 2: Model Connection Test (unskippable)**
+- [ ] Sequential `POST /api/provider/test-model` for default then backup.
+- [ ] Per-model status: pending → testing → success / failed.
+- [ ] On failure: Retry or Restart (back to Step 0).
 
-**M7.5 — Step 4: Exa**
-- [ ] If Exa key already present in env / keychain / auth.json: skip the
-  step silently.
-- [ ] Otherwise: input + "Sign up for Exa" link + short explainer.
-- [ ] "Skip" is allowed but shows a warning about free-tier rate limits
-  before confirming.
+**M7.5 — Step 3: Exa**
+- [ ] Auto-skip when `state.provider.exa_configured === true`.
+- [ ] Single password input + "Sign up at exa.ai" link.
+- [ ] Skip allowed with rate-limit warning confirmation.
 
-**M7.6 — Step 5: Scheduling (optional)**
-- [ ] Cadence picker: Off / Daily / Weekly (day-of-week) / Monthly
-  (day-of-month).
-- [ ] Time-of-day picker in local time, with UTC echo for sanity.
+**M7.6 — Step 4: Scheduling (optional)**
+- [ ] Cadence picker: Off / Daily / Weekly / Monthly segmented control.
+- [ ] Time-of-day in local time with UTC echo.
 - [ ] `scripts/schedule_job.py` with platform branches:
-  - Linux / WSL → systemd user timer.
-  - macOS → launchd agent plist in `~/Library/LaunchAgents/`.
-  - Windows → Task Scheduler task via `schtasks /create /xml`.
-- [ ] Job invokes `scripts/run_update.py` (M6.3); per-platform log path.
+  - Linux / WSL → systemd user timer (detect WSL systemd availability).
+  - macOS → launchd plist in `~/Library/LaunchAgents/`.
+  - Windows → Task Scheduler via `schtasks /create /xml`.
+- [ ] Job invokes `scripts/run_update.py`; per-platform log path.
 - [ ] API: `GET` / `POST` / `DELETE /api/schedule`. "Off" removes the job.
 
-**M7.7 — Step 6: Summary + finalize**
-- [ ] Review screen listing everything about to be written (creds hint
-  only — no raw key).
-- [ ] Finish → persists remaining config + kicks off an immediate Refresh
-  via M6.5.
+**M7.7 — Step 5: Summary + Finalize**
+- [ ] Review screen (creds hint only — `sk-...xxxx`).
+- [ ] Finish → persist config + close wizard + re-fetch provider state +
+  immediate `POST /api/run-update`.
 
-**M7.8 — Smoke + verification**
-- [ ] End-to-end wizard run against a real OpenAI-compatible endpoint
-  (local Ollama or OpenRouter free tier).
-- [ ] Schedule creation verified via `systemctl --user list-timers` on
-  Linux, `launchctl list` on macOS, `schtasks /query` on Windows.
+**M7.8 — UI Integration**
+- [ ] Refresh button: no provider → open wizard (not manual refresh modal).
+- [ ] Data view: provider status card with Reconfigure + Manage Schedule.
+- [ ] `renderOverlay()` priority: bootstrap > wizard > run-update >
+  manual refresh.
+
+**M7.9 — Smoke + Verification**
+- [ ] End-to-end wizard against real OpenAI-compatible endpoint.
+- [ ] Schedule creation verified: `systemctl --user list-timers` (Linux),
+  `launchctl list` (macOS), `schtasks /query` (Windows).
 - [ ] "Off" state proven to disable + remove the job.
+- [ ] Voidware visual regression across all 5 views.
+- [ ] Wizard re-entry from Data tab pre-fills existing config.
 
 ## Nice-to-haves (post-v1)
 
