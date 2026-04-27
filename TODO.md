@@ -278,12 +278,25 @@ Triggers:
   manual refresh.
 
 **M7.9 — Smoke + Verification**
-- [ ] End-to-end wizard against real OpenAI-compatible endpoint.
-- [ ] Schedule creation verified: `systemctl --user list-timers` (Linux),
-  `launchctl list` (macOS), `schtasks /query` (Windows).
-- [ ] "Off" state proven to disable + remove the job.
-- [ ] Voidware visual regression across all 5 views.
-- [ ] Wizard re-entry from Data tab pre-fills existing config.
+- [x] End-to-end provider runner against real OpenAI-compatible endpoint.
+  NanoGPT via Voidware auth, `zai-org/glm-5:thinking` default,
+  `minimax/minimax-m2.7` backup, subscription models override URL, free Exa
+  MCP with no API key. Wrote `changelogs/2026-04-26.md`, DB changelog row,
+  run_metrics row, CSV row, and bumped `meta.last_updated`.
+- [x] Schedule creation verified on this host: WSL/systemd user timer appears
+  in `systemctl --user list-timers`.
+- [x] "Off" state proven to disable + remove the systemd job.
+- [x] Voidware visual regression across all 5 views.
+  Evidence: `artifacts/m7-9/{table,chart,changelog,stats,data}.png`.
+- [x] Wizard re-entry from Data tab pre-fills existing config.
+  Fixed and verified `MODELS_OVERRIDE_URL` hydration plus model-step prefill
+  for default/backup after connection test.
+
+M7.9 caveats:
+- macOS `launchctl` and Windows `schtasks` were not run from this WSL host.
+- Exa free MCP was mounted and used as an agent tool source, but the Agents SDK
+  path still does not expose per-tool call counts, so run metrics record
+  `exa_searches=0` / `exa_fetches=0`.
 
 ## Nice-to-haves (post-v1)
 

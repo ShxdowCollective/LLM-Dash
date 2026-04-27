@@ -18,7 +18,8 @@ EXA_KEY_NAME = "EXA_API_KEY"
 CONFIG_ENV_PREFIX = "LLM_DASH_"
 
 PROVIDER_BASE_URL_ENVS = ("LLM_DASH_BASE_URL", "LLM_DASH_PROVIDER_BASE_URL", "BASE_URL")
-PROVIDER_API_KEY_ENVS = ("LLM_DASH_API_KEY", "LLM_DASH_PROVIDER_API_KEY", "API_KEY")
+PROVIDER_API_KEY_ENVS = ("LLM_DASH_API_KEY", "LLM_DASH_PROVIDER_API_KEY", "NANOGPT_API_KEY", "API_KEY")
+PROVIDER_KEY_NAMES = (PROVIDER_KEY_NAME, "NANOGPT_API_KEY")
 MODELS_OVERRIDE_URL_ENVS = ("LLM_DASH_MODELS_OVERRIDE_URL", "MODELS_OVERRIDE_URL")
 DEFAULT_MODEL_ENVS = ("LLM_DASH_DEFAULT_MODEL", "DEFAULT_MODEL")
 BACKUP_MODEL_ENVS = ("LLM_DASH_BACKUP_MODEL", "BACKUP_MODEL")
@@ -173,8 +174,12 @@ def _save_auth_file_secret(name: str, secret: str, meta: dict[str, Any] | None =
     _atomic_write_json(auth_path(), data)
 
 
-def _read_secret(envs: tuple[str, ...], key_name: str) -> str:
-    return _env_first(envs) or _keyring_get(key_name) or _credential_from_auth_file(key_name)
+def _read_secret(envs: tuple[str, ...], key_name: str | tuple[str, ...]) -> str:
+    key_names = (key_name,) if isinstance(key_name, str) else key_name
+    for secret in [_env_first(envs), *(_keyring_get(name) for name in key_names), *(_credential_from_auth_file(name) for name in key_names)]:
+        if secret:
+            return secret
+    return ""
 
 
 def _normalize_header_map(raw: Any) -> dict[str, str]:
@@ -239,11 +244,18 @@ def _endpoint_base(base_url: str, endpoint_mode: str) -> str:
     return f"{normalize_base_url(base_url)}/v1"
 
 
+def is_models_endpoint_url(value: str) -> bool:
+    parsed = urlparse(str(value or "").strip())
+    return parsed.path.rstrip("/").endswith("/models")
+
+
 def chat_endpoint(base_url: str, endpoint_mode: str = ENDPOINT_MODE_APPEND_V1) -> str:
     return f"{_endpoint_base(base_url, endpoint_mode)}/chat/completions"
 
 
 def models_endpoint(base_url: str, endpoint_mode: str = ENDPOINT_MODE_APPEND_V1) -> str:
+    if is_models_endpoint_url(base_url):
+        return normalize_base_url(base_url, field="models_endpoint", allow_v1=True)
     return f"{_endpoint_base(base_url, endpoint_mode)}/models"
 
 
@@ -283,6 +295,7 @@ def public_provider_state() -> dict[str, Any]:
     return {
         "has_provider": bundle.has_provider,
         "base_url": bundle.config.base_url,
+        "models_override_url": bundle.config.models_override_url,
         "chat_endpoint": bundle.chat_endpoint,
         "models_endpoint": bundle.models_endpoint,
         "default_model": bundle.config.default_model,
@@ -326,7 +339,7 @@ def load_provider_config() -> ProviderConfig:
 def load_provider_bundle() -> ProviderBundle:
     return ProviderBundle(
         config=load_provider_config(),
-        secrets=ProviderSecrets(api_key=_read_secret(PROVIDER_API_KEY_ENVS, PROVIDER_KEY_NAME)),
+        secrets=ProviderSecrets(api_key=_read_secret(PROVIDER_API_KEY_ENVS, PROVIDER_KEY_NAMES)),
     )
 
 

@@ -102,6 +102,7 @@
       loaded: false,
       has_provider: false,
       base_url: "",
+      models_override_url: "",
       chat_endpoint: "",
       models_endpoint: "",
       default_model: "",
@@ -602,13 +603,27 @@
     return String(value || "").trim().replace(/\/+$/, "");
   }
 
-  function endpointPreview(baseUrl, endpointMode) {
+  function isModelsEndpointUrl(value) {
+    try {
+      const url = new URL(String(value || "").trim());
+      return url.pathname.replace(/\/+$/, "").endsWith("/models");
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function endpointPreview(baseUrl, endpointMode, modelsOverrideUrl) {
     const base = stripTrailingSlash(baseUrl);
+    const modelsOverride = stripTrailingSlash(modelsOverrideUrl);
     if (!base) return { chat: "—", models: "—" };
     const root = endpointMode === "root" ? base : base + "/v1";
     return {
       chat: root + "/chat/completions",
-      models: root + "/models",
+      models: modelsOverride
+        ? isModelsEndpointUrl(modelsOverride)
+          ? modelsOverride
+          : (endpointMode === "root" ? modelsOverride : modelsOverride + "/v1") + "/models"
+        : root + "/models",
     };
   }
 
@@ -672,7 +687,7 @@
       preset: null,
       baseUrl: state.provider.base_url || "",
       apiKey: "",
-      modelsOverrideUrl: "",
+      modelsOverrideUrl: state.provider.models_override_url || "",
       endpointMode: state.provider.endpoint_mode || "append_v1",
       requestHeaders: [],
       advancedOpen: false,
@@ -1914,7 +1929,7 @@
   }
 
   function renderWizardProviderStep() {
-    const preview = endpointPreview(state.wizard.baseUrl, state.wizard.endpointMode);
+    const preview = endpointPreview(state.wizard.baseUrl, state.wizard.endpointMode, state.wizard.modelsOverrideUrl);
     const presets = state.providerPresets.providers;
     return h("div", { class: "wizard-step-body" }, [
       wizardField("Preset", h("select", {

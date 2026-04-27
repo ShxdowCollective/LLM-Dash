@@ -232,6 +232,48 @@ def latest_scores(con: sqlite3.Connection, model_name: str) -> dict[str, Any]:
     }
 
 
+def validate_update(update: dict[str, Any], db_path: Path) -> None:
+    date_value = str(update.get("date") or local_date())
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_value):
+        raise RunUpdateError("date must be YYYY-MM-DD")
+    dt.date.fromisoformat(date_value)
+
+    new_names = {str(item.get("name") or "").strip() for item in update.get("new_models", []) or []}
+    new_names.discard("")
+    for model in update.get("new_models", []) or []:
+        name = str(model.get("name") or "").strip()
+        if not name:
+            raise RunUpdateError("new model missing name")
+        for field in ("intelligence", "coding", "agents", "speed", "cost"):
+            coerce_score(model.get(field), field)
+
+    con = sqlite3.connect(db_path)
+    try:
+        known_names = {
+            str(row[0])
+            for row in con.execute("SELECT name FROM models")
+        }
+        valid_names = known_names | new_names
+        for update_item in update.get("score_updates", []) or []:
+            name = str(update_item.get("name") or "").strip()
+            field = str(update_item.get("field") or "").strip()
+            if name not in known_names:
+                raise RunUpdateError(f"Unknown model in score update: {name}")
+            if field not in {"intelligence", "coding", "agents", "speed", "cost"}:
+                raise RunUpdateError(f"Invalid score field: {field}")
+            coerce_score(update_item.get("new"), field)
+
+        for item in update.get("status_changes", []) or []:
+            name = str(item.get("name") or "").strip()
+            status = str(item.get("to") or "").strip()
+            if name not in valid_names:
+                raise RunUpdateError(f"Unknown model in status change: {name}")
+            if status not in {"active", "superseded", "deprecated"}:
+                raise RunUpdateError(f"Invalid status: {status}")
+    finally:
+        con.close()
+
+
 def export_metrics_csv(db_path: Path, csv_path: Path) -> None:
     con = sqlite3.connect(db_path)
     try:
@@ -539,23 +581,21 @@ async def run_agent_once(model_name: str, prompt: str, exa_key: str, log_path: P
     )
     model = OpenAIChatCompletionsModel(model=model_name, openai_client=client)
 
-    mcp_servers = []
     server_cm = None
-    if exa_key:
-        try:
-            from agents.mcp import MCPServerStreamableHttp
+    try:
+        from agents.mcp import MCPServerStreamableHttp
 
-            server_cm = MCPServerStreamableHttp(
-                name="exa",
-                params={
-                    "url": EXA_MCP_URL,
-                    "headers": {"x-api-key": exa_key},
-                },
-                cache_tools_list=True,
-                require_approval="never",
-            )
-        except Exception as exc:
-            write_log(log_path, f"exa_mcp_setup_error={type(exc).__name__}: {exc}")
+        params: dict[str, Any] = {"url": EXA_MCP_URL}
+        if exa_key:
+            params["headers"] = {"x-api-key": exa_key}
+        server_cm = MCPServerStreamableHttp(
+            name="exa",
+            params=params,
+            cache_tools_list=True,
+            require_approval="never",
+        )
+    except Exception as exc:
+        write_log(log_path, f"exa_mcp_setup_error={type(exc).__name__}: {exc}")
 
     def make_agent(mcp_servers: list[Any] | None = None) -> Any:
         return Agent(
@@ -570,8 +610,13 @@ async def run_agent_once(model_name: str, prompt: str, exa_key: str, log_path: P
         )
 
     if server_cm is not None:
-        async with server_cm as server:
-            agent = make_agent([server])
+        try:
+            async with server_cm as server:
+                agent = make_agent([server])
+                result = await Runner.run(agent, prompt)
+        except Exception as exc:
+            write_log(log_path, f"exa_mcp_runtime_error={type(exc).__name__}: {exc}")
+            agent = make_agent()
             result = await Runner.run(agent, prompt)
     else:
         agent = make_agent()
@@ -580,11 +625,11 @@ async def run_agent_once(model_name: str, prompt: str, exa_key: str, log_path: P
     return str(result.final_output), usage_metrics(result)
 
 
-async def generate_diff(log_path: Path) -> tuple[dict[str, Any], dict[str, Any], str]:
+async def generate_diff(log_path: Path, db_path: Path = DB_PATH) -> tuple[dict[str, Any], dict[str, Any], str]:
     bundle = load_provider_bundle()
     if not bundle.has_provider:
         raise ConfigError("Agent Provider requires base_url, api_key, and default_model")
-    state = current_state(DB_PATH)
+    state = current_state(db_path)
     skill = SKILL_PATH.read_text(encoding="utf-8")
     exa_key = load_exa_api_key()
     prompt = "\n\n".join(
@@ -613,12 +658,15 @@ async def generate_diff(log_path: Path) -> tuple[dict[str, Any], dict[str, Any],
                         "base_url": bundle.config.base_url,
                         "endpoint_mode": bundle.config.endpoint_mode,
                         "headers": redact_headers(bundle.config.request_headers),
-                        "exa_mcp": bool(exa_key),
+                        "exa_mcp": True,
+                        "exa_auth": "key" if exa_key else "free",
                     }
                 ),
             )
             output, usage = await run_agent_once(model_name, prompt, exa_key, log_path)
-            return parse_json_output(output), usage, model_name
+            update = parse_json_output(output)
+            validate_update(update, db_path)
+            return update, usage, model_name
         except Exception as exc:
             errors.append(f"{model_name}: {type(exc).__name__}: {exc}")
             write_log(log_path, f"agent_error model={model_name} error={type(exc).__name__}: {exc}")
@@ -677,7 +725,7 @@ def main() -> int:
             usage = {"tokens_input": None, "tokens_output": None, "tokens_cached": None, "cost_usd": None}
             agent_name = "diff-json"
         else:
-            update, usage, agent_name = asyncio.run(generate_diff(log_path))
+            update, usage, agent_name = asyncio.run(generate_diff(log_path, db_path))
 
         completed = utc_now()
         metrics = {

@@ -94,7 +94,7 @@ OpenAI-shaped roots, or `root` for providers whose documented base URL already
 includes the OpenAI-compatible API root. Secrets go to the OS keychain first, then
 `~/.shxdow/auth.json`; public config goes to
 `~/.shxdow/config/shxdow.llmdash.json`. `GET /api/provider` never returns raw
-keys.
+keys, only non-secret provider config and derived endpoints.
 
 `GET /api/provider-presets` serves the Phase 7 wizard catalog from
 `web/provider-presets.json`: OpenAI, Anthropic OpenAI-compatible, Google AI
