@@ -180,8 +180,10 @@
       scheduleTimeLocal: "09:00",
       scheduleState: "idle",
       scheduleError: "",
+      loading: false,
       saving: false,
       saveError: "",
+      openRequestId: 0,
     },
     runUpdate: {
       active: false,
@@ -791,10 +793,14 @@
     return state.wizard.availableModels.some((model) => model.id === modelId);
   }
 
-  function resetWizardFromCurrent(startStep) {
+  function resetWizardFromCurrent(startStep, options) {
     const scheduleCadence = state.schedule.enabled ? (state.schedule.cadence || "off") : "off";
+    const requestId = options && Number.isFinite(options.requestId)
+      ? options.requestId
+      : state.wizard.openRequestId;
     Object.assign(state.wizard, {
       open: true,
+      openRequestId: requestId,
       step: startStep || 0,
       mode: state.provider.has_provider ? "reconfigure" : "setup",
       presetId: "",
@@ -827,14 +833,19 @@
       scheduleTimeLocal: state.schedule.time_local || "09:00",
       scheduleState: "idle",
       scheduleError: "",
+      loading: Boolean(options && options.loading),
       saving: false,
       saveError: "",
     });
   }
 
   async function openWizard(startStep) {
+    const requestId = state.wizard.openRequestId + 1;
+    resetWizardFromCurrent(startStep || 0, { loading: true, requestId });
+    render();
     await Promise.all([fetchProviderPresets(), fetchSchedule()]);
-    resetWizardFromCurrent(startStep || 0);
+    if (!state.wizard.open || state.wizard.openRequestId !== requestId) return;
+    resetWizardFromCurrent(startStep || 0, { loading: false, requestId });
     if (!state.wizard.baseUrl && state.providerPresets.providers.length) {
       applyWizardPreset(state.providerPresets.providers[0].id, false);
     }
@@ -842,11 +853,13 @@
     if (state.wizard.step === 1) ensureWizardModelsLoaded();
   }
 
-  function closeWizard() {
+  function closeWizard(shouldRender) {
     state.wizard.open = false;
+    state.wizard.openRequestId += 1;
+    state.wizard.loading = false;
     state.wizard.saving = false;
     state.wizard.saveError = "";
-    render();
+    if (shouldRender !== false) render();
   }
 
   function applyWizardPreset(presetId, shouldRender) {
@@ -1046,7 +1059,7 @@
         render();
         await fetchProvider();
         await fetchSchedule();
-        closeWizard();
+        closeWizard(false);
         startRunUpdate();
       }
     } catch (error) {
@@ -1082,7 +1095,7 @@
   async function waitForBootstrapReady() {
     const first = await fetchBootstrapStatus();
     if (!first) return;
-    render();
+    if (state.bootstrap.state === "initializing") render();
     while (state.bootstrap.state === "initializing") {
       await sleep(BOOTSTRAP_POLL_MS);
       await fetchBootstrapStatus();
@@ -1201,7 +1214,7 @@
   }
 
   function closeRunUpdateOverlay() {
-    if (state.runUpdate.state === "running") return;
+    if (isRunUpdateBusy()) return;
     resetRunUpdate(false);
     render();
     const refreshButton = document.getElementById("refresh-trigger");
@@ -1209,9 +1222,20 @@
   }
 
   function retryRunUpdate() {
-    if (state.runUpdate.state === "running") return;
+    if (isRunUpdateBusy()) return;
     resetRunUpdate(false);
     startRunUpdate();
+  }
+
+  function isRunUpdateBusy() {
+    return state.runUpdate.state === "starting" || state.runUpdate.state === "running";
+  }
+
+  function runUpdateLogText() {
+    if (state.runUpdate.tail) return state.runUpdate.tail;
+    if (state.runUpdate.state === "starting") return "Starting update job...";
+    if (state.runUpdate.state === "running") return "Waiting for log output...";
+    return state.runUpdate.error || "No log output.";
   }
 
   function updateRunUpdateDom() {
@@ -1225,7 +1249,7 @@
     }
     if (status) status.textContent = runUpdateStatusText();
     if (log) {
-      log.textContent = state.runUpdate.tail || "Waiting for log output...";
+      log.textContent = runUpdateLogText();
       log.scrollTop = log.scrollHeight;
     }
   }
@@ -1278,7 +1302,15 @@
   async function startRunUpdate() {
     if (state.runUpdate.active || state.runUpdate._starting) return;
     resetRunUpdate(false);
-    state.runUpdate._starting = true;
+    Object.assign(state.runUpdate, {
+      active: true,
+      _starting: true,
+      state: "starting",
+      startedAt: Date.now(),
+      completedAt: null,
+      tail: "",
+      error: "",
+    });
     render();
     try {
       const payload = await fetchJson("/api/run-update", { method: "POST" });
@@ -1298,10 +1330,14 @@
     } catch (error) {
       state.runUpdate._starting = false;
       if (error && error.status === 400) {
+        resetRunUpdate(false);
         state.provider.has_provider = false;
         await openWizard(0);
         return;
       }
+      state.runUpdate.active = true;
+      state.runUpdate.state = "failed";
+      state.runUpdate.completedAt = Date.now();
       state.runUpdate.error = String((error && error.message) || error);
       render();
     }
@@ -2336,6 +2372,11 @@
   }
 
   function renderWizardContent() {
+    if (state.wizard.loading) {
+      return h("div", { class: "wizard-step-body" }, [
+        wizardStatusChip("testing", "Preparing setup"),
+      ]);
+    }
     if (state.wizard.step === 0) return renderWizardProviderStep();
     if (state.wizard.step === 1) return renderWizardModelsStep();
     if (state.wizard.step === 2) return renderWizardTestStep();
@@ -2345,6 +2386,7 @@
   }
 
   function wizardCanNext() {
+    if (state.wizard.loading) return false;
     if (state.wizard.saving) return false;
     if (state.wizard.step === 0) {
       return Boolean(
@@ -2363,7 +2405,9 @@
     const skipVisible = (state.wizard.step === 0 && state.wizard.connectionTestState === "failed") ||
       state.wizard.step === 3 ||
       state.wizard.step === 4;
-    const label = state.wizard.step === 5
+    const label = state.wizard.loading
+      ? "Loading..."
+      : state.wizard.step === 5
       ? state.wizard.saving ? "Finishing..." : "Finish"
       : state.wizard.step === 4
         ? state.wizard.scheduleState === "saving" ? "Saving..." : "Next"
@@ -2372,14 +2416,14 @@
       h("button", {
         class: "vw-btn vw-btn-tertiary",
         type: "button",
-        disabled: state.wizard.step === 0 || state.wizard.saving,
+        disabled: state.wizard.loading || state.wizard.step === 0 || state.wizard.saving,
         onclick: wizardBack,
       }, "Back"),
       h("div", { class: "wizard-footer-actions" }, [
         skipVisible ? h("button", {
           class: "vw-btn vw-btn-secondary",
           type: "button",
-          disabled: state.wizard.saving,
+          disabled: state.wizard.loading || state.wizard.saving,
           onclick: wizardSkip,
         }, "Skip") : null,
         h("button", {
@@ -2492,26 +2536,27 @@
   }
 
   function runUpdateTitle() {
+    if (state.runUpdate.state === "starting") return "Starting update";
     if (state.runUpdate.state === "succeeded") return "Update complete";
     if (state.runUpdate.state === "failed") return "Update failed";
     return "Updating dashboard";
   }
 
   function runUpdateStatusText() {
+    if (state.runUpdate.state === "starting") return "Starting job";
     if (state.runUpdate.state === "succeeded") return "Finished in";
     if (state.runUpdate.state === "failed") return "Stopped after";
     return "Running for";
   }
 
   function renderRunUpdateOverlay() {
-    const isRunning = state.runUpdate.state === "running";
+    const isBusy = isRunUpdateBusy();
     const model = state.provider.default_model || "configured model";
     const elapsed = state.runUpdate.startedAt
       ? formatElapsed((state.runUpdate.completedAt || Date.now()) - state.runUpdate.startedAt)
       : "0s";
-    const logText = state.runUpdate.tail || (isRunning ? "Waiting for log output..." : state.runUpdate.error || "No log output.");
-    const actions = isRunning
-      ? [h("button", { class: "action-btn", type: "button", disabled: true }, "Running...")]
+    const actions = isBusy
+      ? [h("button", { class: "action-btn", type: "button", disabled: true }, state.runUpdate.state === "starting" ? "Starting..." : "Running...")]
       : state.runUpdate.state === "succeeded"
         ? [
             h("button", { class: "action-btn primary", type: "button", onclick: reloadDashboardFromRunUpdate }, "Reload dashboard"),
@@ -2527,7 +2572,7 @@
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": "ru-title",
-      "aria-busy": isRunning ? "true" : "false",
+      "aria-busy": isBusy ? "true" : "false",
       tabindex: "-1",
     }, [
       h("div", { class: "modal-head" }, [
@@ -2535,7 +2580,7 @@
           h("h2", { id: "ru-title" }, runUpdateTitle()),
           h("p", { id: "ru-model" }, model + " via Agent Provider"),
         ]),
-        !isRunning ? h("button", {
+        !isBusy ? h("button", {
           class: "modal-close",
           type: "button",
           onclick: closeRunUpdateOverlay,
@@ -2555,7 +2600,7 @@
           h("span", { id: "ru-status-text" }, runUpdateStatusText()),
           h("span", { id: "ru-elapsed" }, elapsed),
         ]),
-        h("pre", { id: "ru-log", class: "run-update-log" }, logText),
+        h("pre", { id: "ru-log", class: "run-update-log" }, runUpdateLogText()),
         h("div", { class: "modal-actions" }, actions),
       ]),
     ]);
@@ -2567,7 +2612,7 @@
     return h("div", {
       class: "overlay-shell",
       onclick: (event) => {
-        if (!isRunning && event.target === event.currentTarget) closeRunUpdateOverlay();
+        if (!isBusy && event.target === event.currentTarget) closeRunUpdateOverlay();
       },
     }, card);
   }
@@ -3272,11 +3317,17 @@
     ]);
   }
 
+  function finishBootPaint() {
+    const app = document.getElementById("app");
+    if (app) app.removeAttribute("data-booting");
+  }
+
   function renderWizardPage() {
     const app = document.getElementById("app");
     const overlayRoot = document.getElementById("overlay-root");
     if (app) app.hidden = true;
     if (overlayRoot) overlayRoot.hidden = true;
+    document.body.classList.remove("has-overlay");
     let container = document.getElementById("wizard-page");
     if (!container) {
       container = document.createElement("div");
@@ -3301,6 +3352,7 @@
     const viewSlot = document.getElementById("view");
     const sortGroup = document.querySelector(".sort-group");
     if (!viewSlot) return;
+    finishBootPaint();
 
     if (state.wizard.open) {
       renderWizardPage();
@@ -3387,7 +3439,7 @@
     window.addEventListener("keydown", (event) => {
       if (event.key !== "Escape") return;
       if (state.wizard.open) return;
-      if (state.runUpdate.state === "running") return;
+      if (isRunUpdateBusy()) return;
       if (state.runUpdate.active && state.runUpdate.state !== "running") {
         closeRunUpdateOverlay();
         return;

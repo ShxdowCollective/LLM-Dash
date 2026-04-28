@@ -6,6 +6,21 @@ Rough execution order. Newest decisions at the top.
 
 Use `[x]` for done and `[ ]` for still-open. New work should start at the top.
 
+## Phase 8.5 — Refresh transition flicker
+
+Goal: remove the dashboard flash when Refresh routes into setup or starts an
+Agent Provider update.
+
+- [x] `web/index.html` / `web/style.css`: make the initial browser paint a
+  neutral loading state instead of the full dashboard chrome.
+- [x] `web/app.js`: render the full-screen wizard immediately while setup
+  dependencies load.
+- [x] `web/app.js`: show the run-update overlay immediately while the server
+  starts the job, and avoid a dashboard paint between wizard finish and update
+  start.
+- [x] Verification: JS syntax check plus browser smoke for wizard and
+  run-update transition states.
+
 ## Phase 8.4 — Wizard spacing polish
 
 Goal: fix the cramped first setup step Advanced section and sweep nearby app

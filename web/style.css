@@ -158,6 +158,31 @@ a {
   padding: 28px 20px 64px;
 }
 
+#app[data-booting="true"] {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  max-width: none;
+  padding: 28px 20px;
+}
+
+#app[data-booting="true"] .site-header,
+#app[data-booting="true"] .controls,
+#app[data-booting="true"] .filter-slot,
+#app[data-booting="true"] .detail-slot,
+#app[data-booting="true"] .site-footer {
+  display: none;
+}
+
+#app[data-booting="true"] .view-slot {
+  width: min(420px, 100%);
+  text-align: center;
+}
+
+#app[data-booting="true"] .status-msg {
+  margin: 0;
+}
+
 .site-header {
   display: flex;
   justify-content: space-between;
@@ -1779,6 +1804,7 @@ table.data-table thead th.num,
   border-radius: 50%;
 }
 
+.progress-indicator[data-state="starting"],
 .progress-indicator[data-state="running"] {
   animation: spin 0.8s linear infinite;
 }
