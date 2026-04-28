@@ -6,6 +6,18 @@ Rough execution order. Newest decisions at the top.
 
 Use `[x]` for done and `[ ]` for still-open. New work should start at the top.
 
+## Phase 8.3 — Launcher reset mode
+
+Goal: add `--reset` to the launchers so a local install can be wiped back to
+first-run state and land directly in the setup wizard.
+
+- [x] `scripts/reset_local_state.py`: clear app config/secrets, remove the
+  scheduled job, and delete generated SQLite/CSV data.
+- [x] `run.sh` / `run.bat`: parse `--reset`, run the shared reset helper, and
+  open the dashboard with the wizard forced visible.
+- [x] Frontend/docs: support the reset launch URL, preserve changelog history,
+  and document the new command.
+
 ## Phase 8.2 — Windows UNC launcher fix
 
 Goal: make `run.bat` work when launched from a WSL repo path like

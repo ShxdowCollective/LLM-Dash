@@ -2,6 +2,7 @@
 # LLM-Dash — POSIX launcher.
 # Creates/uses a repo-local .venv, installs deps, starts uvicorn, opens the browser.
 # Use --silent to detach the server and print the URL for startup tasks.
+# Use --reset to clear local settings/data and open the setup wizard.
 
 set -euo pipefail
 
@@ -11,11 +12,13 @@ cd "$HERE"
 PORT="${LLM_DASH_PORT:-8787}"
 HOST="${LLM_DASH_HOST:-127.0.0.1}"
 URL="http://${HOST}:${PORT}"
+OPEN_URL="${URL}"
 VENV="${HERE}/.venv"
 SILENT=0
+RESET=0
 
 usage() {
-  echo "Usage: ./run.sh [--silent]"
+  echo "Usage: ./run.sh [--silent] [--reset]"
   echo "Environment: LLM_DASH_HOST=127.0.0.1 LLM_DASH_PORT=8787"
 }
 
@@ -23,6 +26,9 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --silent)
       SILENT=1
+      ;;
+    --reset)
+      RESET=1
       ;;
     -h|--help)
       usage
@@ -36,6 +42,11 @@ while [ "$#" -gt 0 ]; do
   esac
   shift
 done
+
+if [ "${SILENT}" -eq 1 ] && [ "${RESET}" -eq 1 ]; then
+  echo "LLM-Dash: --reset opens the setup wizard and cannot be combined with --silent." >&2
+  exit 2
+fi
 
 pick_python() {
   for candidate in python3 python; do
@@ -68,6 +79,11 @@ PIP="${VENV}/bin/pip"
 
 "${PY}" -m pip install --quiet --upgrade pip >/dev/null
 "${PIP}" install --quiet -r requirements.txt
+
+if [ "${RESET}" -eq 1 ]; then
+  "${PY}" scripts/reset_local_state.py
+  OPEN_URL="${URL}/?reset=1"
+fi
 
 if [ "${SILENT}" -eq 1 ]; then
   exec "${PY}" scripts/launch_server.py --host "${HOST}" --port "${PORT}"
@@ -108,7 +124,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 if wait_for_server "${URL}/api/bootstrap-status"; then
-  open_browser "${URL}"
+  open_browser "${OPEN_URL}"
 else
   echo "LLM-Dash: server did not come up in time; open ${URL} manually once it does."
 fi

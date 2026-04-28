@@ -35,6 +35,11 @@ pip install -r requirements.txt
 The launcher creates the venv automatically if it doesn't exist. First launch
 also seeds `data/dash.sqlite` via `scripts/init_db.py`.
 
+To return a local install to first-run state, use `./run.sh --reset` or
+`run.bat --reset`. This clears app config, removes the scheduled job, deletes
+generated SQLite/CSV data, and opens the setup wizard. Changelog files,
+`~/.shxdow/auth.json`, and keyring/keystore secrets are not modified.
+
 ### Environment Variables
 
 | Variable | Default | Purpose |

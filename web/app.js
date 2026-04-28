@@ -354,6 +354,20 @@
     }
   }
 
+  function consumeResetLaunchFlag() {
+    const url = new URL(window.location.href);
+    const shouldReset = url.searchParams.get("reset") === "1";
+    if (!shouldReset) return false;
+    try {
+      window.localStorage.removeItem(UI_STATE_KEY);
+    } catch (error) {
+      // localStorage is best-effort here; no action needed if unavailable.
+    }
+    url.searchParams.delete("reset");
+    window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+    return true;
+  }
+
   function persistUIState() {
     try {
       window.localStorage.setItem(UI_STATE_KEY, JSON.stringify(state.ui));
@@ -3341,15 +3355,16 @@
   async function boot() {
     wireStaticControls();
     try {
+      const resetLaunch = consumeResetLaunchFlag();
       await waitForBootstrapReady();
       state.db = await loadDB();
-      applyStoredUIState();
+      if (!resetLaunch) applyStoredUIState();
       loadStaticState();
       state.bootstrap.state = state.bootstrap.supported ? "ready" : state.bootstrap.state;
       await fetchProvider();
       await fetchSchedule();
       state.ready = true;
-      if (!state.provider.has_provider) {
+      if (resetLaunch || !state.provider.has_provider) {
         await openWizard(0);
       }
       window.setInterval(updateFreshness, 60000);

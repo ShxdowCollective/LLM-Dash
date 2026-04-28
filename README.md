@@ -100,6 +100,18 @@ For LAN access:
 LLM_DASH_HOST=0.0.0.0 ./run.sh --silent
 ```
 
+### Reset to First Run
+
+```bash
+./run.sh --reset      # macOS / Linux
+run.bat --reset       # Windows
+```
+
+Clears local provider/schedule settings, deletes generated dashboard data,
+restarts from the bootstrap seed, and opens the setup wizard. Historical
+`changelogs/*.md`, `~/.shxdow/auth.json`, and keyring/keystore secrets are left
+alone.
+
 ### Desktop Shortcuts
 
 | Platform | How |

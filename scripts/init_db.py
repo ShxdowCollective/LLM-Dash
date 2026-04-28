@@ -271,20 +271,23 @@ def seed(force: bool) -> None:
         con.close()
 
     md_path = CHANGELOGS_DIR / f"{SEED_DATE}.md"
-    md = render_changelog_md(body, {
-        "started_at": synthetic_ts,
-        "completed_at": synthetic_ts,
-        "duration_sec": duration_sec,
-        "word_count": wc,
-    })
-    md_path.write_text(md, encoding="utf-8")
+    changelog_status = "existing"
+    if not md_path.exists():
+        md = render_changelog_md(body, {
+            "started_at": synthetic_ts,
+            "completed_at": synthetic_ts,
+            "duration_sec": duration_sec,
+            "word_count": wc,
+        })
+        md_path.write_text(md, encoding="utf-8")
+        changelog_status = "created"
 
     export_metrics_csv()
 
     print(f"seeded {DB_PATH.relative_to(ROOT)}")
     print(f"  models:        {len(MODELS)}")
     print(f"  scores:        {len(MODELS)} @ {SEED_DATE}")
-    print(f"  changelog:     {md_path.relative_to(ROOT)} ({wc} words)")
+    print(f"  changelog:     {md_path.relative_to(ROOT)} ({changelog_status}, {wc} words)")
     print(f"  run_metrics:   1 row (synthetic bootstrap timestamps)")
     print(f"  metrics csv:   {CSV_PATH.relative_to(ROOT)}")
 

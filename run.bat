@@ -2,6 +2,7 @@
 rem LLM-Dash - Windows launcher.
 rem Creates/uses a repo-local .venv, installs deps, starts uvicorn, opens the browser.
 rem Use --silent to detach the server and print the URL for startup tasks.
+rem Use --reset to clear local settings/data and open the setup wizard.
 
 setlocal enableextensions
 
@@ -15,14 +16,21 @@ cd /d "%SCRIPT_DIR%"
 if "%LLM_DASH_PORT%"=="" (set "PORT=8787") else (set "PORT=%LLM_DASH_PORT%")
 if "%LLM_DASH_HOST%"=="" (set "HOST=127.0.0.1") else (set "HOST=%LLM_DASH_HOST%")
 set "URL=http://%HOST%:%PORT%"
+set "OPEN_URL=%URL%"
 set "VENV=%~dp0.venv"
 set "SYS_PY="
 set "SILENT=0"
+set "RESET=0"
 
 :parse_args
 if "%~1"=="" goto args_done
 if /I "%~1"=="--silent" (
   set "SILENT=1"
+  shift
+  goto parse_args
+)
+if /I "%~1"=="--reset" (
+  set "RESET=1"
   shift
   goto parse_args
 )
@@ -32,15 +40,20 @@ echo LLM-Dash: unknown argument: %~1 1>&2
 goto usage_error
 
 :usage
-echo Usage: run.bat [--silent]
+echo Usage: run.bat [--silent] [--reset]
 echo Environment: LLM_DASH_HOST=127.0.0.1 LLM_DASH_PORT=8787
 exit /b 0
 
 :usage_error
-echo Usage: run.bat [--silent] 1>&2
+echo Usage: run.bat [--silent] [--reset] 1>&2
 exit /b 2
 
 :args_done
+
+if "%SILENT%"=="1" if "%RESET%"=="1" (
+  echo LLM-Dash: --reset opens the setup wizard and cannot be combined with --silent. 1>&2
+  exit /b 2
+)
 
 where py >nul 2>&1
 if %ERRORLEVEL%==0 (
@@ -80,13 +93,23 @@ if errorlevel 1 (
   exit /b 1
 )
 
+if "%RESET%"=="1" (
+  "%PY%" scripts\reset_local_state.py
+  if errorlevel 1 (
+    echo LLM-Dash: reset failed. See message above.
+    if "%SILENT%"=="0" pause
+    exit /b 1
+  )
+  set "OPEN_URL=%URL%/?reset=1"
+)
+
 if "%SILENT%"=="1" (
   goto silent_launch
 )
 
 echo LLM-Dash: starting uvicorn on %URL%
 start "LLM-Dash browser" cmd /c "powershell -NoProfile -Command ^
-  \"$url = '%URL%'; for ($i=0; $i -lt 40; $i++) { try { Invoke-WebRequest -UseBasicParsing -Uri ($url + '/api/bootstrap-status') ^| Out-Null; Start-Process $url; break } catch { Start-Sleep -Milliseconds 250 } }\""
+  \"$probe = '%URL%'; $open = '%OPEN_URL%'; for ($i=0; $i -lt 40; $i++) { try { Invoke-WebRequest -UseBasicParsing -Uri ($probe + '/api/bootstrap-status') ^| Out-Null; Start-Process $open; break } catch { Start-Sleep -Milliseconds 250 } }\""
 
 "%PY%" -m uvicorn server:app --host %HOST% --port %PORT%
 set "EXIT_CODE=%ERRORLEVEL%"
