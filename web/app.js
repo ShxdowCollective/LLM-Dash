@@ -3281,7 +3281,9 @@
       container.id = "wizard-page";
       document.body.appendChild(container);
     }
+    const focus = captureFocus();
     container.replaceChildren(renderWizard());
+    restoreFocus(focus);
   }
 
   function teardownWizardPage() {

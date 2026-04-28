@@ -2218,7 +2218,7 @@ table.data-table thead th.num,
 
 .wizard-advanced {
   display: grid;
-  gap: 10px;
+  gap: 14px;
 }
 
 .wizard-advanced summary {
@@ -2230,19 +2230,21 @@ table.data-table thead th.num,
 }
 
 .wizard-advanced[open] {
-  padding: 12px;
+  padding: 16px;
   border-radius: var(--vw-radius-md);
   background: var(--vw-surface-2);
   box-shadow: 0 0 0 1px var(--vw-border);
 }
 
 .wizard-advanced[open] summary {
-  margin-bottom: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--vw-border);
 }
 
 .wizard-header-editor {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .wizard-header-row {
