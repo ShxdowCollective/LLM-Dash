@@ -51,6 +51,14 @@
   const BOOTSTRAP_POLL_MS = 1000;
   const RUN_UPDATE_POLL_MS = 3000;
   const WIZARD_STEPS = ["Provider", "Models", "Test", "Exa", "Schedule", "Summary"];
+  const WIZARD_SUBTITLES = [
+    "Connect to your LLM provider",
+    "Choose default and backup models",
+    "Verify your models work",
+    "Enable web research with Exa",
+    "Set automatic update frequency",
+    "Review and finish setup",
+  ];
   const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   const PASTE_HINT = [
     'macOS: claude "$(pbpaste)"  |  codex "$(pbpaste)"  |  gemini "$(pbpaste)"',
@@ -2358,7 +2366,7 @@
       : state.wizard.step === 4
         ? state.wizard.scheduleState === "saving" ? "Saving..." : "Next"
         : "Next";
-    return h("div", { class: "vw-modal-footer wizard-footer" }, [
+    return h("div", { class: "wizard-footer" }, [
       h("button", {
         class: "vw-btn vw-btn-tertiary",
         type: "button",
@@ -2384,23 +2392,31 @@
 
   function renderWizard() {
     const title = state.wizard.mode === "reconfigure" ? "Configure Agent Provider" : "Set Up Agent Provider";
-    return h("div", { class: "vw-modal-backdrop wizard-backdrop" }, h("div", {
-      class: "vw-modal wizard-modal",
-      style: { maxWidth: "var(--vw-setup-max-width)" },
-      role: "dialog",
-      "aria-modal": "true",
-      "aria-labelledby": "wizard-title",
-    }, [
-      h("div", { class: "vw-modal-header" }, [
-        h("h2", { id: "wizard-title" }, title),
-        renderWizardProgress(),
+    const subtitle = WIZARD_SUBTITLES[state.wizard.step] || "";
+    const stepLabel = "Step " + (state.wizard.step + 1) + " of " + WIZARD_STEPS.length;
+    return h("div", { class: "wizard-fullscreen", role: "main", "aria-labelledby": "wizard-title" }, [
+      h("div", { class: "wizard-fs-header" }, [
+        h("span", { class: "wizard-fs-brand" }, "LLM-Dash"),
+        state.wizard.mode === "reconfigure"
+          ? h("button", { class: "vw-btn vw-btn-tertiary wizard-fs-close", type: "button", onclick: closeWizard }, "Exit Setup")
+          : null,
       ]),
-      h("div", { class: "vw-modal-body" }, [
-        state.wizard.saveError ? h("p", { class: "wizard-error" }, state.wizard.saveError) : null,
-        renderWizardContent(),
+      h("div", { class: "wizard-fs-center" }, [
+        h("div", { class: "wizard-fs-card" }, [
+          h("div", { class: "wizard-fs-title-block" }, [
+            h("span", { class: "wizard-fs-step-label" }, stepLabel),
+            h("h1", { id: "wizard-title" }, title),
+            subtitle ? h("p", { class: "wizard-fs-subtitle" }, subtitle) : null,
+          ]),
+          renderWizardProgress(),
+          h("div", { class: "wizard-fs-body" }, [
+            state.wizard.saveError ? h("p", { class: "wizard-error" }, state.wizard.saveError) : null,
+            renderWizardContent(),
+          ]),
+          renderWizardFooter(),
+        ]),
       ]),
-      renderWizardFooter(),
-    ]));
+    ]);
   }
 
   function renderManualRefreshModal() {
@@ -2573,7 +2589,6 @@
     if (!slot) return;
     const nodes = [];
     if (state.bootstrap.state === "initializing") nodes.push(renderBootstrapOverlay());
-    else if (state.wizard.open) nodes.push(renderWizard());
     else if (state.runUpdate.active) nodes.push(renderRunUpdateOverlay());
     else if (state.manualRefreshModal.open) nodes.push(renderManualRefreshModal());
     slot.replaceChildren(...nodes);
@@ -3255,10 +3270,39 @@
     ]);
   }
 
+  function renderWizardPage() {
+    const app = document.getElementById("app");
+    const overlayRoot = document.getElementById("overlay-root");
+    if (app) app.hidden = true;
+    if (overlayRoot) overlayRoot.hidden = true;
+    let container = document.getElementById("wizard-page");
+    if (!container) {
+      container = document.createElement("div");
+      container.id = "wizard-page";
+      document.body.appendChild(container);
+    }
+    container.replaceChildren(renderWizard());
+  }
+
+  function teardownWizardPage() {
+    const app = document.getElementById("app");
+    const overlayRoot = document.getElementById("overlay-root");
+    const container = document.getElementById("wizard-page");
+    if (app) app.hidden = false;
+    if (overlayRoot) overlayRoot.hidden = false;
+    if (container) container.remove();
+  }
+
   function render() {
     const viewSlot = document.getElementById("view");
     const sortGroup = document.querySelector(".sort-group");
     if (!viewSlot) return;
+
+    if (state.wizard.open) {
+      renderWizardPage();
+      return;
+    }
+    teardownWizardPage();
 
     const focus = captureFocus();
     renderActionBar();

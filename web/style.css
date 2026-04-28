@@ -2264,7 +2264,10 @@ table.data-table thead th.num,
 }
 
 .wizard-footer {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 10px;
 }
 
 .wizard-error {
@@ -2319,6 +2322,115 @@ table.data-table thead th.num,
   border-radius: var(--vw-radius-md);
   background: var(--vw-surface-1);
   box-shadow: 0 0 0 1px var(--vw-border);
+}
+
+/* ── Full-screen wizard ── */
+
+.wizard-fullscreen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--vw-bg);
+  animation: vw-fade-in 250ms ease;
+  pointer-events: auto;
+}
+
+.wizard-fs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--vw-border);
+  flex-shrink: 0;
+}
+
+.wizard-fs-brand {
+  font-family: var(--vw-font-mono);
+  font-size: 14px;
+  font-weight: var(--vw-weight-bold);
+  color: var(--vw-text-muted);
+  letter-spacing: 0.04em;
+}
+
+.wizard-fs-close {
+  font-size: 12px;
+}
+
+.wizard-fs-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+}
+
+.wizard-fs-card {
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.wizard-fs-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wizard-fs-step-label {
+  font-family: var(--vw-font-mono);
+  font-size: 11px;
+  font-weight: var(--vw-weight-semibold);
+  color: var(--vw-accent);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.wizard-fs-title-block h1 {
+  margin: 0;
+  font-family: var(--vw-font-mono);
+  font-size: 22px;
+  font-weight: var(--vw-weight-bold);
+  color: var(--vw-text);
+  line-height: 1.3;
+}
+
+.wizard-fs-subtitle {
+  margin: 0;
+  font-family: var(--vw-font-mono);
+  font-size: 13px;
+  color: var(--vw-text-muted);
+  line-height: 1.5;
+}
+
+.wizard-fs-body {
+  display: grid;
+  gap: 16px;
+}
+
+.wizard-fullscreen .wizard-footer {
+  padding-top: 8px;
+  border-top: 1px solid var(--vw-border);
+}
+
+.wizard-fullscreen .vw-wizard-progress {
+  padding: 0;
+}
+
+@media (max-width: 520px) {
+  .wizard-fs-center {
+    padding: 24px 16px;
+    align-items: flex-start;
+  }
+
+  .wizard-fs-card {
+    gap: 20px;
+  }
+
+  .wizard-fs-title-block h1 {
+    font-size: 18px;
+  }
 }
 
 @keyframes vw-modal-in {
