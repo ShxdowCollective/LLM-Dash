@@ -1,8 +1,3 @@
-<p align="right">
-  <a href="https://buymeacoffee.com/shxdowenby">
-    <img src=".github/bmc-button.png" alt="Buy Me a Coffee" height="40">
-  </a>
-</p>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://fonts.gstatic.com/s/i/short-term/release/googlesymbols/dashboard/default/48px.svg">
@@ -13,6 +8,8 @@
 
 **Local LLM benchmark dashboard with AI-driven daily changelog updates.**
 
+
+
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab?logo=python&logoColor=white)](https://www.python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org)
@@ -20,7 +17,9 @@
 [![voidware](https://img.shields.io/badge/voidware-v0.7.1-7c5cc4)](https://github.com/shxdow)
 [![License: MIT](https://img.shields.io/badge/license-MIT-a6f17b)](LICENSE)
 [![OpenAI Agents SDK](https://img.shields.io/badge/OpenAI_Agents-SDK-412991?logo=openai&logoColor=white)](https://github.com/openai/openai-agents-python)
-
+<a href="https://buymeacoffee.com/shxdowenby">
+<img src=".github/bmc-button.png" alt="Buy Me a Coffee" height="30">
+</a>
 ---
 
 <p align="center">
