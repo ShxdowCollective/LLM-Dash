@@ -77,6 +77,10 @@ The launcher handles everything:
 3. Starts `uvicorn server:app` on `127.0.0.1:8787`
 4. Opens the dashboard in your default browser
 
+When `run.bat` is launched from a WSL UNC path such as
+`\\wsl.localhost\Debian\home\...\LLM-Dash`, it delegates to `run.sh` inside
+that distro instead of trying to create a Windows virtualenv on the UNC path.
+
 > **Override host/port:**
 > `LLM_DASH_HOST=0.0.0.0 LLM_DASH_PORT=9000 ./run.sh`
 
@@ -187,6 +191,7 @@ LLM-Dash/
 | Problem | Fix |
 |---|---|
 | `python -m venv` fails on Debian/Ubuntu | Install `python3-venv` and rerun the launcher |
+| `CMD does not support UNC paths` when using WSL | Use `run.bat` from the repo; it delegates WSL UNC paths to `wsl.exe` and `run.sh` |
 | Port 8787 already in use | `LLM_DASH_PORT=9000 ./run.sh` |
 | LAN access not working | Start with `LLM_DASH_HOST=0.0.0.0` and allow the port through your firewall |
 | Browser didn't open | Copy the URL from terminal output and open manually |

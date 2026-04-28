@@ -6,6 +6,16 @@ Rough execution order. Newest decisions at the top.
 
 Use `[x]` for done and `[ ]` for still-open. New work should start at the top.
 
+## Phase 8.2 — Windows UNC launcher fix
+
+Goal: make `run.bat` work when launched from a WSL repo path like
+`\\wsl.localhost\Debian\home\phxntom\Repos\LLM-Dash`.
+
+- [x] `run.bat`: detect WSL UNC script paths before `cd`, translate them to the
+  Linux path, and delegate to `run.sh` through `wsl.exe`.
+- [x] README: document that WSL UNC launches are handed to the Linux launcher.
+- [x] Verification: Windows `cmd.exe` help smoke for UNC-style execution.
+
 ## Phase 8.1 — Silent background launcher
 
 Goal: add a `--silent` mode for startup tasks so the dashboard server detaches,
