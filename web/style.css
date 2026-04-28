@@ -2331,7 +2331,6 @@ table.data-table thead th.num,
   flex-direction: column;
   min-height: 100vh;
   background: var(--vw-bg);
-  animation: vw-fade-in 250ms ease;
   pointer-events: auto;
 }
 
