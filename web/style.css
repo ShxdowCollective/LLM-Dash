@@ -1971,7 +1971,7 @@ table.data-table thead th.num,
 
 .vw-field {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .vw-label {
@@ -1980,6 +1980,7 @@ table.data-table thead th.num,
   font-size: 11px;
   font-weight: var(--vw-weight-semibold);
   letter-spacing: 0.04em;
+  line-height: 1.35;
 }
 
 .vw-hint {
@@ -2204,16 +2205,17 @@ table.data-table thead th.num,
 
 .wizard-step-body {
   display: grid;
-  gap: 12px;
+  gap: 16px;
 }
 
 .wizard-preview {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   overflow-wrap: anywhere;
   color: var(--vw-text-muted);
   font-family: var(--vw-font-mono);
   font-size: 11px;
+  line-height: 1.5;
 }
 
 .wizard-advanced {
@@ -2230,27 +2232,33 @@ table.data-table thead th.num,
 }
 
 .wizard-advanced[open] {
-  padding: 16px;
+  padding: 18px;
   border-radius: var(--vw-radius-md);
   background: var(--vw-surface-2);
   box-shadow: 0 0 0 1px var(--vw-border);
 }
 
 .wizard-advanced[open] summary {
-  margin-bottom: 12px;
-  padding-bottom: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
   border-bottom: 1px solid var(--vw-border);
+}
+
+.wizard-advanced-body {
+  display: grid;
+  gap: 16px;
 }
 
 .wizard-header-editor {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .wizard-header-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-  gap: 8px;
+  align-items: start;
+  gap: 10px;
 }
 
 .wizard-test-row,
@@ -2319,7 +2327,7 @@ table.data-table thead th.num,
 .wizard-segmented {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
   padding: 4px;
   border-radius: var(--vw-radius-md);
   background: var(--vw-surface-1);
@@ -2407,7 +2415,7 @@ table.data-table thead th.num,
 
 .wizard-fs-body {
   display: grid;
-  gap: 16px;
+  gap: 18px;
 }
 
 .wizard-fullscreen .wizard-footer {
@@ -2431,6 +2439,10 @@ table.data-table thead th.num,
 
   .wizard-fs-title-block h1 {
     font-size: 18px;
+  }
+
+  .wizard-header-row {
+    grid-template-columns: 1fr;
   }
 }
 

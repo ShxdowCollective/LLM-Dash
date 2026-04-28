@@ -6,6 +6,18 @@ Rough execution order. Newest decisions at the top.
 
 Use `[x]` for done and `[ ]` for still-open. New work should start at the top.
 
+## Phase 8.4 — Wizard spacing polish
+
+Goal: fix the cramped first setup step Advanced section and sweep nearby app
+form/card spacing for the same problem.
+
+- [x] `web/app.js`: wrap Advanced contents so spacing is stable inside
+  `<details>`.
+- [x] `web/style.css`: loosen wizard field, preview, Advanced, header-editor,
+  segmented-control, and mobile header-row spacing.
+- [x] Verification: JS syntax check plus headed browser screenshots for the
+  wizard and main dashboard views.
+
 ## Phase 8.3 — Launcher reset mode
 
 Goal: add `--reset` to the launchers so a local install can be wiped back to

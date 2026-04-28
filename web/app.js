@@ -2137,33 +2137,35 @@
         },
       }, [
         h("summary", null, "Advanced"),
-        wizardField("MODELS_OVERRIDE_URL", h("input", {
-          id: "wizard-models-override",
-          class: "vw-input",
-          value: state.wizard.modelsOverrideUrl,
-          placeholder: "Optional",
-          oninput: (event) => {
-            state.wizard.modelsOverrideUrl = event.target.value;
-            state.wizard.connectionTestState = "idle";
-            state.wizard.connectionTestSkipped = false;
-            render();
-          },
-        })),
-        wizardField("Endpoint mode", h("select", {
-          id: "wizard-endpoint-mode",
-          class: "vw-select",
-          value: state.wizard.endpointMode,
-          onchange: (event) => {
-            state.wizard.endpointMode = event.target.value;
-            state.wizard.connectionTestState = "idle";
-            state.wizard.connectionTestSkipped = false;
-            render();
-          },
-        }, [
-          h("option", { value: "append_v1", selected: state.wizard.endpointMode === "append_v1" }, "OpenAI /v1"),
-          h("option", { value: "root", selected: state.wizard.endpointMode === "root" }, "Provider root"),
-        ])),
-        renderHeaderEditor(),
+        h("div", { class: "wizard-advanced-body" }, [
+          wizardField("MODELS_OVERRIDE_URL", h("input", {
+            id: "wizard-models-override",
+            class: "vw-input",
+            value: state.wizard.modelsOverrideUrl,
+            placeholder: "Optional",
+            oninput: (event) => {
+              state.wizard.modelsOverrideUrl = event.target.value;
+              state.wizard.connectionTestState = "idle";
+              state.wizard.connectionTestSkipped = false;
+              render();
+            },
+          })),
+          wizardField("Endpoint mode", h("select", {
+            id: "wizard-endpoint-mode",
+            class: "vw-select",
+            value: state.wizard.endpointMode,
+            onchange: (event) => {
+              state.wizard.endpointMode = event.target.value;
+              state.wizard.connectionTestState = "idle";
+              state.wizard.connectionTestSkipped = false;
+              render();
+            },
+          }, [
+            h("option", { value: "append_v1", selected: state.wizard.endpointMode === "append_v1" }, "OpenAI /v1"),
+            h("option", { value: "root", selected: state.wizard.endpointMode === "root" }, "Provider root"),
+          ])),
+          renderHeaderEditor(),
+        ]),
       ]),
       h("div", { class: "wizard-test-row" }, [
         h("button", {
