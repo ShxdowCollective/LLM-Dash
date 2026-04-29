@@ -62,43 +62,79 @@ tooling needs.
 
 ### Phase 8.9 — Visual polish and motion pass
 
+> Plan: [docs/plans/M8_9_VISUAL_POLISH_PLAN.md](docs/plans/M8_9_VISUAL_POLISH_PLAN.md)
+
 Goal: make every page feel intentional, stable, and easy to scan without
 turning the dashboard into a confetti machine.
 
-- [ ] Add responsive progress bars, spinners, and small loading animations
-  where async work currently feels stalled or ambiguous.
-- [ ] Re-audit grading/tier colors so the visible score scheme is
-  spectrum-ordered and consistent across table cells, chart bars, badges, and
-  model details.
-- [ ] Sweep spacing and padding across all views: Table, Chart, Changelog,
-  Stats, Settings, overlays, wizard, modals, filters, and model info cards.
-- [ ] Ensure text does not wrap, overflow, clip, or collide in buttons, chips,
-  nav, cards, tables, charts, log tails, and mobile layouts.
-- [ ] Add tasteful iridescent gradient accents to key affordances and section
-  boundaries where they improve hierarchy.
-- [ ] Run headed browser visual checks at desktop and mobile widths, including
-  screenshot evidence and an overflow/layout-shift probe.
+- [ ] Add loading skeletons and view-transition crossfades: DB-loading skeleton
+  cards below `.bootstrap-spinner`, changelog body pulse placeholder, double-
+  `requestAnimationFrame` view switch fade on `.view-slot` (`#view`), filter chip
+  `:active` scale, table row hover inset glow. 300ms minimum skeleton display
+  to avoid flash on fast loads.
+- [ ] Refactor `barColor()` (app.js:249) and `CHART_BARS` (app.js:24) from
+  hardcoded hex to `var(--vw-iridescent-N)` references. Add `resolveCSSVar()`
+  helper called at render time (not init) for uPlot canvas contexts. Create
+  a single `TIER_COLOR_MAP` lookup used by tier pills, `barColor()`, and
+  any future tier→color mapping.
+- [ ] Introduce `--vw-space-*` tokens (xs=4px through 3xl=32px) in `:root`
+  (these don't exist yet) and sweep spacing across all views. Key targets:
+  filter grid gap → `--vw-space-lg`, score cells → `clamp(120px, 15vw, 144px)`,
+  changelog body → `max-inline-size: 65ch`, mobile sort controls → horizontal
+  scrollable chip strip with `scroll-snap-type: x mandatory`.
+- [ ] Fix text overflow on 4 exposed surfaces: detail panel title `h2`
+  (ellipsis + `max-width: 100%`), changelog body `overflow-wrap: break-word`,
+  `.vw-btn` truncation modifier, and filter chip labels (`max-width: 160px`).
+  Add mobile `.view-slot { overflow-x: hidden }` guard.
+- [ ] Add iridescent gradient accents: active nav `::after` underline glow,
+  collapsed `.panel-shell` bottom hairline (use `rgba()` not `color-mix()`),
+  score bar `linear-gradient` fills, wizard step dot+connector indicators,
+  and stale Refresh button `accent-pulse` animation (>24h since
+  `state.lastUpdated` → `dataset.stale` attribute).
+- [ ] Create `switchView()` wrapper in app.js replacing the direct
+  `state.view` assignment at ~line 3513. Wire nav button click handler to
+  call `switchView(btn.dataset.view)` for the fade transition.
+- [ ] Run headed browser visual checks at desktop (1920×1080) and mobile
+  (390×844) widths — 20-point checklist in the plan. Save screenshots to
+  `artifacts/phase-8-9-verification/`.
 
 ### Phase 8.10 — In-app Settings
+
+> Plan: [docs/plans/M8_10_IN_APP_SETTINGS_PLAN.md](docs/plans/M8_10_IN_APP_SETTINGS_PLAN.md)
+> Depends on: Phase 8.9 (spacing tokens, panel affordances)
 
 Goal: replace the Data page with a real Settings page that can handle normal
 configuration without forcing the whole first-run wizard.
 
-- [ ] Rename the Data nav/view to Settings while preserving the manual update
-  prompt escape hatch.
-- [ ] Add editable Agent Provider settings: provider preset/custom endpoint,
-  endpoint mode, optional models override URL, request headers, and API key
-  update flow.
-- [ ] Add model configuration controls for default and backup model selection,
-  manual model IDs, provider model refresh, and model test roundtrips.
-- [ ] Add API-key/config sections for Exa and optional enrichment providers,
-  with save/test/remove flows.
-- [ ] Keep the full setup wizard for first-run onboarding and major guided
-  reconfiguration, but route routine edits through Settings.
-- [ ] Make Settings changes reload provider state and update Refresh behavior
-  without a full page refresh.
-- [ ] Verify secret redaction, failed-test messaging, keyboard flow, mobile
-  layout, and no accidental provider run on save.
+- [ ] Backend: add `_delete_keyring_secret()`, `_delete_auth_file_secret()`,
+  `remove_exa_api_key()`, and `remove_provider_api_key()` to config.py
+  (none of these exist yet). Add `DELETE /api/exa` and
+  `DELETE /api/provider/key` endpoints to server.py. Testable via curl
+  independently of the frontend.
+- [ ] Rename Data nav label to "Settings" (keep `state.view = "data"` and
+  `#data` hash internally; accept `#settings` alias). Rename
+  `renderDataView()` (app.js:3113) → `renderSettingsView()`. Add settings
+  gear icon to the icon lookup table.
+- [ ] Build 6-section Settings layout using `.panel-shell` collapsible
+  sections: Agent Provider (preset selector + form fields + API key
+  show/hide + save+test), Models (dropdown from `/api/provider/models` +
+  refresh + per-model test roundtrips + manual ID text input fallback),
+  Exa (status + save + remove with inline confirmation dialog), LLM Stats
+  (reserved/disabled placeholder for 8.11), Schedule (extract shared
+  `renderScheduleForm()` from `renderWizardScheduleStep()` at app.js:2383),
+  Manual Update (collapsed, retained from old Data view).
+- [ ] Wire provider/Exa save to reload `state.provider` via `fetchProvider()`
+  (app.js:722) without a full page refresh. Pre-populate all fields from
+  current state on mount so partial edits never wipe existing config. Empty
+  API key field = keep existing key. Add error boundary: if `fetchProvider()`
+  fails on mount, render degraded state with error banner and working
+  Manual Update section.
+- [ ] Remove "Reconfigure" / "Manage Schedule" wizard entry buttons from
+  Settings. Keep wizard for first-run only. Show "Agent Provider not
+  configured → Run Setup Wizard" banner when `!state.provider.has_provider`.
+- [ ] Verify: secret redaction (no plaintext keys in DOM), failed-test
+  messaging, keyboard tab order + Enter-to-submit, mobile layout at 390px,
+  no accidental run-update on save, inline confirmation before key removal.
 
 ### Phase 8.11 — Optional LLM Stats enrichment
 
