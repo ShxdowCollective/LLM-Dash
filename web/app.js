@@ -274,6 +274,29 @@
     return val;
   }
 
+  function colorWithAlpha(color, alpha) {
+    if (typeof color !== "string") return color;
+    const value = color.trim();
+    const clampedAlpha = clamp(Number(alpha), 0, 1);
+    const hex = value.replace(/^#/, "");
+    if (/^[0-9a-f]{3}$/i.test(hex)) {
+      const [r, g, b] = hex.split("").map((part) => parseInt(part + part, 16));
+      return `rgba(${r}, ${g}, ${b}, ${clampedAlpha})`;
+    }
+    if (/^[0-9a-f]{6}$/i.test(hex) || /^[0-9a-f]{8}$/i.test(hex)) {
+      const r = parseInt(hex.slice(0, 2), 16);
+      const g = parseInt(hex.slice(2, 4), 16);
+      const b = parseInt(hex.slice(4, 6), 16);
+      return `rgba(${r}, ${g}, ${b}, ${clampedAlpha})`;
+    }
+    const rgb = value.match(/^rgba?\(([^)]+)\)$/i);
+    if (rgb) {
+      const parts = rgb[1].split(",").map((part) => part.trim()).slice(0, 3);
+      if (parts.length === 3) return `rgba(${parts.join(", ")}, ${clampedAlpha})`;
+    }
+    return value;
+  }
+
   function clamp(value, lo, hi) {
     return value < lo ? lo : value > hi ? hi : value;
   }
@@ -1229,7 +1252,7 @@
 
   async function openTerminalForManual() {
     state.manualRefreshModal.terminalState = "warning";
-    state.manualRefreshModal.terminalMessage = "Opening terminal...";
+    state.manualRefreshModal.terminalMessage = "Opening terminal…";
     render();
     try {
       const payload = await fetchJson("/api/open-terminal", { method: "POST" });
@@ -1246,7 +1269,7 @@
 
   async function openTerminalForData() {
     state.dataTerminalState = "warning";
-    state.dataTerminalMessage = "Opening terminal...";
+    state.dataTerminalMessage = "Opening terminal…";
     render();
     try {
       const payload = await fetchJson("/api/open-terminal", { method: "POST" });
@@ -1301,8 +1324,8 @@
 
   function runUpdateLogText() {
     if (state.runUpdate.tail) return state.runUpdate.tail;
-    if (state.runUpdate.state === "starting") return "Starting update job...";
-    if (state.runUpdate.state === "running") return "Waiting for log output...";
+    if (state.runUpdate.state === "starting") return "Starting update job…";
+    if (state.runUpdate.state === "running") return "Waiting for log output…";
     return state.runUpdate.error || "No log output.";
   }
 
@@ -1563,9 +1586,9 @@
     const el = document.getElementById("freshness");
     if (!el) return;
     if (!state.lastUpdated) {
-      el.textContent = "never updated";
+      el.textContent = "No updates yet";
       el.dataset.state = "unknown";
-      el.title = "No update recorded yet";
+      el.title = "Run Refresh to create the first update.";
       return;
     }
     const timestamp = Date.parse(state.lastUpdated);
@@ -1980,11 +2003,11 @@
     const active = filterCount();
     return renderCollapsiblePanel({
       id: "model-filters",
-      title: "Model filters",
+      title: "Model Filters",
       summary: [
         state.models.length + " / " + state.totalModelCount + " models",
         " · ",
-        active ? active + " filters active" : "no filters",
+        active ? active + " filters active" : "No filters",
       ],
       actions: [
         h("button", {
@@ -2002,11 +2025,11 @@
           h("div", { class: "filter-summary" }, [
             h("div", { class: "filter-summary-copy" }, [
               h("span", { class: "summary-pill" }, state.models.length + " / " + state.totalModelCount + " models"),
-              h("span", { class: "summary-note" }, active ? active + " filters active" : "all filters open"),
+              h("span", { class: "summary-note" }, active ? active + " filters active" : "All filters open"),
             ]),
           ]),
           h("div", { class: "filter-card" }, [
-            h("label", { class: "control-label stacked", for: "model-search" }, "search"),
+            h("label", { class: "control-label stacked", for: "model-search" }, "Search"),
             h("div", { class: "search-shell" }, h("input", {
               id: "model-search",
               class: "search-input",
@@ -2017,7 +2040,7 @@
             })),
           ]),
           h("div", { class: "filter-card" }, [
-            h("div", { class: "control-label stacked" }, "vendors"),
+            h("div", { class: "control-label stacked" }, "Vendors"),
             h("div", { class: "chip-group" }, state.vendorOptions.map((vendor) =>
               h("button", {
                 class: "filter-chip" + (state.filter.vendors.has(vendor) ? " is-active" : ""),
@@ -2028,7 +2051,7 @@
             )),
           ]),
           h("div", { class: "filter-card" }, [
-            h("div", { class: "control-label stacked" }, "tier"),
+            h("div", { class: "control-label stacked" }, "Tier"),
             h("div", { class: "chip-group tier-chip-group" }, TIER_FILTERS.map((item) =>
               h("button", {
                 class: "filter-chip tier-filter-chip" + (state.filter.tier === item.key ? " is-active" : ""),
@@ -2047,11 +2070,11 @@
   function renderStatsFilters() {
     return renderCollapsiblePanel({
       id: "stats-filters",
-      title: "Stats filters",
+      title: "Stats Filters",
       summary: [
         getFilteredMetrics().length + " runs",
         " · ",
-        state.statsFilter.agent ? "filtered by agent + date" : "all recorded runs",
+        state.statsFilter.agent ? "Filtered by agent + date" : "All recorded runs",
       ],
       actions: [
         h("button", {
@@ -2069,12 +2092,12 @@
           h("div", { class: "filter-summary" }, [
             h("div", { class: "filter-summary-copy" }, [
               h("span", { class: "summary-pill" }, getFilteredMetrics().length + " runs"),
-              h("span", { class: "summary-note" }, state.statsFilter.agent ? "filtered by agent + date" : "all recorded runs"),
+              h("span", { class: "summary-note" }, state.statsFilter.agent ? "Filtered by agent + date" : "All recorded runs"),
             ]),
           ]),
           h("div", { class: "stats-filter-grid" }, [
             h("label", { class: "field-block", for: "stats-from" }, [
-              h("span", { class: "control-label stacked" }, "from"),
+              h("span", { class: "control-label stacked" }, "From"),
               h("input", {
                 id: "stats-from",
                 class: "text-input",
@@ -2084,7 +2107,7 @@
               }),
             ]),
             h("label", { class: "field-block", for: "stats-to" }, [
-              h("span", { class: "control-label stacked" }, "to"),
+              h("span", { class: "control-label stacked" }, "To"),
               h("input", {
                 id: "stats-to",
                 class: "text-input",
@@ -2094,14 +2117,14 @@
               }),
             ]),
             h("label", { class: "field-block", for: "stats-agent" }, [
-              h("span", { class: "control-label stacked" }, "agent"),
+              h("span", { class: "control-label stacked" }, "Agent"),
               h("select", {
                 id: "stats-agent",
                 class: "text-input",
                 value: state.statsFilter.agent,
                 onchange: (event) => setStatsFilter("agent", event.target.value),
               }, [
-                h("option", { value: "" }, "All agents"),
+                h("option", { value: "" }, "All Agents"),
                 ...metricsAgentOptions().map(([key, label]) => h("option", { value: key, selected: state.statsFilter.agent === key }, label)),
               ]),
             ]),
@@ -2121,13 +2144,13 @@
         type: "button",
         disabled: !state.models.length,
         onclick: downloadModelsCsv,
-      }, "Export models CSV");
+      }, "Export Models CSV");
     } else if (state.view === "stats") {
       content = h("a", {
         class: "action-btn link-btn",
         href: "/data/run_metrics.csv",
         download: "run_metrics.csv",
-      }, "Download run_metrics.csv");
+      }, "Download Metrics CSV");
     }
     slot.replaceChildren();
     if (content) slot.appendChild(content);
@@ -2250,7 +2273,7 @@
         class: "vw-input",
         type: "password",
         value: state.wizard.apiKey,
-        placeholder: state.provider.has_provider ? "Leave blank to keep stored key" : "sk-...",
+        placeholder: state.provider.has_provider ? "Leave blank to keep stored key" : "sk-…",
         oninput: (event) => {
           state.wizard.apiKey = event.target.value;
           state.wizard.connectionTestState = "idle";
@@ -2306,7 +2329,7 @@
           type: "button",
           disabled: state.wizard.connectionTestState === "testing" || !state.wizard.baseUrl || (!state.provider.has_provider && !state.wizard.apiKey),
           onclick: testWizardConnection,
-        }, state.wizard.connectionTestState === "testing" ? "Testing..." : "Test Connection"),
+        }, state.wizard.connectionTestState === "testing" ? "Testing…" : "Test Connection"),
         state.wizard.connectionTestState !== "idle"
           ? wizardStatusChip(state.wizard.connectionTestState, state.wizard.connectionTestStatus || state.wizard.connectionTestState)
           : null,
@@ -2396,7 +2419,7 @@
         class: "vw-input",
         type: "password",
         value: state.wizard.exaKey,
-        placeholder: "exa_...",
+        placeholder: "exa_…",
         oninput: (event) => {
           state.wizard.exaKey = event.target.value;
           render();
@@ -2503,11 +2526,11 @@
       state.wizard.step === 3 ||
       state.wizard.step === 4;
     const label = state.wizard.loading
-      ? "Loading..."
+      ? "Loading…"
       : state.wizard.step === 5
-      ? state.wizard.saving ? "Finishing..." : "Finish"
+      ? state.wizard.saving ? "Finishing…" : "Finish"
       : state.wizard.step === 4
-        ? state.wizard.scheduleState === "saving" ? "Saving..." : "Next"
+        ? state.wizard.scheduleState === "saving" ? "Saving…" : "Next"
         : "Next";
     return h("div", { class: "wizard-footer" }, [
       h("button", {
@@ -2586,8 +2609,8 @@
     }, [
       h("div", { class: "modal-head" }, [
         h("div", null, [
-          h("h2", { id: "refresh-modal-title" }, "Run today's update"),
-          h("p", null, "Prompt is agent-neutral on purpose. Pick your CLI and fire away."),
+          h("h2", { id: "refresh-modal-title" }, "Run Today’s Update"),
+          h("p", null, "Use this prompt with any supported CLI. It stays neutral so Claude, Codex, or Gemini can run it."),
         ]),
         h("button", {
           class: "modal-close",
@@ -2610,14 +2633,14 @@
             type: "button",
             disabled: state.manualRefreshModal.loading || !state.manualRefreshModal.prompt,
             onclick: copyManualPromptAgain,
-          }, "Copy again"),
+          }, "Copy Again"),
           h("button", {
             class: "action-btn primary",
             type: "button",
             disabled:
               state.manualRefreshModal.loading ||
               !state.manualRefreshModal.prompt ||
-              state.manualRefreshModal.terminalMessage === "Opening terminal...",
+              state.manualRefreshModal.terminalMessage === "Opening terminal…",
             onclick: openTerminalForManual,
           }, "Open Terminal"),
         ]),
@@ -2653,10 +2676,10 @@
       ? formatElapsed((state.runUpdate.completedAt || Date.now()) - state.runUpdate.startedAt)
       : "0s";
     const actions = isBusy
-      ? [h("button", { class: "action-btn", type: "button", disabled: true }, state.runUpdate.state === "starting" ? "Starting..." : "Running...")]
+      ? [h("button", { class: "action-btn", type: "button", disabled: true }, state.runUpdate.state === "starting" ? "Starting…" : "Running…")]
       : state.runUpdate.state === "succeeded"
         ? [
-            h("button", { class: "action-btn primary", type: "button", onclick: reloadDashboardFromRunUpdate }, "Reload dashboard"),
+            h("button", { class: "action-btn primary", type: "button", onclick: reloadDashboardFromRunUpdate }, "Reload Dashboard"),
             h("button", { class: "action-btn", type: "button", onclick: closeRunUpdateOverlay }, "Close"),
           ]
         : [
@@ -2729,7 +2752,7 @@
       ]),
       h("h2", null, "Preparing dashboard"),
       h("p", null, "First run is seeding the local SQLite bundle so the app has something real to load."),
-      h("div", { class: "bootstrap-status" }, state.bootstrap.message || "Seeding dashboard database..."),
+      h("div", { class: "bootstrap-status" }, state.bootstrap.message || "Seeding dashboard database…"),
       state.bootstrap.detail ? h("div", { class: "bootstrap-detail" }, state.bootstrap.detail) : null,
     ]));
   }
@@ -2761,11 +2784,11 @@
       if (showIcon) button.appendChild(icon("refresh-cw"));
       button.appendChild(document.createTextNode(text));
     };
-    if (state.bootstrap.state === "initializing") setButtonLabel("Loading...", false);
-    else if (checking) setButtonLabel("Checking...", false);
-    else if (state.runUpdate.active || state.runUpdate._starting) setButtonLabel("Running...", false);
-    else if (state.wizard.open) setButtonLabel("Configuring...", false);
-    else if (state.manualRefreshModal.loading) setButtonLabel("Loading...", false);
+    if (state.bootstrap.state === "initializing") setButtonLabel("Loading…", false);
+    else if (checking) setButtonLabel("Checking…", false);
+    else if (state.runUpdate.active || state.runUpdate._starting) setButtonLabel("Running…", false);
+    else if (state.wizard.open) setButtonLabel("Configuring…", false);
+    else if (state.manualRefreshModal.loading) setButtonLabel("Loading…", false);
     else setButtonLabel("Refresh", true);
     button.title = state.runUpdate.error && !state.runUpdate.active ? state.runUpdate.error : "";
     let isStale = false;
@@ -2803,7 +2826,7 @@
 
   function renderTable() {
     if (!state.models.length) {
-      return renderEmptyState("No models match this filter.", "Loosen the filters or reset them to see results.");
+      return renderEmptyState("No Models Match", "Loosen the filters or reset them to see results.");
     }
     const head = h("thead", null, h("tr", null, [
       h("th", { class: "num" }, "#"),
@@ -2857,7 +2880,7 @@
 
   function renderChart() {
     if (!state.models.length) {
-      return renderEmptyState("No chart data to draw.", "Loosen the filters or reset them to see results.");
+      return renderEmptyState("No Chart Data", "Loosen the filters or reset them to see results.");
     }
     const rows = state.models.map((model, index) => {
       const overall = getOverall(model);
@@ -2930,7 +2953,7 @@
 
   function renderChangelog() {
     if (!state.changelogs.length) {
-      return renderEmptyState("No changelogs yet.", "Run a daily update and entries will appear here.");
+      return renderEmptyState("No Changelogs Yet", "Run a daily update and entries will appear here.");
     }
     const active = state.changelogs.find((row) => row.date === state.activeChangelogDate) || state.changelogs[0];
     if (active && state.activeChangelogDate !== active.date) state.activeChangelogDate = active.date;
@@ -2938,7 +2961,7 @@
     const cache = active ? state.changelogBodies[active.date] : null;
     let body;
     if (!active) {
-      body = renderEmptyState("Select an entry", "Choose a date from the sidebar to view its changelog.");
+      body = renderEmptyState("Select an Entry", "Choose a date from the sidebar to view its changelog.");
     } else if (!cache || cache.status === "loading") {
       body = h("div", { class: "changelog-body" }, [
         h("div", { class: "changelog-skeleton" }, [
@@ -3046,9 +3069,8 @@
           class: "table-link-btn",
           type: "button",
           onclick: () => {
-            state.view = "changelog";
             state.activeChangelogDate = row.changelog_date;
-            render();
+            switchView("changelog");
           },
         }, formatShortDate(row.changelog_date))),
         h("td", null, formatAgentLabel(row)),
@@ -3066,7 +3088,7 @@
   function renderStatsView() {
     const rows = getFilteredMetrics();
     if (!rows.length) {
-      return renderEmptyState("No runs match these filters.", "Try widening the date range or clearing the agent filter.");
+      return renderEmptyState("No Runs Match", "Try widening the date range or clearing the agent filter.");
     }
 
     const totals = {
@@ -3161,7 +3183,7 @@
   function renderDataView() {
     if (!state.dataPromptLoaded && !state.dataPromptLoading) fetchDataPrompt();
     if (!state.schedule.loaded && !state.schedule.loading) fetchSchedule();
-    const promptText = state.dataPromptLoading ? "Loading prompt..." : state.dataPrompt;
+    const promptText = state.dataPromptLoading ? "Loading prompt…" : state.dataPrompt;
     const scheduleLabel = !state.schedule.enabled || state.schedule.cadence === "off"
       ? "Off"
       : state.schedule.cadence + " · " + state.schedule.time_local + " (" + state.schedule.utc_echo + ")";
@@ -3199,11 +3221,11 @@
               type: "button",
               disabled: state.dataPromptLoading || !state.dataPrompt,
               onclick: copyDataPrompt,
-            }, "Copy prompt"),
+            }, "Copy Prompt"),
             h("button", {
               class: "action-btn primary",
               type: "button",
-              disabled: state.dataTerminalMessage === "Opening terminal...",
+              disabled: state.dataTerminalMessage === "Opening terminal…",
               onclick: openTerminalForData,
             }, "Open Terminal"),
           ]),
@@ -3270,7 +3292,7 @@
 
     const isBar = options.type === "bar";
     const stroke = resolveCSSVar(options.color);
-    const fill = stroke + "33";
+    const fill = colorWithAlpha(stroke, 0.2);
 
     const series = [
       {},
@@ -3506,7 +3528,7 @@
     }
     if (!state.ready) {
       viewSlot.replaceChildren(renderPlaceholder(
-        state.bootstrap.state === "initializing" ? "preparing dashboard…" : "loading dashboard…"
+        state.bootstrap.state === "initializing" ? "Preparing dashboard…" : "Loading dashboard…"
       ));
       renderDetailPanels([]);
       updateFreshness();
@@ -3551,6 +3573,7 @@
   }
 
   function switchView(view) {
+    if (!view || view === state.view) return;
     const stage = document.getElementById("view");
     if (stage) stage.classList.add("is-switching");
     state.view = view;

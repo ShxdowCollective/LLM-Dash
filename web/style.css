@@ -87,7 +87,7 @@
   --vw-space-2xl: 24px;
   --vw-space-3xl: 32px;
 
-  --vw-font-mono:    "SUSE", "Roboto", system-ui, sans-serif;
+  --vw-font-mono:    "JetBrains Mono", "Cascadia Code", "Fira Code", monospace;
   --vw-font-body:    "SUSE", "Roboto", system-ui, sans-serif;
   --vw-font-display: "Roboto", "SUSE", system-ui, sans-serif;
 }
@@ -114,6 +114,8 @@ html, body {
   font-family: var(--vw-font-body);
   font-size: 14px;
   line-height: 1.5;
+  font-feature-settings: "liga" 1, "calt" 1;
+  text-rendering: optimizeLegibility;
 }
 
 body.has-overlay {
@@ -221,8 +223,8 @@ a {
   margin: 0;
   font-family: var(--vw-font-display);
   font-size: 30px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  font-weight: var(--vw-weight-light);
+  letter-spacing: 0;
   background: linear-gradient(
     135deg,
     var(--vw-iridescent-1),
@@ -943,6 +945,7 @@ table.data-table {
   border-collapse: separate;
   border-spacing: 0 3px;
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 table.models thead th,
@@ -1086,6 +1089,7 @@ table.data-table thead th.num,
   align-items: center;
   gap: 6px;
   min-width: clamp(120px, 15vw, 144px);
+  font-variant-numeric: tabular-nums;
 }
 
 .score-cell .tier-pill {
@@ -1463,6 +1467,7 @@ table.data-table thead th.num,
   font-size: 24px;
   font-weight: 700;
   line-height: 1.2;
+  font-variant-numeric: tabular-nums;
 }
 
 .stats-note {
@@ -2705,6 +2710,17 @@ table.data-table thead th.num,
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
   }
 }
 
