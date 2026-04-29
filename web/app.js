@@ -263,9 +263,13 @@
   const _cssVarCache = Object.create(null);
   function resolveCSSVar(varStr) {
     if (_cssVarCache[varStr]) return _cssVarCache[varStr];
+    if (!varStr || !varStr.startsWith("var(")) {
+      _cssVarCache[varStr] = varStr;
+      return varStr;
+    }
     const prop = varStr.replace(/^var\(/, "").replace(/\)$/, "");
     const val = getComputedStyle(document.documentElement)
-      .getPropertyValue(prop).trim();
+      .getPropertyValue(prop).trim() || varStr;
     _cssVarCache[varStr] = val;
     return val;
   }
@@ -1561,7 +1565,7 @@
     if (!state.lastUpdated) {
       el.textContent = "never updated";
       el.dataset.state = "unknown";
-      el.title = "no meta.last_updated row";
+      el.title = "No update recorded yet";
       return;
     }
     const timestamp = Date.parse(state.lastUpdated);
@@ -1574,7 +1578,7 @@
     const ageMs = Date.now() - timestamp;
     const ageHours = ageMs / 3600000;
     el.textContent = "updated " + humanAge(ageMs);
-    el.title = "meta.last_updated = " + state.lastUpdated;
+    el.title = "Last updated: " + state.lastUpdated;
     if (ageHours <= 24) el.dataset.state = "fresh";
     else if (ageHours <= 48) el.dataset.state = "stale";
     else el.dataset.state = "expired";
@@ -1818,7 +1822,7 @@
         class: "fill",
         style: {
           width: width + "%",
-          background: "linear-gradient(90deg, color-mix(in srgb, " + colorVar + " 67%, transparent), " + colorVar + ")",
+          background: colorVar,
         },
       })),
       h("span", { class: "val" }, Number(score).toFixed(1)),
@@ -2799,7 +2803,7 @@
 
   function renderTable() {
     if (!state.models.length) {
-      return renderEmptyState("No models match this filter.", "Trim the filters or reset them and the table will fill back in.");
+      return renderEmptyState("No models match this filter.", "Loosen the filters or reset them to see results.");
     }
     const head = h("thead", null, h("tr", null, [
       h("th", { class: "num" }, "#"),
@@ -2853,7 +2857,7 @@
 
   function renderChart() {
     if (!state.models.length) {
-      return renderEmptyState("No chart data to draw.", "Right now the filters are too tight, so there is nothing left to graph.");
+      return renderEmptyState("No chart data to draw.", "Loosen the filters or reset them to see results.");
     }
     const rows = state.models.map((model, index) => {
       const overall = getOverall(model);
@@ -2926,7 +2930,7 @@
 
   function renderChangelog() {
     if (!state.changelogs.length) {
-      return renderEmptyState("No changelogs yet.", "Run the daily update flow and the changelog timeline will start filling in.");
+      return renderEmptyState("No changelogs yet.", "Run a daily update and entries will appear here.");
     }
     const active = state.changelogs.find((row) => row.date === state.activeChangelogDate) || state.changelogs[0];
     if (active && state.activeChangelogDate !== active.date) state.activeChangelogDate = active.date;
@@ -2934,7 +2938,7 @@
     const cache = active ? state.changelogBodies[active.date] : null;
     let body;
     if (!active) {
-      body = renderEmptyState("Pick a changelog.", "Nothing is selected.");
+      body = renderEmptyState("Select an entry", "Choose a date from the sidebar to view its changelog.");
     } else if (!cache || cache.status === "loading") {
       body = h("div", { class: "changelog-body" }, [
         h("div", { class: "changelog-skeleton" }, [
@@ -2945,7 +2949,7 @@
         ]),
       ]);
     } else if (cache.status === "error") {
-      body = h("p", { class: "status-msg error" }, "failed to load changelog: " + cache.error);
+      body = h("p", { class: "status-msg error" }, "Failed to load changelog: " + cache.error);
     } else {
       body = renderMarkdown(cache.body);
     }
@@ -3062,7 +3066,7 @@
   function renderStatsView() {
     const rows = getFilteredMetrics();
     if (!rows.length) {
-      return renderEmptyState("No runs match these stats filters.", "Widen the date range or clear the agent filter.");
+      return renderEmptyState("No runs match these filters.", "Try widening the date range or clearing the agent filter.");
     }
 
     const totals = {
@@ -3087,12 +3091,12 @@
       h("section", { class: "stats-section" }, [
         h("div", { class: "section-head" }, [
           h("h2", null, "Totals"),
-          h("p", null, "Raw spend, tokens, Agent Provider, and words across the filtered runs."),
+          h("p", null, "Cost, tokens, duration, and word counts across the filtered runs."),
         ]),
         h("div", { class: "stats-grid" }, [
-          statCard("Runs", formatNumber(totals.runs, 0), "Changelogs with recorded run metadata"),
-          statCard("Total cost", formatCurrency(totals.cost), "NULL cost rows stay out of the sum"),
-          statCard("Total duration", formatDuration(totals.duration), "Wall-clock time across runs"),
+          statCard("Runs", formatNumber(totals.runs, 0), "Changelogs with run metadata"),
+          statCard("Total cost", formatCurrency(totals.cost), "Excludes runs without cost data"),
+          statCard("Total duration", formatDuration(totals.duration), "Wall-clock time across all runs"),
           statCard("Input tokens", formatCompactNumber(totals.input), FULL_NUMBER.format(totals.input || 0)),
           statCard("Output tokens", formatCompactNumber(totals.output), FULL_NUMBER.format(totals.output || 0)),
           statCard("Cached tokens", formatCompactNumber(totals.cached), FULL_NUMBER.format(totals.cached || 0)),
@@ -3109,8 +3113,8 @@
           statCard("Duration / run", formatDuration(averages.duration), "Average wall-clock duration"),
           statCard("Input / run", formatCompactNumber(averages.input), averages.input !== null ? FULL_NUMBER.format(Math.round(averages.input)) : "—"),
           statCard("Output / run", formatCompactNumber(averages.output), averages.output !== null ? FULL_NUMBER.format(Math.round(averages.output)) : "—"),
-          statCard("Words / run", formatNumber(averages.words, 0), "Body word count only"),
-          statCard("Cost / word", formatCurrency(averages.costPerWord), "Across rows with both cost + words"),
+          statCard("Words / run", formatNumber(averages.words, 0), "Changelog body only"),
+          statCard("Cost / word", formatCurrency(averages.costPerWord), "Runs with both cost and word data"),
         ]),
       ]),
       h("section", { class: "stats-section" }, [
@@ -3140,14 +3144,14 @@
       h("section", { class: "stats-section" }, [
         h("div", { class: "section-head" }, [
           h("h2", null, "Per-Agent Breakdown"),
-          h("p", null, "Grouped by agent model + Agent Provider so comparisons stay honest."),
+          h("p", null, "Grouped by agent model and provider for side-by-side comparison."),
         ]),
         renderAgentBreakdown(rows),
       ]),
       h("section", { class: "stats-section" }, [
         h("div", { class: "section-head" }, [
           h("h2", null, "Run Metrics"),
-          h("p", null, "Sortable raw rows from the `run_metrics` table. Click a date to jump to that changelog."),
+          h("p", null, "All recorded runs. Click a column header to sort, or a date to view that changelog."),
         ]),
         renderRunTable(rows),
       ]),
@@ -3180,8 +3184,8 @@
       ]),
       h("section", { class: "data-card prompt-card" }, [
         h("div", { class: "data-card-head" }, [
-          h("h3", null, "AI Prompt for updating"),
-          h("p", null, "Copy this prompt and paste it into any AI coding agent to run today's dashboard update manually."),
+          h("h3", null, "Manual Update Prompt"),
+          h("p", null, "Paste this into any AI coding agent to trigger today's dashboard update."),
         ]),
         h("div", { class: "data-card-body" }, [
           h("textarea", {
@@ -3349,25 +3353,25 @@
       renderUplotChart("stats-chart-cost", rows, "cost_usd", {
         type: "bar",
         label: "Cost",
-        color: "#f17bb5",
+        color: "var(--vw-iridescent-7)",
         axis: (value) => formatCurrency(value),
       });
       renderUplotChart("stats-chart-duration", rows, "duration_sec", {
         type: "line",
         label: "Duration",
-        color: "#86a8ff",
+        color: "var(--vw-iridescent-5)",
         axis: (value) => formatDuration(value),
       });
       renderUplotChart("stats-chart-output", rows, "tokens_output", {
         type: "line",
         label: "Output tokens",
-        color: "#72f0d7",
+        color: "var(--vw-iridescent-4)",
         axis: (value) => formatCompactNumber(value),
       });
       renderUplotChart("stats-chart-words", rows, "word_count", {
         type: "line",
         label: "Words",
-        color: "#a6f17b",
+        color: "var(--vw-iridescent-3)",
         axis: (value) => formatCompactNumber(value),
       });
     });
@@ -3632,7 +3636,7 @@
         );
       } else {
         state.error = renderError(
-          "failed to load dashboard",
+          "Failed to load dashboard",
           h("span", null, String((error && error.message) || error))
         );
       }

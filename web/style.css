@@ -79,7 +79,6 @@
   --vw-transition-fast: 140ms ease;
   --vw-transition:      220ms ease;
 
-  /* Spacing scale — introduced in Phase 8.9 */
   --vw-space-xs: 4px;
   --vw-space-sm: 8px;
   --vw-space-md: 12px;
@@ -2695,7 +2694,7 @@ table.data-table thead th.num,
   50% { box-shadow: 0 0 0 2px rgba(124, 92, 196, 0.6), 0 0 16px rgba(124, 92, 196, 0.15); }
 }
 
-.controls-bar .vw-btn-primary[data-stale="true"] {
+.refresh-btn[data-stale="true"] {
   animation: accent-pulse 3s ease-in-out infinite;
 }
 
