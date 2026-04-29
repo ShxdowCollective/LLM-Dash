@@ -28,6 +28,8 @@ from scripts.config import (
     normalize_base_url,
     normalize_endpoint_mode,
     public_provider_state,
+    remove_exa_api_key,
+    remove_provider_api_key,
     save_exa_api_key,
     save_provider,
 )
@@ -516,6 +518,28 @@ def post_exa(payload: ExaPayload) -> dict[str, Any]:
         return {"exa_configured": True}
     except ConfigError as exc:
         raise _http_error(exc)
+
+
+@app.delete("/api/exa")
+def delete_exa() -> dict[str, Any]:
+    try:
+        remove_exa_api_key()
+        return {"exa_configured": False}
+    except ConfigError as exc:
+        raise _http_error(exc)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.delete("/api/provider/key")
+def delete_provider_key() -> dict[str, Any]:
+    try:
+        remove_provider_api_key()
+        return {"key_removed": True}
+    except ConfigError as exc:
+        raise _http_error(exc)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.get("/api/schedule")

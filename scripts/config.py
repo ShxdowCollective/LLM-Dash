@@ -163,6 +163,27 @@ def _keyring_set_verified(name: str, secret: str) -> bool:
         return False
 
 
+def _delete_keyring_secret(name: str) -> bool:
+    try:
+        import keyring
+    except Exception:
+        return False
+    try:
+        keyring.delete_password(KEYRING_SERVICE, name)
+        return True
+    except Exception:
+        return False
+
+
+def _delete_auth_file_secret(name: str) -> None:
+    data = _read_json(auth_path()) or {"version": 2, "credentials": {}}
+    credentials = data.get("credentials", {})
+    if name in credentials:
+        del credentials[name]
+    data["credentials"] = credentials
+    _atomic_write_json(auth_path(), data)
+
+
 def _save_auth_file_secret(name: str, secret: str, meta: dict[str, Any] | None = None) -> None:
     data = _read_json(auth_path()) or {"version": 2, "credentials": {}}
     data["version"] = 2
@@ -404,3 +425,13 @@ def save_exa_api_key(api_key: str) -> None:
         raise ConfigError("api_key is required")
     if not _keyring_set_verified(EXA_KEY_NAME, secret):
         _save_auth_file_secret(EXA_KEY_NAME, secret, {"app": APP_NAME, "kind": "exa"})
+
+
+def remove_exa_api_key() -> None:
+    _delete_keyring_secret(EXA_KEY_NAME)
+    _delete_auth_file_secret(EXA_KEY_NAME)
+
+
+def remove_provider_api_key() -> None:
+    _delete_keyring_secret(PROVIDER_KEY_NAME)
+    _delete_auth_file_secret(PROVIDER_KEY_NAME)

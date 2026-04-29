@@ -1659,6 +1659,114 @@ table.data-table thead th.num,
   color: var(--vw-error);
 }
 
+/* Settings view */
+.settings-view {
+  display: grid;
+  gap: var(--vw-space-lg);
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.settings-view .panel-shell {
+  background: var(--vw-bg-soft);
+  border-radius: var(--vw-radius-lg);
+  box-shadow: 0 0 0 1px var(--vw-border);
+}
+
+.settings-form {
+  display: grid;
+  gap: var(--vw-space-md);
+  padding: var(--vw-space-xs) 0 0;
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--vw-space-sm);
+  align-items: center;
+}
+
+.settings-password-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.settings-password-input {
+  flex: 1;
+  padding-right: 40px;
+}
+
+.settings-password-toggle {
+  position: absolute;
+  right: 4px;
+  padding: 4px;
+  min-width: auto;
+}
+
+.settings-field-status {
+  margin: 0;
+  color: var(--vw-text-muted);
+  font-family: var(--vw-font-mono);
+  font-size: 12px;
+}
+
+.settings-test-result {
+  margin-top: var(--vw-space-xs);
+}
+
+.settings-segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--vw-space-xs);
+}
+
+.settings-no-provider-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--vw-space-md);
+  padding: var(--vw-space-md) var(--vw-space-lg);
+  background: var(--vw-surface-2);
+  border: 1px solid var(--vw-warning);
+  border-radius: var(--vw-radius-lg);
+}
+
+.settings-no-provider-banner p {
+  margin: 0;
+  color: var(--vw-warning);
+  font-family: var(--vw-font-mono);
+  font-size: 13px;
+  font-weight: var(--vw-weight-semibold);
+}
+
+.settings-disabled-section {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.settings-seg-btn {
+  min-width: 70px;
+}
+
+@media (max-width: 480px) {
+  .settings-view {
+    gap: var(--vw-space-md);
+  }
+  .settings-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .settings-no-provider-banner {
+    flex-direction: column;
+    text-align: center;
+  }
+  .settings-password-toggle {
+    width: 36px;
+    flex-shrink: 0;
+  }
+}
+
 .chart-empty {
   display: flex;
   align-items: center;

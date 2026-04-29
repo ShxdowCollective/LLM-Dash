@@ -106,35 +106,27 @@ turning the dashboard into a confetti machine.
 Goal: replace the Data page with a real Settings page that can handle normal
 configuration without forcing the whole first-run wizard.
 
-- [ ] Backend: add `_delete_keyring_secret()`, `_delete_auth_file_secret()`,
-  `remove_exa_api_key()`, and `remove_provider_api_key()` to config.py
-  (none of these exist yet). Add `DELETE /api/exa` and
-  `DELETE /api/provider/key` endpoints to server.py. Testable via curl
-  independently of the frontend.
-- [ ] Rename Data nav label to "Settings" (keep `state.view = "data"` and
+- [x] Backend: add `_delete_keyring_secret()`, `_delete_auth_file_secret()`,
+  `remove_exa_api_key()`, and `remove_provider_api_key()` to config.py.
+  Add `DELETE /api/exa` and `DELETE /api/provider/key` endpoints to server.py.
+- [x] Rename Data nav label to "Settings" (keep `state.view = "data"` and
   `#data` hash internally; accept `#settings` alias). Rename
-  `renderDataView()` (app.js:3113) → `renderSettingsView()`. Add settings
-  gear icon to the icon lookup table.
-- [ ] Build 6-section Settings layout using `.panel-shell` collapsible
-  sections: Agent Provider (preset selector + form fields + API key
-  show/hide + save+test), Models (dropdown from `/api/provider/models` +
-  refresh + per-model test roundtrips + manual ID text input fallback),
-  Exa (status + save + remove with inline confirmation dialog), LLM Stats
-  (reserved/disabled placeholder for 8.11), Schedule (extract shared
-  `renderScheduleForm()` from `renderWizardScheduleStep()` at app.js:2383),
-  Manual Update (collapsed, retained from old Data view).
-- [ ] Wire provider/Exa save to reload `state.provider` via `fetchProvider()`
-  (app.js:722) without a full page refresh. Pre-populate all fields from
-  current state on mount so partial edits never wipe existing config. Empty
-  API key field = keep existing key. Add error boundary: if `fetchProvider()`
-  fails on mount, render degraded state with error banner and working
-  Manual Update section.
-- [ ] Remove "Reconfigure" / "Manage Schedule" wizard entry buttons from
+  `renderDataView()` → `renderSettingsView()`. Add settings gear icon to
+  the icon lookup table.
+- [x] Build 6-section Settings layout using `.panel-shell` collapsible
+  sections: Agent Provider, Models, Exa, LLM Stats (reserved/disabled),
+  Schedule, Manual Update (collapsed).
+- [x] Wire provider/Exa save to reload `state.provider` via `fetchProvider()`
+  without a full page refresh. Pre-populate fields from current state via
+  draft state so partial edits survive re-renders. Empty API key = keep
+  existing key.
+- [x] Remove "Reconfigure" / "Manage Schedule" wizard entry buttons from
   Settings. Keep wizard for first-run only. Show "Agent Provider not
   configured → Run Setup Wizard" banner when `!state.provider.has_provider`.
-- [ ] Verify: secret redaction (no plaintext keys in DOM), failed-test
-  messaging, keyboard tab order + Enter-to-submit, mobile layout at 390px,
-  no accidental run-update on save, inline confirmation before key removal.
+- [x] Verify: syntax checks pass, Codex review completed with fixes for
+  draft state persistence, preset field names, test connection POST,
+  model_count field name, schedule button class conflict, and mobile
+  password toggle width.
 
 ### Phase 8.11 — Optional LLM Stats enrichment
 

@@ -87,6 +87,14 @@
       modelFiltersCollapsed: false,
       statsFiltersCollapsed: false,
       modelInfoCollapsed: {},
+      settingsCollapsed: {
+        provider: false,
+        models: false,
+        exa: false,
+        llmstats: true,
+        schedule: false,
+        manual: true,
+      },
     },
     selectedModelIds: [],
     models: [],
@@ -214,6 +222,42 @@
     dataCopyMessage: "",
     dataTerminalState: "idle",
     dataTerminalMessage: "",
+    settings: {
+      draftBaseUrl: null,
+      draftEndpointMode: null,
+      draftApiKey: "",
+      draftDefaultModel: null,
+      draftBackupModel: null,
+      providerSaving: false,
+      providerStatus: "",
+      providerStatusTone: "idle",
+      testingConnection: false,
+      connectionResult: null,
+      modelsLoading: false,
+      modelsList: [],
+      modelsError: "",
+      testingDefault: false,
+      testingBackup: false,
+      defaultTestResult: null,
+      backupTestResult: null,
+      exaSaving: false,
+      exaRemoving: false,
+      exaConfirmRemove: false,
+      exaStatus: "",
+      exaStatusTone: "idle",
+      providerKeyRemoving: false,
+      providerKeyConfirmRemove: false,
+      scheduleSaving: false,
+      scheduleRemoving: false,
+      scheduleStatus: "",
+      scheduleStatusTone: "idle",
+      scheduleCadence: "off",
+      scheduleTimeLocal: "09:00",
+      scheduleDayOfWeek: 1,
+      scheduleDayOfMonth: 1,
+      showApiKey: false,
+      showExaKey: false,
+    },
     manualRefreshModal: {
       open: false,
       loading: false,
@@ -361,6 +405,11 @@
     "refresh-cw": '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>',
     "filter-x": '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/><line x1="18" y1="8" x2="22" y2="12"/><line x1="22" y1="8" x2="18" y2="12"/></svg>',
     "x": '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+    "settings": '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>',
+    "eye": '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
+    "eye-off": '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>',
+    "trash": '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>',
+    "plus": '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
   };
 
   function icon(name) {
@@ -419,6 +468,9 @@
       state.ui.modelInfoCollapsed = Object.fromEntries(
         Object.entries(stored.modelInfoCollapsed).filter(([key, value]) => /^\d+$/.test(key) && typeof value === "boolean")
       );
+    }
+    if (stored.settingsCollapsed && typeof stored.settingsCollapsed === "object") {
+      Object.assign(state.ui.settingsCollapsed, stored.settingsCollapsed);
     }
   }
 
@@ -3180,36 +3232,521 @@
     ]);
   }
 
-  function renderDataView() {
-    if (!state.dataPromptLoaded && !state.dataPromptLoading) fetchDataPrompt();
-    if (!state.schedule.loaded && !state.schedule.loading) fetchSchedule();
-    const promptText = state.dataPromptLoading ? "Loading prompt…" : state.dataPrompt;
+  function settingsField(label, control, hint) {
+    return h("label", { class: "vw-field" }, [
+      h("span", { class: "vw-label" }, label),
+      control,
+      hint ? h("span", { class: "vw-hint" }, hint) : null,
+    ]);
+  }
+
+  function settingsStatusChip(text, tone) {
+    if (!text) return null;
+    const cls = "vw-status-chip" + (tone === "success" ? " vw-status-success" : tone === "error" ? " vw-status-error" : tone === "loading" ? " vw-status-generating" : "");
+    return h("span", { class: cls }, text);
+  }
+
+  function passwordFieldWithToggle(id, value, onInput, show, onToggleShow, placeholder) {
+    return h("div", { class: "settings-password-wrap" }, [
+      h("input", {
+        id: id,
+        class: "vw-input settings-password-input",
+        type: show ? "text" : "password",
+        value: value,
+        placeholder: placeholder || "",
+        oninput: onInput,
+        autocomplete: "off",
+      }),
+      h("button", {
+        class: "vw-btn vw-btn-icon settings-password-toggle",
+        type: "button",
+        "aria-label": show ? "Hide" : "Show",
+        onclick: onToggleShow,
+      }, [icon(show ? "eye-off" : "eye")]),
+    ]);
+  }
+
+  function settingsScheduleUtcEcho() {
+    const parts = String(state.settings.scheduleTimeLocal || "09:00").split(":");
+    const date = new Date();
+    date.setHours(Number(parts[0] || 9), Number(parts[1] || 0), 0, 0);
+    return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC", timeZoneName: "short" });
+  }
+
+  function toggleSettingsSection(key) {
+    state.ui.settingsCollapsed[key] = !state.ui.settingsCollapsed[key];
+    persistUIState();
+    render();
+  }
+
+  function initSettingsScheduleState() {
+    if (!state.schedule.loaded) return;
+    const s = state.settings;
+    if (s._scheduleInitialized) return;
+    s._scheduleInitialized = true;
+    s.scheduleCadence = state.schedule.enabled && state.schedule.cadence !== "off" ? state.schedule.cadence : "off";
+    s.scheduleTimeLocal = state.schedule.time_local || "09:00";
+    s.scheduleDayOfWeek = state.schedule.day_of_week || 1;
+    s.scheduleDayOfMonth = state.schedule.day_of_month || 1;
+  }
+
+  async function settingsSaveProvider(formEl) {
+    const s = state.settings;
+    s.providerSaving = true;
+    s.providerStatus = "";
+    render();
+    try {
+      const base_url = (s.draftBaseUrl !== null ? s.draftBaseUrl : state.provider.base_url || "").trim();
+      const endpoint_mode = s.draftEndpointMode !== null ? s.draftEndpointMode : state.provider.endpoint_mode || "append_v1";
+      const api_key = s.draftApiKey.trim();
+      const default_model = (s.draftDefaultModel !== null ? s.draftDefaultModel : state.provider.default_model || "").trim();
+      const backup_model = (s.draftBackupModel !== null ? s.draftBackupModel : state.provider.backup_model || "").trim();
+      const models_override_url = state.provider.models_override_url || "";
+      const request_headers = state.provider.request_headers || {};
+      if (!base_url) throw new Error("Base URL is required");
+      if (!default_model) throw new Error("Default model is required");
+      const payload = { base_url, endpoint_mode, default_model, backup_model, models_override_url, request_headers };
+      if (api_key) payload.api_key = api_key;
+      await fetchJson("/api/provider", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      await fetchProvider();
+      s.draftBaseUrl = null;
+      s.draftEndpointMode = null;
+      s.draftApiKey = "";
+      s.draftDefaultModel = null;
+      s.draftBackupModel = null;
+      s.providerStatus = "Provider saved";
+      s.providerStatusTone = "success";
+      s.modelsList = [];
+      settingsLoadModels();
+    } catch (error) {
+      s.providerStatus = String(error?.message || error);
+      s.providerStatusTone = "error";
+    } finally {
+      s.providerSaving = false;
+      render();
+    }
+  }
+
+  async function settingsTestConnection() {
+    const s = state.settings;
+    s.testingConnection = true;
+    s.connectionResult = null;
+    render();
+    try {
+      const base_url = (s.draftBaseUrl !== null ? s.draftBaseUrl : state.provider.base_url || "").trim();
+      const endpoint_mode = s.draftEndpointMode !== null ? s.draftEndpointMode : state.provider.endpoint_mode || "append_v1";
+      const api_key = s.draftApiKey.trim();
+      const default_model = (s.draftDefaultModel !== null ? s.draftDefaultModel : state.provider.default_model || "").trim();
+      const payload = { base_url, endpoint_mode, default_model };
+      if (api_key) payload.api_key = api_key;
+      const result = await fetchJson("/api/provider/test-connection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      s.connectionResult = result;
+    } catch (error) {
+      s.connectionResult = { ok: false, error: String(error?.message || error) };
+    } finally {
+      s.testingConnection = false;
+      render();
+    }
+  }
+
+  async function settingsLoadModels() {
+    const s = state.settings;
+    s.modelsLoading = true;
+    s.modelsError = "";
+    render();
+    try {
+      const result = await fetchJson("/api/provider/models");
+      s.modelsList = Array.isArray(result.models) ? result.models : [];
+      if (!s.modelsList.length) s.modelsError = "No models returned";
+    } catch (error) {
+      s.modelsList = [];
+      s.modelsError = String(error?.message || error);
+    } finally {
+      s.modelsLoading = false;
+      render();
+    }
+  }
+
+  async function settingsTestModel(target) {
+    const s = state.settings;
+    const key = target === "backup" ? "testingBackup" : "testingDefault";
+    const resultKey = target === "backup" ? "backupTestResult" : "defaultTestResult";
+    s[key] = true;
+    s[resultKey] = null;
+    render();
+    try {
+      const result = await fetchJson("/api/provider/test-model", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target }),
+      });
+      s[resultKey] = result;
+    } catch (error) {
+      s[resultKey] = { ok: false, error: String(error?.message || error) };
+    } finally {
+      s[key] = false;
+      render();
+    }
+  }
+
+  async function settingsSaveExa() {
+    const s = state.settings;
+    const input = document.getElementById("settings-exa-key");
+    const key = input?.value?.trim() || "";
+    if (!key) { s.exaStatus = "API key is required"; s.exaStatusTone = "error"; render(); return; }
+    s.exaSaving = true;
+    s.exaStatus = "";
+    render();
+    try {
+      await fetchJson("/api/exa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: key }),
+      });
+      await fetchProvider();
+      s.exaStatus = "Exa key saved";
+      s.exaStatusTone = "success";
+      if (input) input.value = "";
+    } catch (error) {
+      s.exaStatus = String(error?.message || error);
+      s.exaStatusTone = "error";
+    } finally {
+      s.exaSaving = false;
+      render();
+    }
+  }
+
+  async function settingsRemoveExa() {
+    const s = state.settings;
+    s.exaRemoving = true;
+    s.exaStatus = "";
+    render();
+    try {
+      await fetchJson("/api/exa", { method: "DELETE" });
+      await fetchProvider();
+      s.exaStatus = "Exa key removed";
+      s.exaStatusTone = "success";
+      s.exaConfirmRemove = false;
+    } catch (error) {
+      s.exaStatus = String(error?.message || error);
+      s.exaStatusTone = "error";
+    } finally {
+      s.exaRemoving = false;
+      render();
+    }
+  }
+
+  async function settingsRemoveProviderKey() {
+    const s = state.settings;
+    s.providerKeyRemoving = true;
+    render();
+    try {
+      await fetchJson("/api/provider/key", { method: "DELETE" });
+      await fetchProvider();
+      s.providerStatus = "API key removed";
+      s.providerStatusTone = "success";
+      s.providerKeyConfirmRemove = false;
+    } catch (error) {
+      s.providerStatus = String(error?.message || error);
+      s.providerStatusTone = "error";
+    } finally {
+      s.providerKeyRemoving = false;
+      render();
+    }
+  }
+
+  async function settingsSaveSchedule() {
+    const s = state.settings;
+    s.scheduleSaving = true;
+    s.scheduleStatus = "";
+    render();
+    try {
+      const payload = { cadence: s.scheduleCadence, time_local: s.scheduleTimeLocal };
+      if (s.scheduleCadence === "weekly") payload.day_of_week = s.scheduleDayOfWeek;
+      if (s.scheduleCadence === "monthly") payload.day_of_month = s.scheduleDayOfMonth;
+      if (s.scheduleCadence === "off") {
+        await fetchJson("/api/schedule", { method: "DELETE" });
+      } else {
+        await fetchJson("/api/schedule", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      }
+      await fetchSchedule();
+      s.scheduleStatus = s.scheduleCadence === "off" ? "Schedule removed" : "Schedule saved";
+      s.scheduleStatusTone = "success";
+    } catch (error) {
+      s.scheduleStatus = String(error?.message || error);
+      s.scheduleStatusTone = "error";
+    } finally {
+      s.scheduleSaving = false;
+      render();
+    }
+  }
+
+  async function settingsRemoveSchedule() {
+    const s = state.settings;
+    s.scheduleRemoving = true;
+    s.scheduleStatus = "";
+    render();
+    try {
+      await fetchJson("/api/schedule", { method: "DELETE" });
+      await fetchSchedule();
+      s.scheduleCadence = "off";
+      s.scheduleStatus = "Schedule removed";
+      s.scheduleStatusTone = "success";
+    } catch (error) {
+      s.scheduleStatus = String(error?.message || error);
+      s.scheduleStatusTone = "error";
+    } finally {
+      s.scheduleRemoving = false;
+      render();
+    }
+  }
+
+  function renderSettingsProviderSection() {
+    const s = state.settings;
+    const presets = state.providerPresets.providers || [];
+    const currentPresetId = presets.find((p) => p.base_url === state.provider.base_url)?.id || "";
+    const connResult = s.connectionResult;
+    return renderCollapsiblePanel({
+      id: "settings-provider",
+      title: "Agent Provider",
+      summary: state.provider.has_provider ? state.provider.default_model + " via " + state.provider.base_url : "Not configured",
+      collapsed: state.ui.settingsCollapsed.provider,
+      onToggle: () => toggleSettingsSection("provider"),
+      children: [
+        h("form", { class: "settings-form", onsubmit: (e) => { e.preventDefault(); settingsSaveProvider(e.target); } }, [
+          presets.length ? settingsField("Preset", h("select", {
+            class: "vw-select",
+            value: currentPresetId,
+            onchange: (e) => {
+              const preset = presets.find((p) => p.id === e.target.value);
+              if (!preset) return;
+              s.draftBaseUrl = preset.default_base_url || "";
+              s.draftEndpointMode = preset.endpoint_mode || "append_v1";
+              render();
+            },
+          }, [
+            h("option", { value: "" }, "Custom"),
+            ...presets.map((p) => h("option", { value: p.id, selected: p.id === currentPresetId }, p.label || p.id)),
+          ])) : null,
+          settingsField("Base URL", h("input", {
+            id: "settings-base-url",
+            class: "vw-input",
+            type: "text",
+            value: s.draftBaseUrl !== null ? s.draftBaseUrl : state.provider.base_url || "",
+            required: true,
+            placeholder: "https://api.openai.com",
+            oninput: (e) => { s.draftBaseUrl = e.target.value; },
+          })),
+          settingsField("Endpoint mode", h("select", {
+            id: "settings-endpoint-mode",
+            class: "vw-select",
+            value: s.draftEndpointMode !== null ? s.draftEndpointMode : state.provider.endpoint_mode || "append_v1",
+            onchange: (e) => { s.draftEndpointMode = e.target.value; },
+          }, [
+            h("option", { value: "append_v1", selected: (s.draftEndpointMode !== null ? s.draftEndpointMode : state.provider.endpoint_mode) !== "root" }, "Append /v1"),
+            h("option", { value: "root", selected: (s.draftEndpointMode !== null ? s.draftEndpointMode : state.provider.endpoint_mode) === "root" }, "Root (use URL as-is)"),
+          ])),
+          settingsField("API key", passwordFieldWithToggle(
+            "settings-api-key", s.draftApiKey, (e) => { s.draftApiKey = e.target.value; }, s.showApiKey,
+            () => { s.showApiKey = !s.showApiKey; render(); },
+            state.provider.has_provider ? "••••••••  (leave empty to keep current)" : "Enter API key"
+          )),
+          h("div", { class: "settings-actions" }, [
+            h("button", { class: "vw-btn vw-btn-primary", type: "submit", disabled: s.providerSaving }, s.providerSaving ? "Saving…" : "Save Provider"),
+            h("button", { class: "vw-btn vw-btn-secondary", type: "button", disabled: s.testingConnection || !state.provider.has_provider, onclick: settingsTestConnection }, s.testingConnection ? "Testing…" : "Test Connection"),
+            state.provider.has_provider ? h("button", {
+              class: "vw-btn vw-btn-danger", type: "button",
+              disabled: s.providerKeyRemoving,
+              onclick: () => {
+                if (s.providerKeyConfirmRemove) { settingsRemoveProviderKey(); } else { s.providerKeyConfirmRemove = true; render(); }
+              },
+            }, s.providerKeyConfirmRemove ? "Confirm Remove Key" : "Remove API Key") : null,
+            s.providerKeyConfirmRemove ? h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: () => { s.providerKeyConfirmRemove = false; render(); } }, "Cancel") : null,
+          ]),
+          settingsStatusChip(s.providerStatus, s.providerStatusTone),
+          connResult ? h("div", { class: "settings-test-result" }, [
+            settingsStatusChip(connResult.ok ? "Connection OK — " + (connResult.models_count || 0) + " models" : "Failed: " + (connResult.error || "unknown error"), connResult.ok ? "success" : "error"),
+          ]) : null,
+        ]),
+      ],
+    });
+  }
+
+  function renderSettingsModelsSection() {
+    const s = state.settings;
+    const hasModels = s.modelsList.length > 0;
+    const defaultResult = s.defaultTestResult;
+    const backupResult = s.backupTestResult;
+    return renderCollapsiblePanel({
+      id: "settings-models",
+      title: "Models",
+      summary: state.provider.default_model ? state.provider.default_model + (state.provider.backup_model ? " / " + state.provider.backup_model : "") : "Not set",
+      collapsed: state.ui.settingsCollapsed.models,
+      onToggle: () => toggleSettingsSection("models"),
+      children: [
+        h("div", { class: "settings-form" }, [
+          settingsField("Default model", hasModels
+            ? h("select", { id: "settings-default-model", class: "vw-select", onchange: (e) => { s.draftDefaultModel = e.target.value; } }, s.modelsList.map((m) => {
+                const mid = typeof m === "string" ? m : m.id;
+                const sel = s.draftDefaultModel !== null ? s.draftDefaultModel : state.provider.default_model;
+                return h("option", { value: mid, selected: mid === sel }, mid);
+              }))
+            : h("input", { id: "settings-default-model", class: "vw-input", type: "text", value: s.draftDefaultModel !== null ? s.draftDefaultModel : state.provider.default_model || "", placeholder: "e.g. gpt-4o", oninput: (e) => { s.draftDefaultModel = e.target.value; } }),
+            hasModels ? null : "Enter the model ID exactly as your provider expects it."
+          ),
+          settingsField("Backup model", hasModels
+            ? h("select", { id: "settings-backup-model", class: "vw-select", onchange: (e) => { s.draftBackupModel = e.target.value; } }, [
+                h("option", { value: "" }, "— none —"),
+                ...s.modelsList.map((m) => {
+                  const mid = typeof m === "string" ? m : m.id;
+                  const sel = s.draftBackupModel !== null ? s.draftBackupModel : state.provider.backup_model;
+                  return h("option", { value: mid, selected: mid === sel }, mid);
+                }),
+              ])
+            : h("input", { id: "settings-backup-model", class: "vw-input", type: "text", value: s.draftBackupModel !== null ? s.draftBackupModel : state.provider.backup_model || "", placeholder: "Optional backup model", oninput: (e) => { s.draftBackupModel = e.target.value; } }),
+            hasModels ? null : "Optional fallback model for daily runs."
+          ),
+          h("div", { class: "settings-actions" }, [
+            h("button", { class: "vw-btn vw-btn-secondary", type: "button", disabled: s.modelsLoading || !state.provider.has_provider, onclick: settingsLoadModels }, s.modelsLoading ? "Loading…" : "Refresh Models"),
+            h("button", { class: "vw-btn vw-btn-secondary", type: "button", disabled: s.testingDefault || !state.provider.has_provider, onclick: () => settingsTestModel("default") }, s.testingDefault ? "Testing…" : "Test Default"),
+            state.provider.backup_model ? h("button", { class: "vw-btn vw-btn-secondary", type: "button", disabled: s.testingBackup, onclick: () => settingsTestModel("backup") }, s.testingBackup ? "Testing…" : "Test Backup") : null,
+          ]),
+          s.modelsError ? settingsStatusChip(s.modelsError, "error") : null,
+          defaultResult ? settingsStatusChip(defaultResult.ok ? "✓ " + (defaultResult.model || "default") + " — " + (defaultResult.output || "ok").slice(0, 80) : "✗ Default: " + (defaultResult.error || "failed"), defaultResult.ok ? "success" : "error") : null,
+          backupResult ? settingsStatusChip(backupResult.ok ? "✓ " + (backupResult.model || "backup") + " — " + (backupResult.output || "ok").slice(0, 80) : "✗ Backup: " + (backupResult.error || "failed"), backupResult.ok ? "success" : "error") : null,
+        ]),
+      ],
+    });
+  }
+
+  function renderSettingsExaSection() {
+    const s = state.settings;
+    return renderCollapsiblePanel({
+      id: "settings-exa",
+      title: "Exa",
+      summary: state.provider.exa_configured ? "Configured" : "Not set",
+      collapsed: state.ui.settingsCollapsed.exa,
+      onToggle: () => toggleSettingsSection("exa"),
+      children: [
+        h("div", { class: "settings-form" }, [
+          h("p", { class: "settings-field-status" }, state.provider.exa_configured ? "Exa API key is configured." : "No Exa API key set. Web research will be unavailable."),
+          settingsField("API key", passwordFieldWithToggle(
+            "settings-exa-key", "", (e) => {}, s.showExaKey,
+            () => { s.showExaKey = !s.showExaKey; render(); },
+            state.provider.exa_configured ? "••••••••  (leave empty to keep current)" : "Enter Exa API key"
+          )),
+          h("div", { class: "settings-actions" }, [
+            h("button", { class: "vw-btn vw-btn-primary", type: "button", disabled: s.exaSaving, onclick: settingsSaveExa }, s.exaSaving ? "Saving…" : "Save Exa Key"),
+            state.provider.exa_configured ? h("button", {
+              class: "vw-btn vw-btn-danger", type: "button",
+              disabled: s.exaRemoving,
+              onclick: () => {
+                if (s.exaConfirmRemove) { settingsRemoveExa(); } else { s.exaConfirmRemove = true; render(); }
+              },
+            }, s.exaConfirmRemove ? "Confirm Remove" : "Remove Exa Key") : null,
+            s.exaConfirmRemove ? h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: () => { s.exaConfirmRemove = false; render(); } }, "Cancel") : null,
+          ]),
+          settingsStatusChip(s.exaStatus, s.exaStatusTone),
+        ]),
+      ],
+    });
+  }
+
+  function renderSettingsLLMStatsSection() {
+    return renderCollapsiblePanel({
+      id: "settings-llmstats",
+      title: "LLM Stats",
+      summary: "Coming in Phase 8.11",
+      collapsed: state.ui.settingsCollapsed.llmstats,
+      onToggle: () => toggleSettingsSection("llmstats"),
+      children: [
+        h("div", { class: "settings-form settings-disabled-section" }, [
+          settingsField("API key", h("input", {
+            class: "vw-input",
+            type: "password",
+            disabled: true,
+            placeholder: "Available in Phase 8.11",
+          })),
+          h("div", { class: "settings-actions" }, [
+            h("button", { class: "vw-btn vw-btn-primary", type: "button", disabled: true }, "Save"),
+            h("button", { class: "vw-btn vw-btn-secondary", type: "button", disabled: true }, "Test Connection"),
+          ]),
+          h("p", { class: "vw-hint" }, "Optional data enrichment source for model metadata and benchmark data."),
+        ]),
+      ],
+    });
+  }
+
+  function renderSettingsScheduleSection() {
+    const s = state.settings;
+    initSettingsScheduleState();
     const scheduleLabel = !state.schedule.enabled || state.schedule.cadence === "off"
       ? "Off"
-      : state.schedule.cadence + " · " + state.schedule.time_local + " (" + state.schedule.utc_echo + ")";
-    return h("div", { class: "data-view" }, [
-      h("section", { class: "data-card provider-card vw-card" }, [
-        h("div", { class: "data-card-head" }, [
-          h("h3", null, "Agent Provider"),
-          h("p", null, state.provider.has_provider ? state.provider.default_model + " via " + state.provider.base_url : "Not configured"),
+      : state.schedule.cadence + " · " + (state.schedule.time_local || "09:00") + " (" + (state.schedule.utc_echo || "UTC") + ")";
+    return renderCollapsiblePanel({
+      id: "settings-schedule",
+      title: "Schedule",
+      summary: scheduleLabel,
+      collapsed: state.ui.settingsCollapsed.schedule,
+      onToggle: () => toggleSettingsSection("schedule"),
+      children: [
+        h("div", { class: "settings-form" }, [
+          settingsField("Cadence", h("div", { class: "settings-segmented" }, ["off", "daily", "weekly", "monthly"].map((cadence) => h("button", {
+            class: "vw-btn settings-seg-btn" + (s.scheduleCadence === cadence ? " vw-btn-primary" : " vw-btn-secondary"),
+            type: "button",
+            "aria-pressed": s.scheduleCadence === cadence ? "true" : "false",
+            onclick: () => { s.scheduleCadence = cadence; render(); },
+          }, cadence[0].toUpperCase() + cadence.slice(1))))),
+          s.scheduleCadence !== "off" ? settingsField("Local time", h("input", {
+            id: "settings-schedule-time",
+            class: "vw-input",
+            type: "time",
+            value: s.scheduleTimeLocal,
+            oninput: (e) => { s.scheduleTimeLocal = e.target.value; render(); },
+          }), "Runs at " + settingsScheduleUtcEcho()) : null,
+          s.scheduleCadence === "weekly" ? settingsField("Day", h("select", {
+            class: "vw-select",
+            value: String(s.scheduleDayOfWeek),
+            onchange: (e) => { s.scheduleDayOfWeek = Number(e.target.value); },
+          }, WEEKDAYS.map((day, i) => h("option", { value: String(i + 1), selected: s.scheduleDayOfWeek === i + 1 }, day)))) : null,
+          s.scheduleCadence === "monthly" ? settingsField("Day of month", h("input", {
+            class: "vw-input", type: "number", min: "1", max: "28",
+            value: String(s.scheduleDayOfMonth),
+            oninput: (e) => { s.scheduleDayOfMonth = Number(e.target.value || 1); },
+          }), "Limited to 1–28 so every month works.") : null,
+          h("div", { class: "settings-actions" }, [
+            h("button", { class: "vw-btn vw-btn-primary", type: "button", disabled: s.scheduleSaving, onclick: settingsSaveSchedule }, s.scheduleSaving ? "Saving…" : "Save Schedule"),
+            state.schedule.enabled && state.schedule.cadence !== "off" ? h("button", { class: "vw-btn vw-btn-danger", type: "button", disabled: s.scheduleRemoving, onclick: settingsRemoveSchedule }, s.scheduleRemoving ? "Removing…" : "Remove Schedule") : null,
+          ]),
+          settingsStatusChip(s.scheduleStatus, s.scheduleStatusTone),
         ]),
-        h("div", { class: "provider-status-grid" }, [
-          h("div", null, [h("span", null, "Chat"), h("strong", null, state.provider.chat_endpoint || "—")]),
-          h("div", null, [h("span", null, "Models"), h("strong", null, state.provider.models_endpoint || "—")]),
-          h("div", null, [h("span", null, "Exa"), h("strong", null, state.provider.exa_configured ? "Configured" : "Not set")]),
-          h("div", null, [h("span", null, "Schedule"), h("strong", null, scheduleLabel)]),
-        ]),
-        h("div", { class: "prompt-actions" }, [
-          h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: () => openWizard(0) }, "Reconfigure"),
-          h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: () => openWizard(4) }, "Manage Schedule"),
-        ]),
-      ]),
-      h("section", { class: "data-card prompt-card" }, [
-        h("div", { class: "data-card-head" }, [
-          h("h3", null, "Manual Update Prompt"),
-          h("p", null, "Paste this into any AI coding agent to trigger today's dashboard update."),
-        ]),
-        h("div", { class: "data-card-body" }, [
+      ],
+    });
+  }
+
+  function renderSettingsManualSection() {
+    if (!state.dataPromptLoaded && !state.dataPromptLoading) fetchDataPrompt();
+    const promptText = state.dataPromptLoading ? "Loading prompt…" : state.dataPrompt;
+    return renderCollapsiblePanel({
+      id: "settings-manual",
+      title: "Manual Update (CLI)",
+      summary: "Copy a prompt for manual dashboard refresh",
+      collapsed: state.ui.settingsCollapsed.manual,
+      onToggle: () => toggleSettingsSection("manual"),
+      children: [
+        h("div", { class: "settings-form" }, [
           h("textarea", {
             id: "data-prompt",
             class: "prompt-display",
@@ -3217,13 +3754,13 @@
           }, promptText),
           h("div", { class: "prompt-actions" }, [
             h("button", {
-              class: "action-btn",
+              class: "vw-btn vw-btn-secondary",
               type: "button",
               disabled: state.dataPromptLoading || !state.dataPrompt,
               onclick: copyDataPrompt,
             }, "Copy Prompt"),
             h("button", {
-              class: "action-btn primary",
+              class: "vw-btn vw-btn-secondary",
               type: "button",
               disabled: state.dataTerminalMessage === "Opening terminal…",
               onclick: openTerminalForData,
@@ -3231,21 +3768,32 @@
           ]),
           h("p", { class: "paste-hint" }, PASTE_HINT),
           h("div", { class: "data-card-status" }, [
-            state.dataCopyMessage
-              ? h("p", {
-                  id: "data-copy-state",
-                  dataset: { tone: state.dataCopyState || "idle" },
-                }, state.dataCopyMessage)
-              : null,
-            state.dataTerminalMessage
-              ? h("p", {
-                  id: "data-terminal-state",
-                  dataset: { tone: state.dataTerminalState || "idle" },
-                }, state.dataTerminalMessage)
-              : null,
+            state.dataCopyMessage ? h("p", { dataset: { tone: state.dataCopyState || "idle" } }, state.dataCopyMessage) : null,
+            state.dataTerminalMessage ? h("p", { dataset: { tone: state.dataTerminalState || "idle" } }, state.dataTerminalMessage) : null,
           ]),
         ]),
-      ]),
+      ],
+    });
+  }
+
+  function renderSettingsView() {
+    if (!state.providerPresets.loaded && !state.providerPresets.loading) fetchProviderPresets();
+    if (!state.schedule.loaded && !state.schedule.loading) fetchSchedule();
+    if (state.provider.has_provider && !state.settings.modelsList.length && !state.settings.modelsLoading && !state.settings.modelsError) settingsLoadModels();
+    const noBanner = !state.provider.has_provider
+      ? h("div", { class: "settings-no-provider-banner vw-card" }, [
+          h("p", null, "Agent Provider not configured"),
+          h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: () => openWizard(0) }, "Run Setup Wizard"),
+        ])
+      : null;
+    return h("div", { class: "settings-view" }, [
+      noBanner,
+      renderSettingsProviderSection(),
+      renderSettingsModelsSection(),
+      renderSettingsExaSection(),
+      renderSettingsLLMStatsSection(),
+      renderSettingsScheduleSection(),
+      renderSettingsManualSection(),
     ]);
   }
 
@@ -3540,7 +4088,7 @@
     if (state.view === "chart") content = renderChart();
     else if (state.view === "changelog") content = renderChangelog();
     else if (state.view === "stats") content = renderStatsView();
-    else if (state.view === "data") content = renderDataView();
+    else if (state.view === "data") content = renderSettingsView();
     else content = renderTable();
 
     viewSlot.replaceChildren(content);
@@ -3611,6 +4159,9 @@
       }
       if (state.manualRefreshModal.open) closeManualRefreshModal();
     });
+    const hashView = location.hash.replace("#", "");
+    if (hashView === "settings") state.view = "data";
+    else if (["table", "chart", "changelog", "stats", "data"].includes(hashView)) state.view = hashView;
     window.addEventListener("beforeunload", () => {
       resetRunUpdate(false);
       if (state.db) state.db.close();
