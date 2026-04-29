@@ -631,6 +631,9 @@ async def run_agent_once(model_name: str, prompt: str, exa_key: str, log_path: P
             except MaxTurnsExceeded as retry_exc:
                 write_log(log_path, f"exa_mcp_max_turns_retry_failed={retry_exc}; falling back without Exa")
                 result = await run_without_exa(MAX_AGENT_TURNS)
+            except Exception as retry_exc:
+                write_log(log_path, f"exa_mcp_retry_runtime_error={type(retry_exc).__name__}: {retry_exc}; falling back without Exa")
+                result = await run_without_exa(MAX_AGENT_TURNS)
         except Exception as exc:
             write_log(log_path, f"exa_mcp_runtime_error={type(exc).__name__}: {exc}")
             result = await run_without_exa(MAX_AGENT_TURNS)

@@ -93,6 +93,10 @@
   display: none !important;
 }
 
+html {
+  scrollbar-gutter: stable;
+}
+
 html, body {
   margin: 0;
   padding: 0;
@@ -345,6 +349,7 @@ a {
 .sort-btn,
 .view-btn {
   padding: 6px 11px;
+  min-height: 44px;
   background: transparent;
   color: var(--vw-text-muted);
   font-family: var(--vw-font-mono);
@@ -382,6 +387,7 @@ a {
   align-items: center;
   justify-content: center;
   padding: 8px 12px;
+  min-height: 44px;
   background: var(--vw-surface-1);
   color: var(--vw-text-soft);
   box-shadow: 0 0 0 1px var(--vw-border);
@@ -416,8 +422,8 @@ a {
 }
 
 .refresh-btn {
-  min-height: 28px;
-  padding: 4px 12px;
+  min-height: 44px;
+  padding: 8px 12px;
 }
 
 .refresh-error {
@@ -462,7 +468,7 @@ a {
   cursor: pointer;
   transition: background var(--vw-transition-fast);
   flex: 1 1 auto;
-  min-height: 36px;
+  min-height: 44px;
   text-align: left;
 }
 
@@ -508,7 +514,8 @@ a {
 }
 
 .icon-btn {
-  padding: 6px;
+  width: 44px;
+  padding: 0;
 }
 
 .refresh-btn .icon {
@@ -590,7 +597,9 @@ a {
 .table-sort-btn:focus-visible,
 .table-link-btn:focus-visible,
 .sort-btn:focus-visible,
-.view-btn:focus-visible {
+.view-btn:focus-visible,
+table.models tbody tr:focus-visible,
+.chart-row:focus-visible {
   outline: 2px solid var(--vw-border-focus);
   outline-offset: 2px;
 }
@@ -681,7 +690,8 @@ a {
 
 .comparison-row {
   display: grid;
-  grid-template-columns: repeat(var(--card-count, 1), minmax(240px, 1fr));
+  grid-template-columns: repeat(var(--card-count, 1), minmax(220px, 1fr));
+  align-items: start;
   gap: var(--vw-gap-md, 12px);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -689,7 +699,7 @@ a {
 }
 
 .comparison-row > .panel-shell {
-  min-width: 240px;
+  min-width: 220px;
   margin-bottom: 0;
 }
 
@@ -2602,6 +2612,11 @@ table.data-table thead th.num,
     min-width: unset;
   }
 
+  .panel-head-right .icon-btn {
+    flex: 0 0 44px;
+    width: 44px;
+  }
+
   .view-actions {
     justify-content: stretch;
   }
@@ -2670,9 +2685,35 @@ table.data-table thead th.num,
     width: 100%;
   }
 
+  .view-switch {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .view-switch .view-btn {
+    flex: 0 0 auto;
+    width: auto;
+  }
+
+  .panel-head-right .icon-btn {
+    flex: 0 0 44px;
+    width: 44px;
+  }
+
   .site-meta {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .site-meta .refresh-btn {
+    flex: 1 1 0;
+    width: auto;
+  }
+
+  .site-meta .pill {
+    flex: 0 0 auto;
   }
 
   .modal-actions > * {

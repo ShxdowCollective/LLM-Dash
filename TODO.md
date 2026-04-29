@@ -24,7 +24,7 @@ Goal: stabilize the app chrome between views and tighten common controls.
   is still needed.
 - [x] Add an icon to the Refresh button.
 - [x] Replace Reset filters button text with an icon affordance.
-- [ ] Verify the five primary views for nav stability, pointer targets,
+- [x] Verify the five primary views for nav stability, pointer targets,
   tooltips/ARIA labels, and no layout shift.
 
 ### Phase 8.7 — Multi-model info comparison
@@ -41,7 +41,7 @@ between single-card detail views.
   (block with feedback or replace the oldest card).
 - [x] Preserve collapse/expand state and provide an obvious way to close an
   individual model info card.
-- [ ] Verify desktop and mobile behavior for overflow, text fit, keyboard
+- [x] Verify desktop and mobile behavior for overflow, text fit, keyboard
   focus, and row layout.
 
 ### Phase 8.8 — Runner and reset reliability

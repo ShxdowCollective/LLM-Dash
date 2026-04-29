@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from scripts.config import config_path
-from scripts.schedule_job import SCHEDULE_PATH, remove_schedule
+from scripts.schedule_job import SCHEDULE_PATH, remove_schedule, status as schedule_status
 
 DB_PATH = ROOT / "data" / "dash.sqlite"
 CSV_PATH = ROOT / "data" / "run_metrics.csv"
@@ -37,7 +37,16 @@ def reset_local_state(*, dry_run: bool = False) -> tuple[list[str], list[str]]:
     removed: list[str] = []
     warnings: list[str] = []
 
-    if not dry_run:
+    if dry_run:
+        try:
+            current_schedule = schedule_status()
+            if current_schedule.get("enabled") or current_schedule.get("job_present"):
+                manager = current_schedule.get("manager") or current_schedule.get("platform") or "schedule"
+                job_id = current_schedule.get("job_id") or "configured job"
+                removed.append(f"scheduled job: {manager}/{job_id}")
+        except Exception as exc:
+            warnings.append(f"schedule dry-run: {exc}")
+    else:
         try:
             remove_schedule()
         except Exception as exc:

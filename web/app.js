@@ -374,8 +374,10 @@
     if (typeof stored.statsFiltersCollapsed === "boolean") {
       state.ui.statsFiltersCollapsed = stored.statsFiltersCollapsed;
     }
-    if (stored.modelInfoCollapsed && typeof stored.modelInfoCollapsed === "object") {
-      state.ui.modelInfoCollapsed = stored.modelInfoCollapsed;
+    if (stored.modelInfoCollapsed && typeof stored.modelInfoCollapsed === "object" && !Array.isArray(stored.modelInfoCollapsed)) {
+      state.ui.modelInfoCollapsed = Object.fromEntries(
+        Object.entries(stored.modelInfoCollapsed).filter(([key, value]) => /^\d+$/.test(key) && typeof value === "boolean")
+      );
     }
   }
 
@@ -439,6 +441,12 @@
     render();
   }
 
+  function handleModelSelectionKey(event, modelId) {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    toggleModelSelection(modelId);
+  }
+
   function renderCollapsiblePanel({
     id,
     title,
@@ -459,7 +467,7 @@
       "aria-label": collapsed ? `Expand ${title}` : `Collapse ${title}`,
       onclick: onToggle,
     }, [
-      h("h3", { class: "panel-title" }, title),
+      h("span", { class: "panel-title" }, title),
       summary ? h("span", { class: "panel-summary" }, summary) : null,
       chevron,
     ]);
@@ -2774,8 +2782,13 @@
       const isSelected = state.selectedModelIds.includes(model.id);
       const sub = [model.vendor, model.pricing || null, model.status !== "active" ? model.status : null].filter(Boolean).join(" · ");
       return h("tr", {
+        id: "model-row-" + model.id,
         class: isSelected ? "selected" : null,
+        tabindex: "0",
+        "aria-selected": String(isSelected),
+        "aria-label": (isSelected ? "Remove " : "Add ") + model.name + " comparison",
         onclick: () => toggleModelSelection(model.id),
+        onkeydown: (event) => handleModelSelectionKey(event, model.id),
       }, [
         h("td", null, String(index + 1)),
         h("td", null, h("div", { class: "model-cell" }, [
@@ -2809,8 +2822,14 @@
       const overall = getOverall(model);
       const isSelected = state.selectedModelIds.includes(model.id);
       return h("div", {
+        id: "chart-row-" + model.id,
         class: "chart-row" + (isSelected ? " selected" : ""),
+        role: "button",
+        tabindex: "0",
+        "aria-pressed": String(isSelected),
+        "aria-label": (isSelected ? "Remove " : "Add ") + model.name + " comparison",
         onclick: () => toggleModelSelection(model.id),
+        onkeydown: (event) => handleModelSelectionKey(event, model.id),
       }, [
         h("span", { class: "idx" }, String(index + 1)),
         h("div", { class: "dot", style: { backgroundColor: safeHex(model.color, "#888") } }),
@@ -3465,7 +3484,10 @@
       button.setAttribute("aria-pressed", button.dataset.sort === state.sortBy ? "true" : "false");
     });
     document.querySelectorAll(".view-btn").forEach((button) => {
-      button.setAttribute("aria-pressed", button.dataset.view === state.view ? "true" : "false");
+      const isActive = button.dataset.view === state.view;
+      button.setAttribute("aria-pressed", isActive ? "true" : "false");
+      if (isActive) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
     });
 
     updateFreshness();
