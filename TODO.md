@@ -67,34 +67,34 @@ tooling needs.
 Goal: make every page feel intentional, stable, and easy to scan without
 turning the dashboard into a confetti machine.
 
-- [ ] Add loading skeletons and view-transition crossfades: DB-loading skeleton
+- [x] Add loading skeletons and view-transition crossfades: DB-loading skeleton
   cards below `.bootstrap-spinner`, changelog body pulse placeholder, double-
   `requestAnimationFrame` view switch fade on `.view-slot` (`#view`), filter chip
   `:active` scale, table row hover inset glow. 300ms minimum skeleton display
   to avoid flash on fast loads.
-- [ ] Refactor `barColor()` (app.js:249) and `CHART_BARS` (app.js:24) from
+- [x] Refactor `barColor()` (app.js:249) and `CHART_BARS` (app.js:24) from
   hardcoded hex to `var(--vw-iridescent-N)` references. Add `resolveCSSVar()`
   helper called at render time (not init) for uPlot canvas contexts. Create
   a single `TIER_COLOR_MAP` lookup used by tier pills, `barColor()`, and
   any future tier→color mapping.
-- [ ] Introduce `--vw-space-*` tokens (xs=4px through 3xl=32px) in `:root`
+- [x] Introduce `--vw-space-*` tokens (xs=4px through 3xl=32px) in `:root`
   (these don't exist yet) and sweep spacing across all views. Key targets:
   filter grid gap → `--vw-space-lg`, score cells → `clamp(120px, 15vw, 144px)`,
   changelog body → `max-inline-size: 65ch`, mobile sort controls → horizontal
   scrollable chip strip with `scroll-snap-type: x mandatory`.
-- [ ] Fix text overflow on 4 exposed surfaces: detail panel title `h2`
+- [x] Fix text overflow on 4 exposed surfaces: detail panel title `h2`
   (ellipsis + `max-width: 100%`), changelog body `overflow-wrap: break-word`,
   `.vw-btn` truncation modifier, and filter chip labels (`max-width: 160px`).
   Add mobile `.view-slot { overflow-x: hidden }` guard.
-- [ ] Add iridescent gradient accents: active nav `::after` underline glow,
+- [x] Add iridescent gradient accents: active nav `::after` underline glow,
   collapsed `.panel-shell` bottom hairline (use `rgba()` not `color-mix()`),
   score bar `linear-gradient` fills, wizard step dot+connector indicators,
   and stale Refresh button `accent-pulse` animation (>24h since
   `state.lastUpdated` → `dataset.stale` attribute).
-- [ ] Create `switchView()` wrapper in app.js replacing the direct
+- [x] Create `switchView()` wrapper in app.js replacing the direct
   `state.view` assignment at ~line 3513. Wire nav button click handler to
   call `switchView(btn.dataset.view)` for the fade transition.
-- [ ] Run headed browser visual checks at desktop (1920×1080) and mobile
+- [x] Run headed browser visual checks at desktop (1920×1080) and mobile
   (390×844) widths — 20-point checklist in the plan. Save screenshots to
   `artifacts/phase-8-9-verification/`.
 

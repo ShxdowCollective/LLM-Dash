@@ -22,11 +22,20 @@
     { key: "cost", label: "Cost" },
   ];
   const CHART_BARS = [
-    { key: "intelligence", label: "Intelligence", raw: "#7c5cc4" },
-    { key: "coding", label: "Coding", raw: "#86a8ff" },
-    { key: "agents", label: "Agents", raw: "#72f0d7" },
-    { key: "speed", label: "Speed", raw: "#a6f17b" },
+    { key: "intelligence", label: "Intelligence", raw: "var(--vw-iridescent-6)" },
+    { key: "coding", label: "Coding", raw: "var(--vw-iridescent-5)" },
+    { key: "agents", label: "Agents", raw: "var(--vw-iridescent-4)" },
+    { key: "speed", label: "Speed", raw: "var(--vw-iridescent-3)" },
   ];
+  const TIER_COLOR_MAP = {
+    S: "var(--vw-iridescent-6)",
+    A: "var(--vw-iridescent-5)",
+    B: "var(--vw-iridescent-4)",
+    C: "var(--vw-iridescent-3)",
+    D: "var(--vw-iridescent-2)",
+    F: "var(--vw-iridescent-1)",
+    "N/A": "var(--vw-surface-3)",
+  };
   const TIER_FILTERS = [
     { key: null, label: "All tiers" },
     { key: "S", label: "S" },
@@ -247,13 +256,18 @@
   }
 
   function barColor(score) {
-    if (score === null || score === undefined || Number.isNaN(score)) return "#3a3a3a";
-    if (score >= 9) return "#7c5cc4";
-    if (score >= 8) return "#86a8ff";
-    if (score >= 7) return "#72f0d7";
-    if (score >= 6) return "#a6f17b";
-    if (score >= 5) return "#f1d47b";
-    return "#f2ad5b";
+    const t = tier(score);
+    return TIER_COLOR_MAP[t.label] || TIER_COLOR_MAP["N/A"];
+  }
+
+  const _cssVarCache = Object.create(null);
+  function resolveCSSVar(varStr) {
+    if (_cssVarCache[varStr]) return _cssVarCache[varStr];
+    const prop = varStr.replace(/^var\(/, "").replace(/\)$/, "");
+    const val = getComputedStyle(document.documentElement)
+      .getPropertyValue(prop).trim();
+    _cssVarCache[varStr] = val;
+    return val;
   }
 
   function clamp(value, lo, hi) {
@@ -1140,11 +1154,16 @@
   async function waitForBootstrapReady() {
     const first = await fetchBootstrapStatus();
     if (!first) return;
+    const shownAt = state.bootstrap.state === "initializing" ? Date.now() : null;
     if (state.bootstrap.state === "initializing") render();
     while (state.bootstrap.state === "initializing") {
       await sleep(BOOTSTRAP_POLL_MS);
       await fetchBootstrapStatus();
       render();
+    }
+    if (shownAt) {
+      const remaining = 300 - (Date.now() - shownAt);
+      if (remaining > 0) await sleep(remaining);
     }
     if (state.bootstrap.state === "error") {
       const error = new Error(state.bootstrap.detail || state.bootstrap.message || "dashboard bootstrap failed");
@@ -1792,14 +1811,14 @@
     }
     const t = tier(score);
     const width = clamp(Number(score) * 10, 0, 100);
-    const color = barColor(Number(score));
+    const colorVar = barColor(Number(score));
     return h("div", { class: "score-cell" }, [
       h("span", { class: "tier-pill " + t.cls }, t.label),
       h("div", { class: "track" }, h("div", {
         class: "fill",
         style: {
           width: width + "%",
-          background: "linear-gradient(90deg, " + color + "aa, " + color + ")",
+          background: "linear-gradient(90deg, color-mix(in srgb, " + colorVar + " 67%, transparent), " + colorVar + ")",
         },
       })),
       h("span", { class: "val" }, Number(score).toFixed(1)),
@@ -1903,7 +1922,10 @@
       slot.replaceChildren();
       return;
     }
-    const row = h("div", { class: "comparison-row" + (models.length >= 4 ? " is-compact" : "") });
+    const row = h("div", {
+      class: "comparison-row" + (models.length >= 4 ? " is-compact" : ""),
+      dataset: { cardCount: models.length >= 5 ? "5" : undefined },
+    });
     row.style.setProperty("--card-count", models.length);
     for (const model of models) {
       row.appendChild(renderSingleModelCard(model));
@@ -2695,6 +2717,12 @@
       "aria-live": "polite",
     }, [
       h("div", { class: "bootstrap-spinner", "aria-hidden": "true" }),
+      h("div", { class: "db-skeleton" }, [
+        h("div", { class: "db-skeleton-row" }),
+        h("div", { class: "db-skeleton-row" }),
+        h("div", { class: "db-skeleton-row" }),
+        h("div", { class: "db-skeleton-row" }),
+      ]),
       h("h2", null, "Preparing dashboard"),
       h("p", null, "First run is seeding the local SQLite bundle so the app has something real to load."),
       h("div", { class: "bootstrap-status" }, state.bootstrap.message || "Seeding dashboard database..."),
@@ -2736,6 +2764,15 @@
     else if (state.manualRefreshModal.loading) setButtonLabel("Loading...", false);
     else setButtonLabel("Refresh", true);
     button.title = state.runUpdate.error && !state.runUpdate.active ? state.runUpdate.error : "";
+    let isStale = false;
+    if (state.lastUpdated) {
+      const timestamp = Date.parse(state.lastUpdated);
+      if (!Number.isNaN(timestamp)) {
+        const ageHours = (Date.now() - timestamp) / 3600000;
+        isStale = ageHours > 24;
+      }
+    }
+    button.dataset.stale = String(isStale);
     let error = document.getElementById("refresh-error");
     if (state.runUpdate.error && !state.runUpdate.active) {
       if (!error) {
@@ -2899,7 +2936,14 @@
     if (!active) {
       body = renderEmptyState("Pick a changelog.", "Nothing is selected.");
     } else if (!cache || cache.status === "loading") {
-      body = h("p", { class: "status-msg" }, "loading changelog…");
+      body = h("div", { class: "changelog-body" }, [
+        h("div", { class: "changelog-skeleton" }, [
+          h("div", { class: "skeleton-line w-60" }),
+          h("div", { class: "skeleton-line w-80" }),
+          h("div", { class: "skeleton-line w-45" }),
+          h("div", { class: "skeleton-line w-70" }),
+        ]),
+      ]);
     } else if (cache.status === "error") {
       body = h("p", { class: "status-msg error" }, "failed to load changelog: " + cache.error);
     } else {
@@ -3221,8 +3265,8 @@
     }
 
     const isBar = options.type === "bar";
-    const stroke = options.color;
-    const fill = options.color + "33";
+    const stroke = resolveCSSVar(options.color);
+    const fill = stroke + "33";
 
     const series = [
       {},
@@ -3263,14 +3307,14 @@
       },
       axes: [
         {
-          stroke: "#72726b",
+          stroke: resolveCSSVar("var(--vw-text-faint)"),
           grid: { stroke: "rgba(255,255,255,0.06)" },
           ticks: { stroke: "rgba(255,255,255,0.12)" },
           values: (_u, splits) => splits.map((s) => formatShortDate(new Date(s * 1000).toISOString().slice(0, 10))),
           font: "10px var(--vw-font-body)",
         },
         {
-          stroke: "#72726b",
+          stroke: resolveCSSVar("var(--vw-text-faint)"),
           grid: { stroke: "rgba(255,255,255,0.06)" },
           ticks: { stroke: "rgba(255,255,255,0.12)" },
           size: 56,
@@ -3502,6 +3546,18 @@
     scheduleChartDraw();
   }
 
+  function switchView(view) {
+    const stage = document.getElementById("view");
+    if (stage) stage.classList.add("is-switching");
+    state.view = view;
+    requestAnimationFrame(() => {
+      render();
+      requestAnimationFrame(() => {
+        if (stage) stage.classList.remove("is-switching");
+      });
+    });
+  }
+
   function wireStaticControls() {
     document.querySelectorAll(".sort-btn").forEach((button) => {
       button.addEventListener("click", () => {
@@ -3512,8 +3568,7 @@
     });
     document.querySelectorAll(".view-btn").forEach((button) => {
       button.addEventListener("click", () => {
-        state.view = button.dataset.view;
-        render();
+        switchView(button.dataset.view);
       });
     });
     const refreshButton = document.getElementById("refresh-trigger");
