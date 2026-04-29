@@ -16,9 +16,10 @@ OPEN_URL="${URL}"
 VENV="${HERE}/.venv"
 SILENT=0
 RESET=0
+DRY_RUN=0
 
 usage() {
-  echo "Usage: ./run.sh [--silent] [--reset]"
+  echo "Usage: ./run.sh [--silent] [--reset] [--dry-run]"
   echo "Environment: LLM_DASH_HOST=127.0.0.1 LLM_DASH_PORT=8787"
 }
 
@@ -29,6 +30,9 @@ while [ "$#" -gt 0 ]; do
       ;;
     --reset)
       RESET=1
+      ;;
+    --dry-run)
+      DRY_RUN=1
       ;;
     -h|--help)
       usage
@@ -45,6 +49,11 @@ done
 
 if [ "${SILENT}" -eq 1 ] && [ "${RESET}" -eq 1 ]; then
   echo "LLM-Dash: --reset opens the setup wizard and cannot be combined with --silent." >&2
+  exit 2
+fi
+
+if [ "${DRY_RUN}" -eq 1 ] && [ "${RESET}" -eq 0 ]; then
+  echo "LLM-Dash: --dry-run requires --reset." >&2
   exit 2
 fi
 
@@ -81,6 +90,10 @@ PIP="${VENV}/bin/pip"
 "${PIP}" install --quiet -r requirements.txt
 
 if [ "${RESET}" -eq 1 ]; then
+  if [ "${DRY_RUN}" -eq 1 ]; then
+    "${PY}" scripts/reset_local_state.py --dry-run
+    exit $?
+  fi
   "${PY}" scripts/reset_local_state.py
   OPEN_URL="${URL}/?reset=1"
 fi

@@ -36,9 +36,20 @@ The launcher creates the venv automatically if it doesn't exist. First launch
 also seeds `data/dash.sqlite` via `scripts/init_db.py`.
 
 To return a local install to first-run state, use `./run.sh --reset` or
-`run.bat --reset`. This clears app config, removes the scheduled job, deletes
-generated SQLite/CSV data, and opens the setup wizard. Changelog files,
-`~/.shxdow/auth.json`, and keyring/keystore secrets are not modified.
+`run.bat --reset`. Use `--reset --dry-run` to preview what would be removed.
+
+| Category | What's removed |
+|---|---|
+| Provider config | `~/.shxdow/config/shxdow.llmdash.json` |
+| Scheduled job | OS-level timer/task + state file |
+| Database | `data/dash.sqlite` + WAL/SHM/journal sidecars |
+| Metrics CSV | `data/run_metrics.csv` |
+| Run logs | `logs/run-update-*.log`, `logs/server.log`, `logs/scheduled-run.log` |
+| UI state | `localStorage` (cleared via `?reset=1` on next load) |
+
+**Not removed:** `changelogs/*.md` (append-only audit history),
+`~/.shxdow/auth.json`, keyring/keystore secrets, `web/` static assets,
+Python virtual environment.
 
 ### Environment Variables
 

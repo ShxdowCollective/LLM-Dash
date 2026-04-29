@@ -21,6 +21,7 @@ set "VENV=%~dp0.venv"
 set "SYS_PY="
 set "SILENT=0"
 set "RESET=0"
+set "DRY_RUN=0"
 
 :parse_args
 if "%~1"=="" goto args_done
@@ -34,24 +35,34 @@ if /I "%~1"=="--reset" (
   shift
   goto parse_args
 )
+if /I "%~1"=="--dry-run" (
+  set "DRY_RUN=1"
+  shift
+  goto parse_args
+)
 if /I "%~1"=="--help" goto usage
 if /I "%~1"=="-h" goto usage
 echo LLM-Dash: unknown argument: %~1 1>&2
 goto usage_error
 
 :usage
-echo Usage: run.bat [--silent] [--reset]
+echo Usage: run.bat [--silent] [--reset] [--dry-run]
 echo Environment: LLM_DASH_HOST=127.0.0.1 LLM_DASH_PORT=8787
 exit /b 0
 
 :usage_error
-echo Usage: run.bat [--silent] [--reset] 1>&2
+echo Usage: run.bat [--silent] [--reset] [--dry-run] 1>&2
 exit /b 2
 
 :args_done
 
 if "%SILENT%"=="1" if "%RESET%"=="1" (
   echo LLM-Dash: --reset opens the setup wizard and cannot be combined with --silent. 1>&2
+  exit /b 2
+)
+
+if "%DRY_RUN%"=="1" if "%RESET%"=="0" (
+  echo LLM-Dash: --dry-run requires --reset. 1>&2
   exit /b 2
 )
 
@@ -94,6 +105,10 @@ if errorlevel 1 (
 )
 
 if "%RESET%"=="1" (
+  if "%DRY_RUN%"=="1" (
+    "%PY%" scripts\reset_local_state.py --dry-run
+    exit /b %ERRORLEVEL%
+  )
   "%PY%" scripts\reset_local_state.py
   if errorlevel 1 (
     echo LLM-Dash: reset failed. See message above.

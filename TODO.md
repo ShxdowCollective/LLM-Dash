@@ -12,45 +12,52 @@ context belongs in `LOGBOOK.md`.
 
 ### Phase 8.6 — Navigation and panel polish
 
+> Plan: [docs/plans/M8_6_NAVIGATION_POLISH_PLAN.md](docs/plans/M8_6_NAVIGATION_POLISH_PLAN.md)
+
 Goal: stabilize the app chrome between views and tighten common controls.
 
-- [ ] Replace the shifting Table / Chart / Changelog / Stats / Data nav with a
+- [x] Replace the shifting Table / Chart / Changelog / Stats / Data nav with a
   simple top-bar navigation menu that stays put while switching views.
-- [ ] Make collapsible surfaces toggle from the whole component/header click
+- [x] Make collapsible surfaces toggle from the whole component/header click
   target instead of a separate text Collapse button.
-- [ ] Use icon-only collapse/expand affordances where a visual state indicator
+- [x] Use icon-only collapse/expand affordances where a visual state indicator
   is still needed.
-- [ ] Add an icon to the Refresh button.
-- [ ] Replace Reset filters button text with an icon affordance.
+- [x] Add an icon to the Refresh button.
+- [x] Replace Reset filters button text with an icon affordance.
 - [ ] Verify the five primary views for nav stability, pointer targets,
   tooltips/ARIA labels, and no layout shift.
 
 ### Phase 8.7 — Multi-model info comparison
 
+> Plan: [docs/plans/M8_7_MULTI_MODEL_COMPARISON_PLAN.md](docs/plans/M8_7_MULTI_MODEL_COMPARISON_PLAN.md)
+
 Goal: let the dashboard compare several selected models without bouncing
 between single-card detail views.
 
-- [ ] Allow up to 5 model info cards/windows to be open at once.
-- [ ] Opening another model adds it to the existing model info area and splits
+- [x] Allow up to 5 model info cards/windows to be open at once.
+- [x] Opening another model adds it to the existing model info area and splits
   the selected cards into one row.
-- [ ] Add a predictable max-count behavior when a sixth model is selected
+- [x] Add a predictable max-count behavior when a sixth model is selected
   (block with feedback or replace the oldest card).
-- [ ] Preserve collapse/expand state and provide an obvious way to close an
+- [x] Preserve collapse/expand state and provide an obvious way to close an
   individual model info card.
 - [ ] Verify desktop and mobile behavior for overflow, text fit, keyboard
   focus, and row layout.
 
 ### Phase 8.8 — Runner and reset reliability
 
+> Plan: [docs/plans/M8_8_RUNNER_RESET_RELIABILITY_PLAN.md](docs/plans/M8_8_RUNNER_RESET_RELIABILITY_PLAN.md)
+
 Goal: make local update/reset flows match the app's real-world cleanup and
 tooling needs.
 
-- [ ] Fix the Exa MCP run failure shown in logs:
+- [x] Fix the Exa MCP run failure shown in logs:
   `exa_mcp_runtime_error=MaxTurnsExceeded: Max turns (10) exceeded`.
-- [ ] Update `--reset` so it also purges app run logs and generated app
-  changelog artifacts, in addition to provider config, schedule state, SQLite,
-  and CSV data.
-- [ ] Document and verify the expanded reset behavior so the destructive scope
+- [x] Update `--reset` so it also purges app run logs, in addition to
+  provider config, schedule state, SQLite, and CSV data.
+- [x] Keep `changelogs/*.md` append-only during reset; the audit trail is not
+  a disposable generated artifact.
+- [x] Document and verify the expanded reset behavior so the destructive scope
   is obvious before anyone hits it.
 
 ### Phase 8.9 — Visual polish and motion pass

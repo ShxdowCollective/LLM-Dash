@@ -77,9 +77,9 @@
     ui: {
       modelFiltersCollapsed: false,
       statsFiltersCollapsed: false,
-      modelInfoCollapsed: false,
+      modelInfoCollapsed: {},
     },
-    selectedModelId: null,
+    selectedModelIds: [],
     models: [],
     totalModelCount: 0,
     vendorOptions: [],
@@ -315,6 +315,21 @@
     return el;
   }
 
+  const ICONS = {
+    "chevron-down": '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>',
+    "refresh-cw": '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>',
+    "filter-x": '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/><line x1="18" y1="8" x2="22" y2="12"/><line x1="22" y1="8" x2="18" y2="12"/></svg>',
+    "x": '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+  };
+
+  function icon(name) {
+    const span = document.createElement("span");
+    span.className = "icon";
+    span.innerHTML = ICONS[name] || "";
+    span.setAttribute("aria-hidden", "true");
+    return span;
+  }
+
   function captureFocus() {
     const active = document.activeElement;
     if (!active || !active.id) return null;
@@ -359,7 +374,7 @@
     if (typeof stored.statsFiltersCollapsed === "boolean") {
       state.ui.statsFiltersCollapsed = stored.statsFiltersCollapsed;
     }
-    if (typeof stored.modelInfoCollapsed === "boolean") {
+    if (stored.modelInfoCollapsed && typeof stored.modelInfoCollapsed === "object") {
       state.ui.modelInfoCollapsed = stored.modelInfoCollapsed;
     }
   }
@@ -398,8 +413,28 @@
     render();
   }
 
-  function toggleModelInfoCollapsed() {
-    state.ui.modelInfoCollapsed = !state.ui.modelInfoCollapsed;
+  const MAX_COMPARISON_MODELS = 5;
+
+  function toggleModelSelection(modelId) {
+    const idx = state.selectedModelIds.indexOf(modelId);
+    if (idx !== -1) {
+      state.selectedModelIds.splice(idx, 1);
+      delete state.ui.modelInfoCollapsed[String(modelId)];
+      persistUIState();
+    } else if (state.selectedModelIds.length < MAX_COMPARISON_MODELS) {
+      state.selectedModelIds.push(modelId);
+    } else {
+      const evicted = state.selectedModelIds.shift();
+      delete state.ui.modelInfoCollapsed[String(evicted)];
+      state.selectedModelIds.push(modelId);
+      persistUIState();
+    }
+    render();
+  }
+
+  function toggleSingleModelCollapse(modelId) {
+    const key = String(modelId);
+    state.ui.modelInfoCollapsed[key] = !state.ui.modelInfoCollapsed[key];
     persistUIState();
     render();
   }
@@ -413,23 +448,25 @@
     onToggle,
     children,
   }) {
+    const chevron = icon("chevron-down");
+    chevron.classList.add("panel-chevron");
+    if (collapsed) chevron.classList.add("is-collapsed");
+    const hitarea = h("button", {
+      class: "panel-toggle-hitarea",
+      type: "button",
+      "aria-expanded": String(!collapsed),
+      "aria-controls": id + "-body",
+      "aria-label": collapsed ? `Expand ${title}` : `Collapse ${title}`,
+      onclick: onToggle,
+    }, [
+      h("h3", { class: "panel-title" }, title),
+      summary ? h("span", { class: "panel-summary" }, summary) : null,
+      chevron,
+    ]);
     const nodes = [
       h("div", { class: "panel-head" }, [
-        h("div", { class: "panel-head-left" }, [
-          h("h3", { class: "panel-title" }, title),
-          summary ? h("div", { class: "panel-summary" }, summary) : null,
-        ]),
-        h("div", { class: "panel-head-right" }, [
-          ...(actions || []),
-          h("button", {
-            class: "action-btn panel-toggle-btn",
-            type: "button",
-            "aria-expanded": String(!collapsed),
-            "aria-controls": id + "-body",
-            onclick: onToggle,
-            "aria-label": collapsed ? `Expand ${title}` : `Collapse ${title}`,
-          }, collapsed ? "Expand" : "Collapse"),
-        ]),
+        hitarea,
+        (actions && actions.length) ? h("div", { class: "panel-head-right" }, actions) : null,
       ]),
       h("div", {
         class: "panel-body" + (collapsed ? " is-hidden" : ""),
@@ -1480,8 +1517,14 @@
       rows = rows.filter((row) => tier(getOverall(row)).label === state.filter.tier);
     }
     state.models = sortedModels(rows);
-    if (state.selectedModelId !== null && !state.models.some((row) => row.id === state.selectedModelId)) {
-      state.selectedModelId = null;
+    const visibleIds = new Set(state.models.map((row) => row.id));
+    const before = state.selectedModelIds.length;
+    state.selectedModelIds = state.selectedModelIds.filter((id) => visibleIds.has(id));
+    if (state.selectedModelIds.length !== before) {
+      for (const key of Object.keys(state.ui.modelInfoCollapsed)) {
+        if (!visibleIds.has(Number(key))) delete state.ui.modelInfoCollapsed[key];
+      }
+      persistUIState();
     }
   }
 
@@ -1760,13 +1803,7 @@
     return h("span", { class: "status-badge", dataset: { status } }, status);
   }
 
-  function renderDetailPanel(model) {
-    const slot = document.getElementById("detail");
-    if (!slot) return;
-    if (!model) {
-      slot.replaceChildren();
-      return;
-    }
+  function renderModelCardBody(model) {
     const overall = getOverall(model);
     const value = getValue(model);
     const metricRows = [
@@ -1788,60 +1825,82 @@
       model.pricing ? "Pricing: " + model.pricing + "/M tok" : null,
       model.status && model.status !== "active" ? model.status : null,
     ].filter(Boolean);
-
-    slot.replaceChildren(renderCollapsiblePanel({
-      id: "model-info",
-      title: "Model info",
-      summary: [
-        model.name,
-        " · ",
-        overall !== null ? "overall " + overall.toFixed(1) : "overall N/A",
-      ],
-      actions: [
-        h("button", {
-          class: "action-btn subtle",
-          type: "button",
-          onclick: () => {
-            state.selectedModelId = null;
-            render();
-          },
-        }, "Close"),
-      ],
-      collapsed: state.ui.modelInfoCollapsed,
-      onToggle: toggleModelInfoCollapsed,
-      children: h("div", { class: "detail-panel" }, [
-        h("div", { class: "detail-head" }, [
-          h("div", null, [
-            h("div", { class: "detail-name" }, [
-              h("div", {
-                class: "dot",
-                style: {
-                  width: "10px",
-                  height: "10px",
-                  borderRadius: "50%",
-                  backgroundColor: safeHex(model.color, "#888"),
-                },
-              }),
-              h("h2", null, model.name),
-              statusBadge(model.status),
-            ]),
-            h("div", { class: "detail-meta" }, metaParts.join(" · ")),
+    return h("div", { class: "detail-panel" }, [
+      h("div", { class: "detail-head" }, [
+        h("div", null, [
+          h("div", { class: "detail-name" }, [
+            h("div", {
+              class: "dot",
+              style: {
+                width: "10px",
+                height: "10px",
+                borderRadius: "50%",
+                backgroundColor: safeHex(model.color, "#888"),
+              },
+            }),
+            h("h2", null, model.name),
+            statusBadge(model.status),
           ]),
-          h("div", { class: "detail-scores" }, [
-            h("div", { class: "detail-score-card" }, [
-              h("div", { class: "label" }, "Overall"),
-              h("div", { class: "value " + tier(overall).cls }, overall !== null ? overall.toFixed(1) : "N/A"),
-            ]),
-            h("div", { class: "detail-score-card" }, [
-              h("div", { class: "label" }, "Value"),
-              h("div", { class: "value " + tier(value).cls }, value !== null ? value.toFixed(1) : "N/A"),
-            ]),
+          h("div", { class: "detail-meta" }, metaParts.join(" · ")),
+        ]),
+        h("div", { class: "detail-scores" }, [
+          h("div", { class: "detail-score-card" }, [
+            h("div", { class: "label" }, "Overall"),
+            h("div", { class: "value " + tier(overall).cls }, overall !== null ? overall.toFixed(1) : "N/A"),
+          ]),
+          h("div", { class: "detail-score-card" }, [
+            h("div", { class: "label" }, "Value"),
+            h("div", { class: "value " + tier(value).cls }, value !== null ? value.toFixed(1) : "N/A"),
           ]),
         ]),
-        h("div", { class: "detail-grid" }, metricRows),
-        model.notes ? h("p", { class: "detail-notes" }, model.notes) : null,
       ]),
-    }));
+      h("div", { class: "detail-grid" }, metricRows),
+      model.notes ? h("p", { class: "detail-notes" }, model.notes) : null,
+    ]);
+  }
+
+  function renderSingleModelCard(model) {
+    const key = String(model.id);
+    const overall = getOverall(model);
+    return renderCollapsiblePanel({
+      id: "model-info-" + model.id,
+      title: model.name,
+      summary: [overall !== null ? "overall " + overall.toFixed(1) : "N/A"],
+      actions: [
+        h("button", {
+          class: "action-btn subtle icon-btn",
+          type: "button",
+          "aria-label": "Close " + model.name,
+          title: "Close",
+          onclick: (e) => {
+            e.stopPropagation();
+            const idx = state.selectedModelIds.indexOf(model.id);
+            if (idx !== -1) state.selectedModelIds.splice(idx, 1);
+            delete state.ui.modelInfoCollapsed[key];
+            persistUIState();
+            render();
+          },
+        }, icon("x")),
+      ],
+      collapsed: !!state.ui.modelInfoCollapsed[key],
+      onToggle: () => toggleSingleModelCollapse(model.id),
+      children: renderModelCardBody(model),
+    });
+  }
+
+  function renderDetailPanels(models) {
+    const slot = document.getElementById("detail");
+    if (!slot) return;
+    if (!models.length) {
+      slot.replaceChildren();
+      return;
+    }
+    const row = h("div", { class: "comparison-row" + (models.length >= 4 ? " is-compact" : "") });
+    row.style.setProperty("--card-count", models.length);
+    for (const model of models) {
+      row.appendChild(renderSingleModelCard(model));
+    }
+    slot.replaceChildren(row);
   }
 
   function renderEmptyState(title, copy) {
@@ -1895,10 +1954,12 @@
       ],
       actions: [
         h("button", {
-          class: "action-btn subtle",
+          class: "action-btn subtle icon-btn",
           type: "button",
           onclick: resetModelFilters,
-        }, "Reset filters"),
+          "aria-label": "Reset filters",
+          title: "Reset filters",
+        }, icon("filter-x")),
       ],
       collapsed: state.ui.modelFiltersCollapsed,
       onToggle: toggleModelFiltersCollapsed,
@@ -1960,10 +2021,12 @@
       ],
       actions: [
         h("button", {
-          class: "action-btn subtle",
+          class: "action-btn subtle icon-btn",
           type: "button",
           onclick: resetStatsFilters,
-        }, "Reset filters"),
+          "aria-label": "Reset filters",
+          title: "Reset filters",
+        }, icon("filter-x")),
       ],
       collapsed: state.ui.statsFiltersCollapsed,
       onToggle: toggleStatsFiltersCollapsed,
@@ -2653,12 +2716,17 @@
       state.runUpdate._starting ||
       state.wizard.open ||
       state.manualRefreshModal.loading;
-    if (state.bootstrap.state === "initializing") button.textContent = "Loading...";
-    else if (checking) button.textContent = "Checking...";
-    else if (state.runUpdate.active || state.runUpdate._starting) button.textContent = "Running...";
-    else if (state.wizard.open) button.textContent = "Configuring...";
-    else if (state.manualRefreshModal.loading) button.textContent = "Loading...";
-    else button.textContent = "Refresh";
+    const setButtonLabel = (text, showIcon) => {
+      button.replaceChildren();
+      if (showIcon) button.appendChild(icon("refresh-cw"));
+      button.appendChild(document.createTextNode(text));
+    };
+    if (state.bootstrap.state === "initializing") setButtonLabel("Loading...", false);
+    else if (checking) setButtonLabel("Checking...", false);
+    else if (state.runUpdate.active || state.runUpdate._starting) setButtonLabel("Running...", false);
+    else if (state.wizard.open) setButtonLabel("Configuring...", false);
+    else if (state.manualRefreshModal.loading) setButtonLabel("Loading...", false);
+    else setButtonLabel("Refresh", true);
     button.title = state.runUpdate.error && !state.runUpdate.active ? state.runUpdate.error : "";
     let error = document.getElementById("refresh-error");
     if (state.runUpdate.error && !state.runUpdate.active) {
@@ -2703,14 +2771,11 @@
     const body = h("tbody", null, state.models.map((model, index) => {
       const overall = getOverall(model);
       const value = getValue(model);
-      const isSelected = state.selectedModelId === model.id;
+      const isSelected = state.selectedModelIds.includes(model.id);
       const sub = [model.vendor, model.pricing || null, model.status !== "active" ? model.status : null].filter(Boolean).join(" · ");
       return h("tr", {
         class: isSelected ? "selected" : null,
-        onclick: () => {
-          state.selectedModelId = isSelected ? null : model.id;
-          render();
-        },
+        onclick: () => toggleModelSelection(model.id),
       }, [
         h("td", null, String(index + 1)),
         h("td", null, h("div", { class: "model-cell" }, [
@@ -2742,13 +2807,10 @@
     }
     const rows = state.models.map((model, index) => {
       const overall = getOverall(model);
-      const isSelected = state.selectedModelId === model.id;
+      const isSelected = state.selectedModelIds.includes(model.id);
       return h("div", {
         class: "chart-row" + (isSelected ? " selected" : ""),
-        onclick: () => {
-          state.selectedModelId = isSelected ? null : model.id;
-          render();
-        },
+        onclick: () => toggleModelSelection(model.id),
       }, [
         h("span", { class: "idx" }, String(index + 1)),
         h("div", { class: "dot", style: { backgroundColor: safeHex(model.color, "#888") } }),
@@ -3370,7 +3432,7 @@
 
     if (state.error) {
       viewSlot.replaceChildren(state.error);
-      renderDetailPanel(null);
+      renderDetailPanels([]);
       updateFreshness();
       if (state.wizard.open || (!state.manualRefreshModal.open && !state.runUpdate.active && state.bootstrap.state !== "initializing")) restoreFocus(focus);
       return;
@@ -3379,7 +3441,7 @@
       viewSlot.replaceChildren(renderPlaceholder(
         state.bootstrap.state === "initializing" ? "preparing dashboard…" : "loading dashboard…"
       ));
-      renderDetailPanel(null);
+      renderDetailPanels([]);
       updateFreshness();
       if (state.wizard.open || (!state.manualRefreshModal.open && !state.runUpdate.active && state.bootstrap.state !== "initializing")) restoreFocus(focus);
       return;
@@ -3394,10 +3456,10 @@
 
     viewSlot.replaceChildren(content);
 
-    const selected = state.selectedModelId !== null
-      ? state.models.find((model) => model.id === state.selectedModelId) || null
-      : null;
-    renderDetailPanel(MODEL_VIEWS.has(state.view) ? selected : null);
+    const selectedModels = MODEL_VIEWS.has(state.view)
+      ? state.selectedModelIds.map((id) => state.models.find((m) => m.id === id)).filter(Boolean)
+      : [];
+    renderDetailPanels(selectedModels);
 
     document.querySelectorAll(".sort-btn").forEach((button) => {
       button.setAttribute("aria-pressed", button.dataset.sort === state.sortBy ? "true" : "false");
@@ -3429,7 +3491,6 @@
     document.querySelectorAll(".view-btn").forEach((button) => {
       button.addEventListener("click", () => {
         state.view = button.dataset.view;
-        if (!MODEL_VIEWS.has(state.view)) state.selectedModelId = null;
         render();
       });
     });

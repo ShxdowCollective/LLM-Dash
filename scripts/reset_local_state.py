@@ -15,7 +15,8 @@ from scripts.schedule_job import SCHEDULE_PATH, remove_schedule
 
 DB_PATH = ROOT / "data" / "dash.sqlite"
 CSV_PATH = ROOT / "data" / "run_metrics.csv"
-DB_SIDEcars = (
+LOGS_DIR = ROOT / "logs"
+DB_SIDECARS = (
     DB_PATH,
     DB_PATH.with_name(DB_PATH.name + "-wal"),
     DB_PATH.with_name(DB_PATH.name + "-shm"),
@@ -24,38 +25,48 @@ DB_SIDEcars = (
 )
 
 
-def _delete_file(path: Path, removed: list[str]) -> None:
-    try:
-        path.unlink()
-    except FileNotFoundError:
+def _delete_file(path: Path, removed: list[str], *, dry_run: bool = False) -> None:
+    if not path.exists():
         return
     removed.append(str(path.relative_to(ROOT)) if path.is_relative_to(ROOT) else str(path))
+    if not dry_run:
+        path.unlink()
 
 
-def reset_local_state() -> tuple[list[str], list[str]]:
+def reset_local_state(*, dry_run: bool = False) -> tuple[list[str], list[str]]:
     removed: list[str] = []
     warnings: list[str] = []
 
-    try:
-        remove_schedule()
-    except Exception as exc:
-        warnings.append(f"schedule: {exc}")
-    _delete_file(SCHEDULE_PATH, removed)
+    if not dry_run:
+        try:
+            remove_schedule()
+        except Exception as exc:
+            warnings.append(f"schedule: {exc}")
+    _delete_file(SCHEDULE_PATH, removed, dry_run=dry_run)
 
-    _delete_file(config_path(), removed)
+    _delete_file(config_path(), removed, dry_run=dry_run)
 
-    for path in DB_SIDEcars:
-        _delete_file(path, removed)
+    for path in DB_SIDECARS:
+        _delete_file(path, removed, dry_run=dry_run)
+
+    for log_file in sorted(LOGS_DIR.glob("run-update-*.log")):
+        _delete_file(log_file, removed, dry_run=dry_run)
+    _delete_file(LOGS_DIR / "server.log", removed, dry_run=dry_run)
+    _delete_file(LOGS_DIR / "scheduled-run.log", removed, dry_run=dry_run)
 
     return removed, warnings
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Reset local LLM-Dash settings and generated data.")
-    parser.parse_args()
+    parser.add_argument("--dry-run", action="store_true", help="List files that would be removed without deleting them")
+    args = parser.parse_args()
 
-    removed, warnings = reset_local_state()
-    print(f"reset: removed {len(removed)} item(s)")
+    removed, warnings = reset_local_state(dry_run=args.dry_run)
+    prefix = "dry-run: would remove" if args.dry_run else "reset: removed"
+    print(f"{prefix} {len(removed)} item(s)")
+    for item in removed:
+        print(f"  {item}")
     for warning in warnings:
         print(f"warning: {warning}")
     return 0

@@ -18,35 +18,35 @@
         <h1>LLM-Dash</h1>
         <p class="tagline">Benchmark comparisons · tracked daily by AI agents</p>
       </div>
-      <div class="site-meta">
-        <button id="refresh-trigger" class="action-btn refresh-btn primary" type="button">
-          Refresh
-        </button>
-        <span id="freshness" class="pill" data-state="unknown" title="last update unknown">
-          never updated
-        </span>
-      </div>
+      <nav class="top-nav" aria-label="Primary views">
+        <div class="view-switch">
+          <button class="view-btn" data-view="table" aria-pressed="true">Table</button>
+          <button class="view-btn" data-view="chart" aria-pressed="false">Chart</button>
+          <button class="view-btn" data-view="changelog" aria-pressed="false">Changelog</button>
+          <button class="view-btn" data-view="stats" aria-pressed="false">Stats</button>
+          <button class="view-btn" data-view="data" aria-pressed="false">Data</button>
+        </div>
+        <div class="site-meta">
+          <button id="refresh-trigger" class="action-btn refresh-btn primary" type="button">
+            Refresh
+          </button>
+          <span id="freshness" class="pill" data-state="unknown" title="last update unknown">
+            never updated
+          </span>
+        </div>
+      </nav>
     </header>
 
-    <section class="controls" aria-label="Controls">
-      <div class="controls-main">
-        <div class="sort-group" role="group" aria-label="Sort by">
-          <span class="control-label">sort</span>
-          <button class="sort-btn" data-sort="overall" aria-pressed="true">Overall</button>
-          <button class="sort-btn" data-sort="value">Value</button>
-          <button class="sort-btn" data-sort="intelligence">Intelligence</button>
-          <button class="sort-btn" data-sort="coding">Coding</button>
-          <button class="sort-btn" data-sort="agents">Agents</button>
-          <button class="sort-btn" data-sort="speed">Speed</button>
-          <button class="sort-btn" data-sort="cost">Cost</button>
-        </div>
-        <div class="view-switch" role="tablist" aria-label="View">
-          <button class="view-btn" data-view="table" aria-pressed="true" role="tab">Table</button>
-          <button class="view-btn" data-view="chart" aria-pressed="false" role="tab">Chart</button>
-          <button class="view-btn" data-view="changelog" aria-pressed="false" role="tab">Changelog</button>
-          <button class="view-btn" data-view="stats" aria-pressed="false" role="tab">Stats</button>
-          <button class="view-btn" data-view="data" aria-pressed="false" role="tab">Data</button>
-        </div>
+    <section class="controls-bar" aria-label="Controls">
+      <div class="sort-group" role="group" aria-label="Sort by">
+        <span class="control-label">sort</span>
+        <button class="sort-btn" data-sort="overall" aria-pressed="true">Overall</button>
+        <button class="sort-btn" data-sort="value">Value</button>
+        <button class="sort-btn" data-sort="intelligence">Intelligence</button>
+        <button class="sort-btn" data-sort="coding">Coding</button>
+        <button class="sort-btn" data-sort="agents">Agents</button>
+        <button class="sort-btn" data-sort="speed">Speed</button>
+        <button class="sort-btn" data-sort="cost">Cost</button>
       </div>
       <div id="view-actions" class="view-actions" aria-live="polite"></div>
     </section>

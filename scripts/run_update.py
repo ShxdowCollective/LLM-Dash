@@ -44,6 +44,7 @@ CHANGELOGS_DIR = ROOT / "changelogs"
 LOGS_DIR = ROOT / "logs"
 AGENT_RUNTIME = "openai-agents"
 EXA_MCP_URL = "https://mcp.exa.ai/mcp"
+MAX_AGENT_TURNS = 50
 METRICS_COLUMNS = [
     "changelog_date",
     "started_at",
@@ -570,7 +571,7 @@ def usage_metrics(result: Any) -> dict[str, Any]:
 
 
 async def run_agent_once(model_name: str, prompt: str, exa_key: str, log_path: Path) -> tuple[str, dict[str, Any]]:
-    from agents import Agent, AsyncOpenAI, OpenAIChatCompletionsModel, Runner, set_tracing_disabled
+    from agents import Agent, AsyncOpenAI, MaxTurnsExceeded, OpenAIChatCompletionsModel, Runner, set_tracing_disabled
 
     bundle = load_provider_bundle()
     set_tracing_disabled(disabled=True)
@@ -581,19 +582,10 @@ async def run_agent_once(model_name: str, prompt: str, exa_key: str, log_path: P
     )
     model = OpenAIChatCompletionsModel(model=model_name, openai_client=client)
 
-    server_cm = None
+    can_use_exa = False
     try:
         from agents.mcp import MCPServerStreamableHttp
-
-        params: dict[str, Any] = {"url": EXA_MCP_URL}
-        if exa_key:
-            params["headers"] = {"x-api-key": exa_key}
-        server_cm = MCPServerStreamableHttp(
-            name="exa",
-            params=params,
-            cache_tools_list=True,
-            require_approval="never",
-        )
+        can_use_exa = True
     except Exception as exc:
         write_log(log_path, f"exa_mcp_setup_error={type(exc).__name__}: {exc}")
 
@@ -609,18 +601,41 @@ async def run_agent_once(model_name: str, prompt: str, exa_key: str, log_path: P
             mcp_servers=mcp_servers or [],
         )
 
-    if server_cm is not None:
+    def make_exa_server() -> Any:
+        params: dict[str, Any] = {"url": EXA_MCP_URL}
+        if exa_key:
+            params["headers"] = {"x-api-key": exa_key}
+        return MCPServerStreamableHttp(
+            name="exa",
+            params=params,
+            cache_tools_list=True,
+            require_approval="never",
+        )
+
+    async def run_with_exa(max_turns: int) -> Any:
+        async with make_exa_server() as server:
+            agent = make_agent([server])
+            return await Runner.run(agent, prompt, max_turns=max_turns)
+
+    async def run_without_exa(max_turns: int) -> Any:
+        agent = make_agent()
+        return await Runner.run(agent, prompt, max_turns=max_turns)
+
+    if can_use_exa and exa_key:
         try:
-            async with server_cm as server:
-                agent = make_agent([server])
-                result = await Runner.run(agent, prompt)
+            result = await run_with_exa(MAX_AGENT_TURNS)
+        except MaxTurnsExceeded as exc:
+            write_log(log_path, f"exa_mcp_max_turns={exc}; retrying max_turns={MAX_AGENT_TURNS * 2}")
+            try:
+                result = await run_with_exa(MAX_AGENT_TURNS * 2)
+            except MaxTurnsExceeded as retry_exc:
+                write_log(log_path, f"exa_mcp_max_turns_retry_failed={retry_exc}; falling back without Exa")
+                result = await run_without_exa(MAX_AGENT_TURNS)
         except Exception as exc:
             write_log(log_path, f"exa_mcp_runtime_error={type(exc).__name__}: {exc}")
-            agent = make_agent()
-            result = await Runner.run(agent, prompt)
+            result = await run_without_exa(MAX_AGENT_TURNS)
     else:
-        agent = make_agent()
-        result = await Runner.run(agent, prompt)
+        result = await run_without_exa(MAX_AGENT_TURNS)
 
     return str(result.final_output), usage_metrics(result)
 
