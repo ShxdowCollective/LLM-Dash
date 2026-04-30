@@ -4049,6 +4049,8 @@
 
   function render() {
     const viewSlot = document.getElementById("view");
+    const controlsBar = document.querySelector(".controls-bar");
+    const actionSlot = document.getElementById("view-actions");
     const sortGroup = document.querySelector(".sort-group");
     if (!viewSlot) return;
     finishBootPaint();
@@ -4065,7 +4067,10 @@
     renderOverlay();
     syncRefreshButton();
 
-    if (sortGroup) sortGroup.hidden = !state.ready || !MODEL_VIEWS.has(state.view);
+    const hasSortControls = state.ready && MODEL_VIEWS.has(state.view);
+    const hasViewActions = Boolean(actionSlot && actionSlot.childElementCount);
+    if (sortGroup) sortGroup.hidden = !hasSortControls;
+    if (controlsBar) controlsBar.hidden = !hasSortControls && !hasViewActions;
 
     if (state.error) {
       viewSlot.replaceChildren(state.error);

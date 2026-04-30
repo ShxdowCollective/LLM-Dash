@@ -102,6 +102,7 @@ turning the dashboard into a confetti machine.
 
 > Plan: [docs/plans/M8_10_IN_APP_SETTINGS_PLAN.md](docs/plans/M8_10_IN_APP_SETTINGS_PLAN.md)
 > Depends on: Phase 8.9 (spacing tokens, panel affordances)
+> UI status: functional but not shippable. Superseded by Phase 8.10.1.
 
 Goal: replace the Data page with a real Settings page that can handle normal
 configuration without forcing the whole first-run wizard.
@@ -127,6 +128,53 @@ configuration without forcing the whole first-run wizard.
   draft state persistence, preset field names, test connection POST,
   model_count field name, schedule button class conflict, and mobile
   password toggle width.
+
+### Phase 8.10.1 — Voidware app shell and UX overhaul
+
+Goal: rebuild the dashboard experience into a polished, dense, SaaS-grade
+Voidware app instead of continuing to patch the current long-scroll,
+over-containerized single-page layout.
+
+- [ ] Write a fresh implementation plan in
+  `docs/plans/M8_10_1_VOIDWARE_APP_SHELL_PLAN.md` before coding. Treat the
+  current UI as implementation substrate, not design direction.
+- [ ] Decide whether to keep vanilla HTML/CSS/JS or migrate to a lightweight
+  build stack. External dependencies are allowed if they measurably improve
+  maintainability, layout quality, accessibility, routing, charts, or component
+  behavior.
+- [ ] Replace the sticky top navigation with a real app shell: persistent left 
+  side navigation for primary areas, compact header/status actions, and no
+  layout shift between views.
+- [ ] Add top sub-page navigation inside each primary area. Settings should
+  become grouped pages/tabs instead of six stacked collapsible containers.
+- [ ] Redesign information architecture around common workflows:
+  Explore/Compare, Changelog, Stats, Settings, and Update/Run controls. Cut
+  duplicate surfaces and move secondary tools behind predictable sub-pages.
+- [ ] Eliminate long-scroll Settings. Agent Provider, Models, Exa, Schedule,
+  Manual Update, and future LLM Stats should fit into compact, task-focused
+  pages with clear save/test/remove affordances.
+- [ ] Reduce over-containerization. Use cards only for repeated items, modals,
+  and genuinely framed tools; prefer unframed workspace regions, tables,
+  toolbars, split panes, and compact forms.
+- [ ] Rework typography and copy so the app reads like a polished operations
+  dashboard: fewer mono labels, clearer hierarchy, less debug/admin phrasing,
+  no awkward explanatory filler in the main UI.
+- [ ] Establish a real responsive layout contract for desktop, tablet, and
+  mobile: side nav collapses predictably, top subnav remains reachable, no
+  horizontal clipping, no giant stacked button walls unless unavoidable.
+- [ ] Rebuild mobile navigation and settings flows for thumb ergonomics:
+  compact drawer/bottom affordance if needed, short pages, sticky save areas
+  where appropriate, and visible current location.
+- [ ] Audit and restyle table, chart, changelog, stats, detail comparison, run
+  update, setup wizard, and settings views against one cohesive Voidware visual
+  system instead of piecemeal phase patches.
+- [ ] Validate the overhaul with headed browser screenshots at desktop
+  (1920×1080), laptop (1366×768), tablet (~820×1180), and mobile (390×844).
+  Save artifacts under `artifacts/phase-8-10-1-app-shell/`.
+- [ ] Add programmatic UI probes for overflow, clipped text, unreachable
+  controls, console errors, keyboard focus order, and reduced-motion behavior.
+- [ ] Update TODO/LOGBOOK after the design plan, after implementation, and
+  after verification. Do not call the UI shippable until screenshots support it.
 
 ### Phase 8.11 — Optional LLM Stats enrichment
 

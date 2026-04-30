@@ -1665,18 +1665,49 @@ table.data-table thead th.num,
   gap: var(--vw-space-lg);
   max-width: 800px;
   margin: 0 auto;
+  min-width: 0;
 }
 
 .settings-view .panel-shell {
   background: var(--vw-bg-soft);
   border-radius: var(--vw-radius-lg);
   box-shadow: 0 0 0 1px var(--vw-border);
+  grid-template-columns: minmax(0, 1fr);
+  margin-bottom: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.settings-view .panel-head,
+.settings-view .panel-body {
+  min-width: 0;
+}
+
+.settings-view .panel-title {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.settings-view .panel-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-form {
   display: grid;
   gap: var(--vw-space-md);
   padding: var(--vw-space-xs) 0 0;
+  min-width: 0;
+}
+
+.settings-form .vw-field,
+.settings-form .vw-input,
+.settings-form .vw-select,
+.settings-form .vw-textarea {
+  min-width: 0;
 }
 
 .settings-actions {
@@ -1690,11 +1721,16 @@ table.data-table thead th.num,
   position: relative;
   display: flex;
   align-items: center;
+  min-width: 0;
+  width: 100%;
 }
 
 .settings-password-input {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
   padding-right: 40px;
+  text-overflow: ellipsis;
 }
 
 .settings-password-toggle {
@@ -1751,7 +1787,28 @@ table.data-table thead th.num,
 
 @media (max-width: 480px) {
   .settings-view {
-    gap: var(--vw-space-md);
+    gap: 12px;
+    max-width: none;
+  }
+  .settings-view .panel-shell {
+    padding: 12px;
+  }
+  .settings-view .panel-head {
+    padding: 2px 6px 2px 2px;
+  }
+  .settings-view .panel-toggle-hitarea {
+    gap: 8px;
+    min-height: 40px;
+    padding: 6px;
+  }
+  .settings-view .panel-title {
+    font-size: 13px;
+  }
+  .settings-view .panel-summary {
+    font-size: 10px;
+  }
+  .settings-form {
+    gap: 12px;
   }
   .settings-actions {
     flex-direction: column;
@@ -1761,7 +1818,7 @@ table.data-table thead th.num,
     flex-direction: column;
     text-align: center;
   }
-  .settings-password-toggle {
+  .settings-password-wrap .settings-password-toggle {
     width: 36px;
     flex-shrink: 0;
   }
