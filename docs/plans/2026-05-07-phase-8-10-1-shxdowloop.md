@@ -53,11 +53,12 @@ No explicit budget provided. Stop for hard blockers only: secret exposure risk, 
 - [x] 0.2 Create and push the dedicated branch.
 - [x] 0.3 Write this process plan.
 - [x] 0.4 Update TODO/LOGBOOK for the loop start.
-- [ ] 0.5 Commit and push setup checkpoint.
+- [x] 0.5 Commit and push setup checkpoint.
+- [x] 0.6 Split dashboard-update instructions from dev-agent instructions after user requested the AGENTS cleanup.
 **Helpers:** Main agent only.
 **Verification:** `git status --short`, `git diff --check`.
-**Checkpoint:** Pending.
-**Notes:** No application code changes in this stage.
+**Checkpoint:** Setup checkpoint `4aa6105` pushed; AGENTS split checkpoint pending.
+**Notes:** No application code changes in this stage. `AGENTS.md` now points update-run agents to `docs/update_dashboard.md`; dev work can edit `web/` when the task calls for it.
 
 ## Stage 1 - Foundation and Auth Boundary
 
@@ -131,7 +132,7 @@ No explicit budget provided. Stop for hard blockers only: secret exposure risk, 
 
 | Stage | Commit | Push | Verification | Notes |
 |---|---|---|---|---|
-| 0 | Pending | Pending | Pending | Branch and plan setup only. |
+| 0 | `4aa6105` | Pushed | `git diff --check` passed before setup commit | Branch and plan setup; AGENTS split checkpoint pending. |
 | 1 | Pending | Pending | Pending | Foundation and auth boundary. |
 | 2 | Pending | Pending | Pending | Area migrations. |
 | 3 | Pending | Pending | Pending | Polish/responsive/docs. |

@@ -1,78 +1,56 @@
 # LLM-Dash — Agent Guide
 
-Universal instructions for any AI coding agent working on this repository.
-Applies to Claude Code, Codex, Gemini CLI, Cline, Continue, Cursor, and any
-other agent runtime.
+Universal instructions for AI coding agents working on this repository.
+Applies to Claude Code, Codex, Gemini CLI, Cline, Continue, Cursor, and other
+agent runtimes.
 
-## Entrypoints
+## First: Identify the Work Type
+
+### Dashboard Update Runs
+
+If you are running the daily/model benchmark update workflow, follow
+[docs/update_dashboard.md](docs/update_dashboard.md). That document contains
+the update-only triggers, metrics, append-only data rules, and the pointer to
+the source-of-truth update procedure in [skill/SKILL.md](skill/SKILL.md).
+
+Dashboard update runs are the only work type where the static frontend is
+read-only.
+
+### Development Work
+
+If you are doing feature work, bug fixes, docs, refactors, UI work, tests, or
+release prep, use the development instructions below.
+
+## Development Entrypoints
 
 | What you need | Where to look |
 |---|---|
 | Quick start & project overview | [README.md](README.md) |
 | System architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | Development & code conventions | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) |
+| Active roadmap | [TODO.md](TODO.md) |
+| Handoff history | [LOGBOOK.md](LOGBOOK.md) |
 | Implementation history | [docs/plans/IMPLEMENTATION_PLAN.md](docs/plans/IMPLEMENTATION_PLAN.md) |
-| Update procedure (**source of truth**) | [skill/SKILL.md](skill/SKILL.md) |
+| Dashboard update workflow | [docs/update_dashboard.md](docs/update_dashboard.md) |
 
-## Primary Task — Update the Dashboard
+## Development Rules
 
-**Follow [skill/SKILL.md](skill/SKILL.md) end-to-end.** It is the single
-source of truth for daily benchmark updates. Every agent running an update
-reads it, follows it, tracks its own token/cost/duration metadata, and
-finishes with the verification checklist in §10.
-
-## Triggers
-
-- A clipboard-pasted prompt from the dashboard's **Refresh** button.
-- An OS-level scheduled job firing at the configured cadence.
-- Manual invocation: `claude "follow skill/SKILL.md"` or your CLI's equivalent.
-
-## Non-Negotiables
-
-- **Every score claim cites a URL.** No invented numbers, no hallucinated
-  benchmarks.
-- **Prior `changelogs/*.md` files are never modified or deleted.** The audit
-  trail is load-bearing.
-- **Dual metadata.** Every run records metrics in the `## Run Metadata` footer
-  of the `.md` **and** the `run_metrics` SQLite table. Skipping either is a
-  broken run.
-- **Full accounting.** Every run writes a new `changelogs/YYYY-MM-DD.md`,
-  inserts a `run_metrics` row, regenerates `data/run_metrics.csv`, and bumps
-  `meta.last_updated`.
-
-### Metrics to Track
-
-| Field | Required | Notes |
-|---|---|---|
-| `duration_sec` | **Always** | Wall-clock seconds from start to finish |
-| `tokens_input` | When available | Include cache creation tokens |
-| `tokens_output` | When available | |
-| `tokens_cached` | When available | Cache read tokens |
-| `cost_usd` | When available | Compute from model pricing if not exposed |
-| `exa_searches` | Always | `0` if using web-search fallback |
-| `exa_fetches` | Always | `0` if using web-search fallback |
-| `word_count` | Always | Body word count (between frontmatter and Run Metadata) |
-
-Use `NULL` for genuinely unknowable fields. Prefer accurate nulls to guesses.
-
-## Agent Identity
-
-When writing changelog frontmatter and `run_metrics` rows, identify yourself
-honestly:
-
-| Field | Example Values |
-|---|---|
-| `agent` | `claude-opus-4-7`, `claude-sonnet-4-6`, `gpt-5-4`, `gemini-3-pro`, `qwen3-6-plus` |
-| `agent_runtime` | `claude-code`, `codex-cli`, `gemini-cli`, `cline`, `cursor`, `openai-agents` |
-
-`agent` is the specific model. `agent_runtime` is the CLI or SDK harness. The
-Stats dashboard groups by both. Don't spoof.
-
-## Boundaries
-
-- **Don't touch the static web app** (`web/`). The frontend is read-only;
-  data changes come only from update runs and seed scripts.
-- **Don't modify old changelog files.** Today's date owns today's file.
-- **Don't modify old `model_scores` rows.** Score history is append-only.
-- **Don't widen scope.** If the user asks for something unrelated during an
-  update, finish the update first, then handle the other request.
+- Prefer the existing architecture: FastAPI server, vanilla HTML/CSS/JS
+  frontend, sql.js in-browser queries, SQLite data layer, and committed vendor
+  assets.
+- Keep feature and UI work scoped to the active task. Do not turn a dashboard
+  update run into product development, and do not turn product development into
+  benchmark/data mutation.
+- For frontend work, `web/` is editable. Verify UI changes with browser
+  screenshots/probes when layout, responsiveness, or interaction behavior
+  changes.
+- Do not modify old `changelogs/*.md` files unless the user explicitly asks for
+  audit-log repair. Changelog history is append-only by default.
+- Do not rewrite old `model_scores` history unless the task is explicitly a
+  data repair/migration and the plan documents why.
+- Keep credential material out of logs, screenshots, browser responses,
+  changelogs, docs, and committed files.
+- Update `TODO.md`, `LOGBOOK.md`, and relevant docs when development work
+  changes behavior, workflow, architecture, or user-facing expectations.
+- Run the smallest meaningful verification for the change. If verification
+  cannot run, record the exact blocker and the command that should be run.

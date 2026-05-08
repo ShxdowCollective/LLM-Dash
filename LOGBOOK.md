@@ -4,6 +4,28 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 053 — 2026-05-07
+
+**Agent:** GPT-5 Codex (vesperline, docs cleanup)
+**Cycle:** Agent instruction split
+**Task:** Move dashboard update instructions out of AGENTS.md
+
+---
+
+Split the mixed agent instructions so update-only rules no longer block normal development work.
+
+**Changed:**
+- Rewrote `AGENTS.md` as a work-type router: dashboard update runs point to `docs/update_dashboard.md`, while development work keeps repo conventions, verification expectations, and editable `web/` scope.
+- Added `docs/update_dashboard.md` with the daily benchmark update triggers, non-negotiables, metrics, identity, and update-only boundaries.
+- Preserved the daily-update frontend read-only rule only for update runs.
+
+**Verification:** pending checkpoint `git diff --check`.
+**Helper route:** main agent only.
+**Degraded paths:** none new.
+**?** None.
+
+---
+
 ## Entry 052 — 2026-05-07
 
 **Agent:** GPT-5 Codex (vesperline, shxdowloop)
