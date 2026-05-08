@@ -232,6 +232,7 @@ Three explicit mounts maintain the frontend's fetch contract:
 | `/api/provider/test-connection` | GET/POST | Test models endpoint reachability |
 | `/api/provider/models` | GET | Fetch + normalize available models from provider |
 | `/api/provider/test-model` | POST | Short-prompt roundtrip to verify model access |
+| `/api/provider/key` | DELETE | Remove the stored Agent Provider API key |
 | `/api/exa` | POST | Save Exa API key |
 | `/api/exa` | DELETE | Remove Exa API key |
 | `/api/llmstats` | POST/DELETE | Save/remove optional LLM Stats API key |

@@ -4,6 +4,43 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 061 — 2026-05-08
+
+**Agent:** Claude Opus 4.7 (saltline, review pass)
+**Cycle:** Phase 8.12 review
+**Task:** Subagent review of Phase 8.12 docs-pass commit, fix any drift
+
+---
+
+Ran two parallel reviewers against commit `9f2fc9e` ("8.12"): a code-reviewer
+subagent verifying every factual claim added in the docs against HEAD code,
+and an Explore subagent doing a fresh drift sweep across the in-scope docs.
+
+**Findings:**
+- Code-reviewer: all ten checked claims accurate (schema-version migration
+  call sites, `/api/*` endpoints in Settings row, credential precedence,
+  Refresh location, `voidware_auth.py` / `migrate_score_checks.py`
+  responsibilities, CHECK-constraint failure mode, `llmstats_enriched=true`
+  notes flag, wizard-installed scheduled job, TODO Completed History
+  summaries).
+- Explore: one real omission. `docs/ARCHITECTURE.md` "API Routes" table
+  documents every DELETE endpoint except `DELETE /api/provider/key`
+  (`server.py:613`, called from `web/app.js:1641`). The 8.12 pass tightened
+  this table to add `/api/llmstats` but missed this neighboring route.
+
+**Fixed:**
+- `docs/ARCHITECTURE.md`: added `/api/provider/key DELETE` row to the API
+  Routes table, grouped with the other provider routes.
+
+**Verification:**
+- `git diff --check` — no whitespace issues
+- Manual cross-check: every `@app.delete/get/post` decorator in `server.py`
+  now has a matching row in the API Routes table.
+
+**?** None.
+
+---
+
 ## Entry 060 — 2026-05-08
 
 **Agent:** Claude Opus 4.7 (wxlf, shxdow-flow)
