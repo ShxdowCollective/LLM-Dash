@@ -131,17 +131,28 @@ configuration without forcing the whole first-run wizard.
 
 ### Phase 8.10.1 — Voidware app shell and UX overhaul
 
+> Plan: [docs/plans/M8_10_1_VOIDWARE_APP_SHELL_PLAN.md](docs/plans/M8_10_1_VOIDWARE_APP_SHELL_PLAN.md)
+> Depends on: Phase 8.10 (Settings backend + functionality)
+> Voidware: @shxdowcollective/voidware 0.8.3
+
 Goal: rebuild the dashboard experience into a polished, dense, SaaS-grade
 Voidware app instead of continuing to patch the current long-scroll,
 over-containerized single-page layout.
 
-- [ ] Write a fresh implementation plan in
+- [x] Write a fresh implementation plan in
   `docs/plans/M8_10_1_VOIDWARE_APP_SHELL_PLAN.md` before coding. Treat the
   current UI as implementation substrate, not design direction.
-- [ ] Decide whether to keep vanilla HTML/CSS/JS or migrate to a lightweight
+- [x] Decide whether to keep vanilla HTML/CSS/JS or migrate to a lightweight
   build stack. External dependencies are allowed if they measurably improve
   maintainability, layout quality, accessibility, routing, charts, or component
-  behavior.
+  behavior. **Decision: stay vanilla. Vendor voidware CSS as static files.**
+- [x] Review the 8.10.1 plan with native subagents plus a pro nanoagent pass.
+  Tighten routing, Settings safety, accessibility, verification, docs sync,
+  and implementation ownership before app-shell coding starts.
+- [x] Update the 8.10.1 plan for Voidware 0.8.3 and full broker-backed
+  Voidware auth: provider/Exa secrets use a local broker permission grant,
+  durable grant status is surfaced, legacy secrets become migration sources,
+  and grant/secret values stay out of UI, logs, config, and API responses.
 - [ ] Replace the sticky top navigation with a real app shell: persistent left 
   side navigation for primary areas, compact header/status actions, and no
   layout shift between views.
