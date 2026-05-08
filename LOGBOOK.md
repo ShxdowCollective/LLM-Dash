@@ -4,6 +4,43 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 057 — 2026-05-07
+
+**Agent:** GPT-5 Codex (vesperline, shxdowloop)
+**Cycle:** Phase 8.10.1 Stage 4
+**Task:** Complete final verification and evidence capture
+
+---
+
+Completed the Stage 4 evidence pass for the Voidware app-shell phase.
+
+**Verification:**
+- `node --check web/app.js`
+- `python3 -m compileall server.py scripts`
+- `git diff --check`
+- Headed screenshots saved under `artifacts/phase-8-10-1-app-shell/`:
+  `final-desktop-models.png`, `final-laptop-changelog.png`,
+  `final-tablet-stats.png`, and `final-mobile-settings-research.png`.
+- Probe results across the four final viewports: no horizontal page overflow,
+  no legacy global slots in DOM, no clipped button/status text from the scan,
+  and no browser page errors.
+- Mobile drawer opened, Tab advanced focus, Escape closed it, and
+  `aria-expanded` returned to `false`.
+- `/api/provider` and final screenshot artifacts passed redaction scans for
+  fake Provider/Exa secrets, `vwgr_`, broker secret targets, and Voidware CLI
+  paths.
+
+**Notes:**
+- The fake provider deliberately returns 502 for `/api/provider/models` during
+  Settings smoke; that path is displayed as normal UI error state and did not
+  produce page errors.
+- Real Provider, Exa, keyring, broker secret, schedule, changelog, and data
+  state were not mutated.
+
+**?** None.
+
+---
+
 ## Entry 056 — 2026-05-07
 
 **Agent:** GPT-5 Codex (vesperline, shxdowloop)

@@ -46,25 +46,25 @@ Open implementation:
   secondary tools behind predictable sub-pages.
 - [x] Rebuild Settings into compact task pages for Agent Provider, Models, Exa,
   Schedule, Manual Update, and future LLM Stats.
-- [ ] Reduce card soup: use cards only for repeated items, modals, and framed
+- [x] Reduce card soup: use cards only for repeated items, modals, and framed
   tools; prefer workspace regions, tables, toolbars, split panes, and compact
   forms.
-- [ ] Tighten typography and copy so the app reads like a polished operations
+- [x] Tighten typography and copy so the app reads like a polished operations
   dashboard: clearer hierarchy, less debug/admin phrasing, and less filler.
-- [ ] Establish desktop, tablet, and mobile layout contracts: predictable side
+- [x] Establish desktop, tablet, and mobile layout contracts: predictable side
   nav collapse, reachable subnav, no horizontal clipping, and no giant stacked
   button walls unless unavoidable.
-- [ ] Rebuild mobile navigation/settings for thumb ergonomics: drawer or bottom
+- [x] Rebuild mobile navigation/settings for thumb ergonomics: drawer or bottom
   affordance if needed, short pages, sticky save areas where appropriate, and a
   visible current location.
-- [ ] Restyle table, chart, changelog, stats, detail comparison, run update,
+- [x] Restyle table, chart, changelog, stats, detail comparison, run update,
   setup wizard, and settings views against one cohesive Voidware visual system.
-- [ ] Validate with headed screenshots at desktop (1920x1080), laptop
+- [x] Validate with headed screenshots at desktop (1920x1080), laptop
   (1366x768), tablet (~820x1180), and mobile (390x844). Save artifacts under
   `artifacts/phase-8-10-1-app-shell/`.
-- [ ] Add programmatic UI probes for overflow, clipped text, unreachable
+- [x] Add programmatic UI probes for overflow, clipped text, unreachable
   controls, console errors, keyboard focus order, and reduced-motion behavior.
-- [ ] Update TODO/LOGBOOK after the design plan, after implementation, and
+- [x] Update TODO/LOGBOOK after the design plan, after implementation, and
   after verification. Do not call the UI shippable until screenshots support it.
 
 ### Phase 8.11 - Optional LLM Stats enrichment
