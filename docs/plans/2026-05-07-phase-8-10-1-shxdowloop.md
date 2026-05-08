@@ -72,27 +72,27 @@ No explicit budget provided. Stop for hard blockers only: secret exposure risk, 
 - [x] 1.5 Add server-side Voidware auth wrapper and provider/Exa status endpoints without exposing grants or secrets.
 **Helpers:** Native explorer, native phase planner, native plan reviewer, native final reviewer.
 **Verification:** `node --check web/app.js`; `python3 -m compileall server.py scripts`; checksum spot-checks for vendored Voidware CSS; isolated provider-state redaction check; headed `agent-browser` smoke for `#models/table`, `#models/chart`, and `#settings/provider`.
-**Checkpoint:** Pending commit.
+**Checkpoint:** `d81ac94` pushed.
 **Notes:** Real provider, Exa, keyring, auth file, and schedule state were not mutated. User requested maximum token lifetime; all broker grant requests use `--ttl 120d`, the local Voidware maximum. The app keeps temporary legacy `#filters`, `#detail`, and `#view` slots inside the new shell to avoid a blank app before Stage 2 area migration.
 
 ## Stage 2 - Area Migrations
 
-**Status:** Pending
+**Status:** Complete
 **Goal:** Move Models, Changelog, Stats, and Settings into the app shell with compact sub-pages and retained behavior.
 **Phases:**
-- [ ] 2.1 Migrate Models table/chart/detail/filter controls into the Models area.
-- [ ] 2.2 Migrate Changelog and Stats into area renderers with compact headers and retained SQL/data behavior.
-- [ ] 2.3 Split Settings into Provider, Models, Research, and Schedule sub-pages.
-- [ ] 2.4 Add broker auth status/migration UI for provider and Exa without leaking sensitive values.
-- [ ] 2.5 Remove old global chrome render paths after replacement behavior is covered.
+- [x] 2.1 Migrate Models table/chart/detail/filter controls into the Models area.
+- [x] 2.2 Migrate Changelog and Stats into area renderers with compact headers and retained SQL/data behavior.
+- [x] 2.3 Split Settings into Provider, Models, Research, and Schedule sub-pages.
+- [x] 2.4 Add broker auth status/migration UI for provider and Exa without leaking sensitive values.
+- [x] 2.5 Remove old global chrome render paths after replacement behavior is covered.
 **Helpers:** Native explorer, native phase planner, native plan reviewer, native final reviewer. Execution remains main-agent integrated unless a phase can be safely isolated.
-**Verification:** `node --check web/app.js`; browser smoke test for all areas; API smoke tests for provider/Exa status; no console errors.
-**Checkpoint:** Pending.
-**Notes:** Preserve SQL queries, state data shapes where practical, and existing update/run behavior.
+**Verification:** `node --check web/app.js`; `python3 -m compileall server.py scripts`; `git diff --check`; isolated `/api/provider` redaction check; headed browser smoke for Models table/chart, Changelog, Stats, Settings Provider, and Settings Research.
+**Checkpoint:** Pending commit.
+**Notes:** Preserved SQL queries and data shapes. Removed legacy `#view`, `#filters`, `#detail`, `#view-actions`, and `.controls-bar` DOM slots. User reiterated max token lifetime for Voidware auth, so broker UI now calls out the max grant TTL and the wrapper continues to request `--ttl 120d`.
 
 ## Stage 3 - Visual Polish, Responsive Contracts, and Docs Sync
 
-**Status:** Pending
+**Status:** Active
 **Goal:** Reduce duplicate CSS, tighten copy/typography, complete mobile/tablet navigation, and update docs that would be actively wrong.
 **Phases:**
 - [ ] 3.1 Replace duplicated tokens/components in `web/style.css` with app-specific Voidware overrides.
@@ -133,8 +133,8 @@ No explicit budget provided. Stop for hard blockers only: secret exposure risk, 
 | Stage | Commit | Push | Verification | Notes |
 |---|---|---|---|---|
 | 0 | `4aa6105`, `00e9b1c` | Pushed | `git diff --check` passed for setup and AGENTS split | Branch/process setup, then AGENTS/update-dashboard split. |
-| 1 | Pending | Pending | `node --check`; `python3 -m compileall`; CSS checksum spot-check; isolated auth redaction; headed browser smoke | Foundation and auth boundary. |
-| 2 | Pending | Pending | Pending | Area migrations. |
+| 1 | `d81ac94` | Pushed | `node --check`; `python3 -m compileall`; CSS checksum spot-check; isolated auth redaction; headed browser smoke | Foundation and auth boundary. |
+| 2 | Pending | Pending | `node --check`; `python3 -m compileall`; `git diff --check`; isolated `/api/provider` redaction; headed browser smoke | Area migrations. |
 | 3 | Pending | Pending | Pending | Polish/responsive/docs. |
 | 4 | Pending | Pending | Pending | Evidence and final readiness. |
 

@@ -4,6 +4,37 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 055 — 2026-05-07
+
+**Agent:** GPT-5 Codex (vesperline, shxdowloop)
+**Cycle:** Phase 8.10.1 Stage 2
+**Task:** Migrate dashboard areas into the Voidware app shell
+
+---
+
+Completed Stage 2 area migration on `shxdowloop/2026-05-07/phase-8-10-1`.
+
+**Changed:**
+- Moved Models filters, sort controls, Table/Chart segmented toggle, CSV export, comparison cards, and tier legend into a self-contained Models area renderer.
+- Moved Stats filters and metrics CSV download into the Stats area, kept uPlot chart scheduling, and switched metric cards toward Voidware metric classes.
+- Moved changelog markdown onto the `.vw-markdown` surface and compacted changelog list entries with Voidware card styling.
+- Split Settings into Provider, Models, Research, and Schedule sub-pages with `.vw-settings-group` sections. Manual Update remains collapsible on the Provider page.
+- Added safe broker auth status on Provider and Research pages. Browser-visible auth status now shows the max grant TTL (`120d`) without returning CLI paths, secret target names, grants, or plaintext secrets.
+- Removed the legacy global DOM slots (`#view`, `#filters`, `#detail`, `#view-actions`, `.controls-bar`) and fixed `switchView()` so route state carries the target view.
+
+**Verification:**
+- `node --check web/app.js`
+- `python3 -m compileall server.py scripts`
+- `git diff --check`
+- Isolated `/api/provider` redaction check with fake Provider/Exa env secrets: no fake secrets, `vwgr_`, broker secret targets, or Voidware CLI paths in JSON.
+- Headed `agent-browser` smoke with isolated auth root: Models table/chart, Stats, Changelog, Settings Provider, and Settings Research rendered with no page errors and no legacy global slots in the DOM.
+
+**Helper route:** native explorer and native phase planner returned Stage 2 guidance; main-agent implementation and verification.
+**Degraded paths:** Chart smoke initially exposed a real `switchView()` route-state bug; fixed before checkpoint.
+**?** None.
+
+---
+
 ## Entry 054 — 2026-05-07
 
 **Agent:** GPT-5 Codex (vesperline, shxdowloop)

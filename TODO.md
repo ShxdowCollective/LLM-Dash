@@ -29,18 +29,20 @@ Done checkpoints:
 - [x] Split dashboard-update agent rules into `docs/update_dashboard.md`.
 - [x] Complete Phase 8.10.1 Stage 1 foundation: vendored Voidware CSS, app
   shell skeleton, route hooks, and broker auth boundary.
+- [x] Complete Phase 8.10.1 Stage 2 area migration: Models, Changelog, Stats,
+  and Settings now render inside the app shell with old global slots removed.
 
 Open implementation:
 
-- [ ] Replace sticky top navigation with a persistent app shell: left primary
+- [x] Replace sticky top navigation with a persistent app shell: left primary
   nav, compact header/status actions, stable view transitions, and no layout
   shift between views.
-- [ ] Add top sub-page navigation inside primary areas. Settings becomes
+- [x] Add top sub-page navigation inside primary areas. Settings becomes
   grouped pages/tabs instead of six stacked collapsible containers.
-- [ ] Rework information architecture around Explore/Compare, Changelog,
+- [x] Rework information architecture around Explore/Compare, Changelog,
   Stats, Settings, and Update/Run controls. Cut duplicate surfaces and move
   secondary tools behind predictable sub-pages.
-- [ ] Rebuild Settings into compact task pages for Agent Provider, Models, Exa,
+- [x] Rebuild Settings into compact task pages for Agent Provider, Models, Exa,
   Schedule, Manual Update, and future LLM Stats.
 - [ ] Reduce card soup: use cards only for repeated items, modals, and framed
   tools; prefer workspace regions, tables, toolbars, split panes, and compact

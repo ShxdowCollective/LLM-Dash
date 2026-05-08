@@ -439,6 +439,9 @@ def save_provider(
         endpoint_mode=mode,
         request_headers=_normalize_header_map(request_headers or {}),
     )
+    if api_key:
+        save_provider_api_key(api_key)
+
     data = _load_config_file()
     data["version"] = 1
     data["app"] = APP_NAME
@@ -451,9 +454,6 @@ def save_provider(
         "request_headers": normalized.request_headers or {},
     }
     _atomic_write_json(config_path(), data)
-
-    if api_key:
-        save_provider_api_key(api_key)
     return load_provider_bundle()
 
 

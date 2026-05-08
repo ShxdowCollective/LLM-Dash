@@ -288,6 +288,7 @@
       exaSaving: false,
       exaRemoving: false,
       exaConfirmRemove: false,
+      draftExaKey: "",
       exaStatus: "",
       exaStatusTone: "idle",
       providerKeyRemoving: false,
@@ -404,7 +405,8 @@
   }
 
   function routeForView(view) {
-    return VIEW_ROUTES[view] || VIEW_ROUTES.table;
+    const key = VIEW_ROUTES[view] ? view : "table";
+    return { view: key, ...VIEW_ROUTES[key] };
   }
 
   function viewForRoute(area, subview) {
@@ -2102,13 +2104,8 @@
     });
   }
 
-  function renderDetailPanels(models) {
-    const slot = document.getElementById("detail");
-    if (!slot) return;
-    if (!models.length) {
-      slot.replaceChildren();
-      return;
-    }
+  function renderDetailPanelsNode(models) {
+    if (!models.length) return null;
     const row = h("div", {
       class: "comparison-row" + (models.length >= 4 ? " is-compact" : ""),
       dataset: { cardCount: models.length >= 5 ? "5" : undefined },
@@ -2117,7 +2114,7 @@
     for (const model of models) {
       row.appendChild(renderSingleModelCard(model));
     }
-    slot.replaceChildren(row);
+    return row;
   }
 
   function renderEmptyState(title, copy) {
@@ -2292,28 +2289,6 @@
         ]),
       ],
     });
-  }
-
-  function renderActionBar() {
-    const slot = document.getElementById("view-actions");
-    if (!slot) return;
-    let content = null;
-    if (state.view === "table") {
-      content = h("button", {
-        class: "action-btn",
-        type: "button",
-        disabled: !state.models.length,
-        onclick: downloadModelsCsv,
-      }, "Export Models CSV");
-    } else if (state.view === "stats") {
-      content = h("a", {
-        class: "action-btn link-btn",
-        href: "/data/run_metrics.csv",
-        download: "run_metrics.csv",
-      }, "Download Metrics CSV");
-    }
-    slot.replaceChildren();
-    if (content) slot.appendChild(content);
   }
 
   function wizardStatusChip(stateValue, text) {
@@ -2972,18 +2947,6 @@
     }
   }
 
-  function renderFilterSlot() {
-    const slot = document.getElementById("filters");
-    if (!slot) return;
-    slot.replaceChildren();
-    if (!state.ready || state.error) return;
-    if (MODEL_VIEWS.has(state.view)) {
-      slot.appendChild(renderModelFilters());
-    } else if (state.view === "stats") {
-      slot.appendChild(renderStatsFilters());
-    }
-  }
-
   function renderTable() {
     if (!state.models.length) {
       return renderEmptyState("No Models Match", "Loosen the filters or reset them to see results.");
@@ -3087,6 +3050,85 @@
     ]);
   }
 
+  function renderModelSortControls() {
+    const options = [
+      ["overall", "Overall"],
+      ["value", "Value"],
+      ["intelligence", "Intelligence"],
+      ["coding", "Coding"],
+      ["agents", "Agents"],
+      ["speed", "Speed"],
+      ["cost", "Cost"],
+    ];
+    return h("div", { class: "sort-group models-sort-group", role: "group", "aria-label": "Sort models" }, [
+      h("span", { class: "control-label" }, "Sort"),
+      ...options.map(([key, label]) => h("button", {
+        class: "sort-btn",
+        type: "button",
+        "aria-pressed": key === state.sortBy ? "true" : "false",
+        onclick: () => {
+          state.sortBy = key;
+          refreshModels();
+          render();
+        },
+      }, label)),
+    ]);
+  }
+
+  function renderModelsSegmented() {
+    return h("div", { class: "vw-segmented models-view-switch", role: "group", "aria-label": "Models view" }, [
+      ["table", "Table"],
+      ["chart", "Chart"],
+    ].map(([view, label]) => h("button", {
+      class: "vw-segmented-item" + (state.view === view ? " active" : ""),
+      type: "button",
+      "aria-pressed": state.view === view ? "true" : "false",
+      "aria-current": state.view === view ? "page" : null,
+      onclick: () => switchView(view),
+    }, label)));
+  }
+
+  function renderTierLegend() {
+    return h("div", { class: "tier-legend", "aria-label": "Tier legend" }, [
+      h("span", { class: "tier-chip", dataset: { tier: "S" } }, "S · 9.0+"),
+      h("span", { class: "tier-chip", dataset: { tier: "A" } }, "A · 8.0+"),
+      h("span", { class: "tier-chip", dataset: { tier: "B" } }, "B · 7.0+"),
+      h("span", { class: "tier-chip", dataset: { tier: "C" } }, "C · 6.0+"),
+      h("span", { class: "tier-chip", dataset: { tier: "D" } }, "D · 5.0+"),
+      h("span", { class: "tier-chip", dataset: { tier: "F" } }, "F · <5.0"),
+    ]);
+  }
+
+  function renderModelsArea() {
+    const selectedModels = state.selectedModelIds
+      .map((id) => state.models.find((m) => m.id === id))
+      .filter(Boolean);
+    return h("div", { class: "models-area" }, [
+      h("div", { class: "models-toolbar" }, [
+        h("div", { class: "models-toolbar-left" }, [
+          renderModelsSegmented(),
+          renderModelSortControls(),
+        ]),
+        h("button", {
+          class: "vw-btn vw-btn-secondary",
+          type: "button",
+          disabled: !state.models.length,
+          onclick: downloadModelsCsv,
+        }, "Export Models CSV"),
+      ]),
+      renderModelFilters(),
+      renderDetailPanelsNode(selectedModels),
+      state.view === "chart" ? renderChart() : renderTable(),
+      h("footer", { class: "models-footnote" }, [
+        renderTierLegend(),
+        h("p", { class: "sources" }, [
+          "Overall = avg(Intelligence, Coding, Agents, Speed). Value = avg(Overall, Cost). ",
+          "Scores from Artificial Analysis, SWE-bench, Terminal-Bench, OSWorld, GPQA Diamond, and vendor reports; every claim cites a URL in the changelog.",
+        ]),
+      ]),
+    ]);
+  }
+
   function parseJsonArray(value) {
     if (!value) return [];
     try {
@@ -3098,7 +3140,7 @@
   }
 
   function renderMarkdown(markdown) {
-    const article = h("article", { class: "markdown" });
+    const article = h("article", { class: "markdown vw-markdown" });
     if (window.marked && typeof window.marked.parse === "function") {
       article.innerHTML = window.marked.parse(markdown);
       for (const anchor of article.querySelectorAll("a[href^='http']")) {
@@ -3142,7 +3184,7 @@
         const isActive = entry.date === state.activeChangelogDate;
         const newModels = parseJsonArray(entry.new_models_json);
         return h("button", {
-          class: "changelog-item" + (isActive ? " is-active" : ""),
+          class: "changelog-item vw-card-compact" + (isActive ? " is-active" : ""),
           type: "button",
           onclick: () => {
             state.activeChangelogDate = entry.date;
@@ -3170,11 +3212,15 @@
     ]);
   }
 
+  function renderChangelogArea() {
+    return renderChangelog();
+  }
+
   function statCard(label, value, note, tone) {
-    return h("div", { class: "stats-card" + (tone ? " " + tone : "") }, [
-      h("div", { class: "stats-label" }, label),
-      h("div", { class: "stats-value" }, value),
-      note ? h("div", { class: "stats-note" }, note) : null,
+    return h("div", { class: "stats-card vw-metric" + (tone ? " " + tone : "") }, [
+      h("div", { class: "stats-value vw-metric-value" }, value),
+      h("div", { class: "stats-label vw-metric-label" }, label),
+      note ? h("div", { class: "stats-note vw-hint" }, note) : null,
     ]);
   }
 
@@ -3247,8 +3293,17 @@
 
   function renderStatsView() {
     const rows = getFilteredMetrics();
+    const statsActions = h("div", { class: "stats-actions" }, h("a", {
+      class: "vw-btn vw-btn-secondary",
+      href: "/data/run_metrics.csv",
+      download: "run_metrics.csv",
+    }, "Download Metrics CSV"));
     if (!rows.length) {
-      return renderEmptyState("No Runs Match", "Try widening the date range or clearing the agent filter.");
+      return h("div", { class: "stats-view" }, [
+        statsActions,
+        renderStatsFilters(),
+        renderEmptyState("No Runs Match", "Try widening the date range or clearing the agent filter."),
+      ]);
     }
 
     const totals = {
@@ -3270,6 +3325,8 @@
     };
 
     return h("div", { class: "stats-view" }, [
+      statsActions,
+      renderStatsFilters(),
       h("section", { class: "stats-section" }, [
         h("div", { class: "section-head" }, [
           h("h2", null, "Totals"),
@@ -3340,6 +3397,10 @@
     ]);
   }
 
+  function renderStatsArea() {
+    return renderStatsView();
+  }
+
   function settingsField(label, control, hint) {
     return h("label", { class: "vw-field" }, [
       h("span", { class: "vw-label" }, label),
@@ -3348,10 +3409,80 @@
     ]);
   }
 
+  function renderSettingsGroup({ id, title, summary, children }) {
+    return h("section", { class: "vw-settings-group", id }, [
+      h("div", { class: "vw-settings-group-head" }, [
+        h("h3", null, title),
+        summary ? h("p", null, summary) : null,
+      ]),
+      h("div", { class: "vw-settings-group-body" }, children),
+    ]);
+  }
+
   function settingsStatusChip(text, tone) {
     if (!text) return null;
     const cls = "vw-status-chip" + (tone === "success" ? " vw-status-success" : tone === "error" ? " vw-status-error" : tone === "loading" ? " vw-status-generating" : "");
     return h("span", { class: cls }, text);
+  }
+
+  function authSourceLabel(source) {
+    const labels = {
+      env: "Environment",
+      "voidware-broker": "Voidware broker",
+      "keyring-legacy": "Legacy keyring",
+      "auth-file-legacy": "Legacy auth file",
+      missing: "Not configured",
+    };
+    return labels[source] || "Unavailable";
+  }
+
+  function brokerStatusCopy(code) {
+    const labels = {
+      approval_required: "Approval needed",
+      grant_denied: "Grant denied",
+      grant_invalidated: "Grant expired",
+      cli_unavailable: "CLI unavailable",
+      broker_timeout: "Broker timed out",
+      broker_unavailable: "Broker unavailable",
+    };
+    return labels[code] || "Broker unavailable";
+  }
+
+  function renderCredentialStatus(label, status) {
+    const source = status && status.source ? status.source : "missing";
+    const tone = status && status.configured ? (source === "voidware-broker" ? "success" : "idle") : "error";
+    return h("div", { class: "settings-auth-status vw-display-row" }, [
+      h("span", { class: "vw-display-row-label" }, label),
+      h("span", { class: "vw-display-row-value" }, [
+        settingsStatusChip(authSourceLabel(source), tone),
+        status && status.legacy_migration_available
+          ? h("span", { class: "vw-status-chip" }, "Migration available")
+          : null,
+      ]),
+    ]);
+  }
+
+  function renderBrokerStatus() {
+    const broker = state.provider.auth && state.provider.auth.broker ? state.provider.auth.broker : null;
+    if (!broker) return null;
+    const available = Boolean(broker.available);
+    const summary = available
+      ? "Broker ready" + (broker.persistence ? " · " + broker.persistence : "")
+      : broker.cli_available ? "Broker unavailable" : "CLI unavailable";
+    const nextAction = available
+      ? "Secrets are managed through the local grant broker."
+      : brokerStatusCopy(broker.error_code) + ". Open the Voidware approval surface, then retry the save.";
+    return h("div", { class: "settings-auth-broker vw-card vw-card-compact" }, [
+      h("div", { class: "settings-auth-broker-head" }, [
+        h("strong", null, "Voidware Auth"),
+        settingsStatusChip(summary, available ? "success" : "error"),
+      ]),
+      h("p", null, nextAction),
+      h("div", { class: "vw-summary-chip-row" }, [
+        h("span", { class: "vw-summary-chip" }, "Max grant TTL " + (broker.grant_ttl || "120d")),
+        !available && broker.error_code ? h("span", { class: "vw-summary-chip" }, brokerStatusCopy(broker.error_code)) : null,
+      ]),
+    ]);
   }
 
   function passwordFieldWithToggle(id, value, onInput, show, onToggleShow, placeholder) {
@@ -3507,8 +3638,7 @@
 
   async function settingsSaveExa() {
     const s = state.settings;
-    const input = document.getElementById("settings-exa-key");
-    const key = input?.value?.trim() || "";
+    const key = s.draftExaKey.trim();
     if (!key) { s.exaStatus = "API key is required"; s.exaStatusTone = "error"; render(); return; }
     s.exaSaving = true;
     s.exaStatus = "";
@@ -3522,7 +3652,7 @@
       await fetchProvider();
       s.exaStatus = "Exa key saved";
       s.exaStatusTone = "success";
-      if (input) input.value = "";
+      s.draftExaKey = "";
     } catch (error) {
       s.exaStatus = String(error?.message || error);
       s.exaStatusTone = "error";
@@ -3626,12 +3756,10 @@
     const presets = state.providerPresets.providers || [];
     const currentPresetId = presets.find((p) => p.base_url === state.provider.base_url)?.id || "";
     const connResult = s.connectionResult;
-    return renderCollapsiblePanel({
+    return renderSettingsGroup({
       id: "settings-provider",
       title: "Agent Provider",
       summary: state.provider.has_provider ? state.provider.default_model + " via " + state.provider.base_url : "Not configured",
-      collapsed: state.ui.settingsCollapsed.provider,
-      onToggle: () => toggleSettingsSection("provider"),
       children: [
         h("form", { class: "settings-form", onsubmit: (e) => { e.preventDefault(); settingsSaveProvider(e.target); } }, [
           presets.length ? settingsField("Preset", h("select", {
@@ -3671,6 +3799,8 @@
             () => { s.showApiKey = !s.showApiKey; render(); },
             state.provider.has_provider ? "••••••••  (leave empty to keep current)" : "Enter API key"
           )),
+          renderBrokerStatus(),
+          renderCredentialStatus("Provider key", state.provider.auth && state.provider.auth.provider),
           h("div", { class: "settings-actions" }, [
             h("button", { class: "vw-btn vw-btn-primary", type: "submit", disabled: s.providerSaving }, s.providerSaving ? "Saving…" : "Save Provider"),
             h("button", { class: "vw-btn vw-btn-secondary", type: "button", disabled: s.testingConnection || !state.provider.has_provider, onclick: settingsTestConnection }, s.testingConnection ? "Testing…" : "Test Connection"),
@@ -3697,12 +3827,10 @@
     const hasModels = s.modelsList.length > 0;
     const defaultResult = s.defaultTestResult;
     const backupResult = s.backupTestResult;
-    return renderCollapsiblePanel({
+    return renderSettingsGroup({
       id: "settings-models",
       title: "Models",
       summary: state.provider.default_model ? state.provider.default_model + (state.provider.backup_model ? " / " + state.provider.backup_model : "") : "Not set",
-      collapsed: state.ui.settingsCollapsed.models,
-      onToggle: () => toggleSettingsSection("models"),
       children: [
         h("div", { class: "settings-form" }, [
           settingsField("Default model", hasModels
@@ -3741,17 +3869,17 @@
 
   function renderSettingsExaSection() {
     const s = state.settings;
-    return renderCollapsiblePanel({
+    return renderSettingsGroup({
       id: "settings-exa",
       title: "Exa",
       summary: state.provider.exa_configured ? "Configured" : "Not set",
-      collapsed: state.ui.settingsCollapsed.exa,
-      onToggle: () => toggleSettingsSection("exa"),
       children: [
         h("div", { class: "settings-form" }, [
           h("p", { class: "settings-field-status" }, state.provider.exa_configured ? "Exa API key is configured." : "No Exa API key set. Web research will be unavailable."),
+          renderBrokerStatus(),
+          renderCredentialStatus("Exa key", state.provider.auth && state.provider.auth.exa),
           settingsField("API key", passwordFieldWithToggle(
-            "settings-exa-key", "", (e) => {}, s.showExaKey,
+            "settings-exa-key", s.draftExaKey, (e) => { s.draftExaKey = e.target.value; }, s.showExaKey,
             () => { s.showExaKey = !s.showExaKey; render(); },
             state.provider.exa_configured ? "••••••••  (leave empty to keep current)" : "Enter Exa API key"
           )),
@@ -3773,12 +3901,10 @@
   }
 
   function renderSettingsLLMStatsSection() {
-    return renderCollapsiblePanel({
+    return renderSettingsGroup({
       id: "settings-llmstats",
       title: "LLM Stats",
       summary: "Coming in Phase 8.11",
-      collapsed: state.ui.settingsCollapsed.llmstats,
-      onToggle: () => toggleSettingsSection("llmstats"),
       children: [
         h("div", { class: "settings-form settings-disabled-section" }, [
           settingsField("API key", h("input", {
@@ -3803,12 +3929,10 @@
     const scheduleLabel = !state.schedule.enabled || state.schedule.cadence === "off"
       ? "Off"
       : state.schedule.cadence + " · " + (state.schedule.time_local || "09:00") + " (" + (state.schedule.utc_echo || "UTC") + ")";
-    return renderCollapsiblePanel({
+    return renderSettingsGroup({
       id: "settings-schedule",
       title: "Schedule",
       summary: scheduleLabel,
-      collapsed: state.ui.settingsCollapsed.schedule,
-      onToggle: () => toggleSettingsSection("schedule"),
       children: [
         h("div", { class: "settings-form" }, [
           settingsField("Cadence", h("div", { class: "settings-segmented" }, ["off", "daily", "weekly", "monthly"].map((cadence) => h("button", {
@@ -3894,15 +4018,14 @@
           h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: () => openWizard(0) }, "Run Setup Wizard"),
         ])
       : null;
-    return h("div", { class: "settings-view" }, [
-      noBanner,
-      renderSettingsProviderSection(),
-      renderSettingsModelsSection(),
-      renderSettingsExaSection(),
-      renderSettingsLLMStatsSection(),
-      renderSettingsScheduleSection(),
-      renderSettingsManualSection(),
-    ]);
+    const subview = state.subview.settings || "provider";
+    const pages = {
+      provider: [noBanner, renderSettingsProviderSection(), renderSettingsManualSection()],
+      models: [renderSettingsModelsSection()],
+      research: [renderSettingsExaSection(), renderSettingsLLMStatsSection()],
+      schedule: [renderSettingsScheduleSection()],
+    };
+    return h("div", { class: "settings-view" }, pages[subview] || pages.provider);
   }
 
   function buildSeriesData(rows, field) {
@@ -4146,7 +4269,7 @@
     syncRouteFromView();
     const config = AREA_CONFIG[state.area] || AREA_CONFIG.models;
     nav.replaceChildren();
-    if (!config.subpages.length) {
+    if (state.area !== "settings" || !config.subpages.length) {
       nav.hidden = true;
       return;
     }
@@ -4216,10 +4339,7 @@
   }
 
   function render() {
-    const viewSlot = document.getElementById("view");
-    const controlsBar = document.querySelector(".controls-bar");
-    const actionSlot = document.getElementById("view-actions");
-    const sortGroup = document.querySelector(".sort-group");
+    const viewSlot = document.getElementById("content-body");
     if (!viewSlot) return;
     finishBootPaint();
 
@@ -4233,20 +4353,12 @@
     syncRouteFromView();
     renderPageHeader();
     renderSubpageNav();
-    renderActionBar();
-    renderFilterSlot();
     renderOverlay();
     syncRefreshButton();
     syncShellNav();
 
-    const hasSortControls = state.ready && MODEL_VIEWS.has(state.view);
-    const hasViewActions = Boolean(actionSlot && actionSlot.childElementCount);
-    if (sortGroup) sortGroup.hidden = !hasSortControls;
-    if (controlsBar) controlsBar.hidden = !hasSortControls && !hasViewActions;
-
     if (state.error) {
       viewSlot.replaceChildren(state.error);
-      renderDetailPanels([]);
       updateFreshness();
       if (state.wizard.open || (!state.manualRefreshModal.open && !state.runUpdate.active && state.bootstrap.state !== "initializing")) restoreFocus(focus);
       return;
@@ -4255,25 +4367,19 @@
       viewSlot.replaceChildren(renderPlaceholder(
         state.bootstrap.state === "initializing" ? "Preparing dashboard…" : "Loading dashboard…"
       ));
-      renderDetailPanels([]);
       updateFreshness();
       if (state.wizard.open || (!state.manualRefreshModal.open && !state.runUpdate.active && state.bootstrap.state !== "initializing")) restoreFocus(focus);
       return;
     }
 
     let content;
-    if (state.view === "chart") content = renderChart();
-    else if (state.view === "changelog") content = renderChangelog();
-    else if (state.view === "stats") content = renderStatsView();
+    if (MODEL_VIEWS.has(state.view)) content = renderModelsArea();
+    else if (state.view === "changelog") content = renderChangelogArea();
+    else if (state.view === "stats") content = renderStatsArea();
     else if (state.view === "data") content = renderSettingsView();
     else content = renderTable();
 
     viewSlot.replaceChildren(content);
-
-    const selectedModels = MODEL_VIEWS.has(state.view)
-      ? state.selectedModelIds.map((id) => state.models.find((m) => m.id === id)).filter(Boolean)
-      : [];
-    renderDetailPanels(selectedModels);
 
     document.querySelectorAll(".sort-btn").forEach((button) => {
       button.setAttribute("aria-pressed", button.dataset.sort === state.sortBy ? "true" : "false");
@@ -4307,7 +4413,7 @@
 
   function switchView(view, options) {
     if (!view || view === state.view) return;
-    const stage = document.getElementById("view");
+    const stage = document.getElementById("content-body");
     if (stage) stage.classList.add("is-switching");
     applyRoute(routeForView(view), { updateHash: !(options && options.skipHash), replace: options && options.replace });
     requestAnimationFrame(() => {

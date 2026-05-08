@@ -77,42 +77,9 @@
         <button class="vw-subpage-nav-link view-btn" type="button" data-area="models" data-view="chart" aria-pressed="false">Chart</button>
       </nav>
 
-      <section class="controls-bar" aria-label="Controls">
-        <div class="sort-group" role="group" aria-label="Sort by">
-          <span class="control-label">Sort</span>
-          <button class="sort-btn" type="button" data-sort="overall" aria-pressed="true">Overall</button>
-          <button class="sort-btn" type="button" data-sort="value">Value</button>
-          <button class="sort-btn" type="button" data-sort="intelligence">Intelligence</button>
-          <button class="sort-btn" type="button" data-sort="coding">Coding</button>
-          <button class="sort-btn" type="button" data-sort="agents">Agents</button>
-          <button class="sort-btn" type="button" data-sort="speed">Speed</button>
-          <button class="sort-btn" type="button" data-sort="cost">Cost</button>
-        </div>
-        <div id="view-actions" class="view-actions" aria-live="polite"></div>
-      </section>
-
-      <section id="filters" class="filter-slot" aria-live="polite"></section>
-      <section id="detail" class="detail-slot" aria-live="polite"></section>
-
-      <section id="view" class="view-slot" aria-live="polite">
+      <section id="content-body" class="content-slot" aria-live="polite">
         <p class="status-msg">Loading dashboard…</p>
       </section>
-
-      <footer class="site-footer app-footer">
-        <div class="tier-legend" aria-label="Tier legend">
-          <span class="tier-chip" data-tier="S">S · 9.0+</span>
-          <span class="tier-chip" data-tier="A">A · 8.0+</span>
-          <span class="tier-chip" data-tier="B">B · 7.0+</span>
-          <span class="tier-chip" data-tier="C">C · 6.0+</span>
-          <span class="tier-chip" data-tier="D">D · 5.0+</span>
-          <span class="tier-chip" data-tier="F">F · &lt;5.0</span>
-        </div>
-        <p class="sources">
-          Overall = avg(Intelligence, Coding, Agents, Speed). Value = avg(Overall, Cost).
-          Scores from Artificial Analysis, SWE-bench, Terminal-Bench, OSWorld, GPQA Diamond,
-          and vendor reports — every claim cites a URL in the changelog.
-        </p>
-      </footer>
     </section>
   </main>
   <div id="overlay-root" aria-live="polite"></div>

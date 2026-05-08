@@ -15,6 +15,7 @@ from typing import Any
 APP_NAME = "llm-dash"
 PROVIDER_SECRET_NAME = "llmdash.provider.api_key"
 EXA_SECRET_NAME = "llmdash.exa.api_key"
+# Request the longest broker grant lifetime Voidware currently accepts.
 MAX_GRANT_TTL = "120d"
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -100,10 +101,8 @@ def broker_status() -> dict[str, Any]:
         return {
             "available": False,
             "cli_available": False,
-            "cli": "",
             "persistence": "",
             "error_code": "cli_unavailable",
-            "message": "Voidware CLI is not installed or configured.",
             "grant_ttl": MAX_GRANT_TTL,
         }
     payload = _run(["auth", "broker", "status", *_context_flags(), "--json"], timeout=8)
@@ -111,10 +110,8 @@ def broker_status() -> dict[str, Any]:
     return {
         "available": bool(payload.get("ok")),
         "cli_available": True,
-        "cli": " ".join(cmd),
         "persistence": str(data.get("persistence") or ""),
         "error_code": str(payload.get("errorCode") or ""),
-        "message": _redact(str(payload.get("error") or "")),
         "grant_ttl": MAX_GRANT_TTL,
     }
 
