@@ -102,7 +102,7 @@ No explicit budget provided. Stop for hard blockers only: secret exposure risk, 
 - [x] 3.5 Update TODO/LOGBOOK and process plan with remaining verification findings.
 **Helpers:** Native explorer, native phase planner, native plan reviewer, native final reviewer; optional nano-agent for CSS dead-selector searches.
 **Verification:** `node --check web/app.js`; `python3 -m compileall server.py scripts`; `git diff --check`; stale docs/CSS searches; headed responsive smoke at 1366x768, 820x1180, and 390x844 plus mobile drawer Escape behavior.
-**Checkpoint:** Pending commit.
+**Checkpoint:** `78806dd` pushed.
 **Notes:** Full desktop/tablet/mobile evidence matrix remains in Stage 4. Stage 3 focused on stale docs/CSS cleanup and responsive smoke rather than final visual sign-off.
 
 ## Stage 4 - Verification and Evidence
@@ -135,7 +135,7 @@ No explicit budget provided. Stop for hard blockers only: secret exposure risk, 
 | 0 | `4aa6105`, `00e9b1c` | Pushed | `git diff --check` passed for setup and AGENTS split | Branch/process setup, then AGENTS/update-dashboard split. |
 | 1 | `d81ac94` | Pushed | `node --check`; `python3 -m compileall`; CSS checksum spot-check; isolated auth redaction; headed browser smoke | Foundation and auth boundary. |
 | 2 | `b1f80ac` | Pushed | `node --check`; `python3 -m compileall`; `git diff --check`; isolated `/api/provider` redaction; headed browser smoke | Area migrations. |
-| 3 | Pending | Pending | `node --check`; `python3 -m compileall`; `git diff --check`; stale-reference search; responsive browser smoke | Polish/responsive/docs. |
+| 3 | `78806dd` | Pushed | `node --check`; `python3 -m compileall`; `git diff --check`; stale-reference search; responsive browser smoke | Polish/responsive/docs. |
 | 4 | Pending | Pending | Pending | Evidence and final readiness. |
 
 ## Verification Matrix
