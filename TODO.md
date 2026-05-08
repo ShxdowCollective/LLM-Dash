@@ -45,25 +45,45 @@ enrichment + score-range schema hardening) settled.
 Goal: the dashboard already shows *current* state well. Phase 9.x makes it
 useful for comparing across time and sharing results.
 
+Each milestone has a detailed execution plan under `docs/plans/`. Plans were
+written 2026-05-08 with Exa-backed research, native code-explorer subagents,
+and a Codex review pass. Implementation can start at any milestone — 9.2
+depends on 9.1's export builder for the `e` shortcut only; 9.3 is fully
+independent.
+
 ### Phase 9.1 — Data exploration
 
-- [ ] Sparklines of each model's score trajectory in the Table view.
-- [ ] Per-model score trend chart inside the DetailPanel.
-- [ ] Diff view between any two changelog dates.
+Plan: [docs/plans/2026-05-08-phase-9-1-data-exploration.md](docs/plans/2026-05-08-phase-9-1-data-exploration.md)
+
+- [ ] Sparklines of each model's score trajectory in the Table view (inline
+  SVG, hand-rolled, no new dependency).
+- [ ] Per-model score trend chart inside the DetailPanel (multi-series uPlot,
+  separate `state.detailUplots` map so the Stats scheduler doesn't wipe it).
+- [ ] Diff view between any two changelog dates (internal tab inside
+  `renderChangelog()`, hash-state shareable).
 - [ ] Markdown-exportable single-model report (frontmatter + score history +
   citations pulled from changelog notes).
 
 ### Phase 9.2 — Power-user UX
 
-- [ ] Keyboard shortcuts: `/` search, `j/k` row nav, `e` export, `r` refresh.
+Plan: [docs/plans/2026-05-08-phase-9-2-power-user-ux.md](docs/plans/2026-05-08-phase-9-2-power-user-ux.md)
+
+- [ ] Keyboard shortcuts: `/` search, `j/k` row nav, `e` export, `r` refresh
+  (single global keydown handler with input/modal/wizard guards; no library).
+- [ ] `GET /api/meta` endpoint (declared before the `/` static mount).
 - [ ] Auto-poll `meta.last_updated` every ~15s and show a "new data
-  available" toast that swaps the active state without a page reload.
+  available" toast that swaps the active state via `reloadDB()` — no page
+  reload. Reuses unused `vw-toast-*` voidware classes.
 
 ### Phase 9.3 — Stats page enrichment
 
-- [ ] Agent Provider leaderboard on the Stats page: cost-per-word,
-  words-per-dollar, fastest wall-clock, grouped by `agent` and
-  `agent_runtime`.
+Plan: [docs/plans/2026-05-08-phase-9-3-stats-leaderboard.md](docs/plans/2026-05-08-phase-9-3-stats-leaderboard.md)
+
+- [ ] Agent Provider leaderboard section on the Stats page: cost-per-word,
+  words-per-dollar, and `min(duration_sec)` (fastest run) grouped by
+  `(agent_name, agent_runtime)`. Conservative `n ≥ 3` discipline threshold
+  for fastest-run; NULL-safe cost math; `formatMicroCost` helper for
+  fractional-cent values; sort persisted via existing `UI_STATE_KEY`.
 
 ## Completed History
 

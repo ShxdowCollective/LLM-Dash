@@ -4,6 +4,96 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 062 — 2026-05-08
+
+**Agent:** Claude Opus 4.7 (driftwave, shxdow-flow planning pass)
+**Cycle:** Phase 9 prep
+**Task:** Write detailed execution plans for the active backlog milestones,
+have Codex review them, fold suggestions back in.
+
+---
+
+Backlog state coming into this session: Phase 8.12 (docs sync) just wrapped,
+Phase 9.1/9.2/9.3 stubs were already promoted to TODO during 8.12 but had no
+plans yet. This pass turns each into a ship-ready doc.
+
+**Research route:**
+- Three native `feature-dev:code-explorer` subagents (parallel) — one per
+  Phase 9 milestone. Returned file:line refs for the Table view, DetailPanel,
+  Changelog view, Stats page, `groupMetricsByAgent`, `renderUplotChart`, the
+  unused vendor toast CSS, `handleRefresh()`, `applyStoredUIState`, plus the
+  exact `run_metrics` and `model_scores` schemas.
+- Four parallel Exa searches: SVG sparkline libraries, keyboard-shortcut
+  libraries, sql.js IndexedDB persistence patterns, leaderboard statistical
+  rigor (CIs, sample-size, error bars on evals).
+
+**Plans written:**
+- `docs/plans/2026-05-08-phase-9-1-data-exploration.md` — sparklines (SVG,
+  no dep), DetailPanel multi-series uPlot trend chart (new helper, separate
+  `state.detailUplots` so the Stats scheduler doesn't wipe it), Compare tab
+  inside `renderChangelog()` with hash-state share-links, Markdown
+  single-model report with citation extraction from changelog bodies.
+- `docs/plans/2026-05-08-phase-9-2-power-user-ux.md` — single global keydown
+  handler with input/modal/wizard guards (no library), `state.focusedRowIndex`
+  for `j/k` table nav, `r` mirrors `handleRefresh()`, new `/api/meta` route
+  declared before the `/` static mount, 15-s visibility-aware poll, toast
+  primitive over the unused `vw-toast-*` vendor classes, in-place
+  `reloadDB()` swap on click.
+- `docs/plans/2026-05-08-phase-9-3-stats-leaderboard.md` — new
+  `renderAgentLeaderboard` section between Averages and Time Series, extends
+  `groupMetricsByAgent` with `minDuration`/`durations`/paired cost+word
+  sums, `formatMicroCost` helper for fractional-cent values, `n ≥ 3`
+  threshold for fastest-run, sort persisted in existing `UI_STATE_KEY`.
+
+**Codex review (gpt-5-codex) caught real issues:**
+- 9.1: `renderUplotChart` is single-series — required a new
+  `renderMultiSeriesChart` helper. Cleanup wiring named a `closeDetailPanel`
+  function that doesn't exist (real path is `toggleModelSelection` /
+  `renderSingleModelCard`). DetailPanel uPlots would have been wiped by the
+  Stats `scheduleChartDraw` if stored in the same `state.uplots` map. The
+  diff view assumed `changed_json` was an array of `{model, field, from, to}`
+  — actual SQL column shape is `{score_updates: [{name, field, new, ...}],
+  status_changes: [{name, to, ...}]}`. Hash state for Compare needed an
+  explicit `parseHashRoute`/`hashForRoute` extension.
+- 9.2: `r` shortcut linked the wrong line; clarified it routes through
+  `handleRefresh()` exclusively, not `openManualRefreshModal`. `/api/meta`
+  must be declared before the `/` static mount or it's shadowed. Toast
+  de-dupe needed an explicit `uiToastShownFor`/`uiToastHandle` pair.
+- 9.3: `formatCurrency` collapses fractional-cent values to `$0.00` —
+  added `formatMicroCost`. "Fastest" was inconsistently min vs median
+  across header / sort / summary — locked to **min** everywhere, with
+  median in the row tooltip. Sort key `llmdash:stats:leaderboard:sort` had
+  no load path — folded into existing `UI_STATE_KEY` block.
+
+All Codex findings folded into the plans. Three plans now ready for
+implementation.
+
+**Files changed:**
+- `docs/plans/2026-05-08-phase-9-1-data-exploration.md` (new, ~310 lines)
+- `docs/plans/2026-05-08-phase-9-2-power-user-ux.md` (new, ~270 lines)
+- `docs/plans/2026-05-08-phase-9-3-stats-leaderboard.md` (new, ~200 lines)
+- `TODO.md` — Phase 9.x sections now link to the plans, and each checkpoint
+  carries one-line context cribbed from the plans.
+- `LOGBOOK.md` — this entry.
+
+**Verification:**
+- `node --check web/app.js` and `python3 -m py_compile server.py` —
+  unchanged source, both still pass (sanity).
+- Markdown link spot-checks across the three plans and TODO updates — all
+  internal references resolve.
+- Spot-checked Codex's flagged file:line refs against the live source:
+  `handleRefresh` at `web/app.js:1652`, `formatCurrency` at `web/app.js:775`,
+  `applyStoredUIState` at `web/app.js:584`, `UI_STATE_KEY` at
+  `web/app.js:115`, `changed_json` write site at `scripts/run_update.py:330`
+  — all confirmed accurate.
+
+**?** Decision committed in 9.1: Compare lives as an internal tab inside
+`renderChangelog()`, not as a global subpage. Decision committed in 9.3:
+"fastest run" ranks by `min(duration_sec)`, with `median` reserved for the
+tooltip context.
+
+---
+
 ## Entry 061 — 2026-05-08
 
 **Agent:** Claude Opus 4.7 (saltline, review pass)
