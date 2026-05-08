@@ -25,6 +25,7 @@ Done checkpoints:
 - [x] Stay vanilla HTML/CSS/JS; vendor Voidware CSS as static files.
 - [x] Review and harden the plan with native subagents plus a pro nanoagent.
 - [x] Add full broker-backed Voidware auth requirements to the plan.
+- [x] Start shxdowloop execution branch and process plan.
 
 Open implementation:
 

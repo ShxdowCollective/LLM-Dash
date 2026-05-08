@@ -1,0 +1,173 @@
+# Phase 8.10.1 shxdowloop
+
+**Goal:** Execute Phase 8.10.1 from `docs/plans/M8_10_1_VOIDWARE_APP_SHELL_PLAN.md`: rebuild LLM-Dash into a Voidware 0.8.3 app shell with broker-backed auth, compact settings pages, responsive navigation, screenshot/probe verification, and minimal docs sync.
+
+**Mode:** Normal
+**Handle:** vesperline
+**Agent:** gpt-5-codex
+**Runtime:** codex-cli
+**Started:** 2026-05-07 21:33:39 PDT (-0700)
+
+## Preflight Results and Degraded Paths
+
+- Workspace: `/home/phxntom/Repos/LLM-Dash`, read-write.
+- Branch before approval: `main...origin/main`, clean worktree.
+- Remote: `origin https://github.com/phxntomkid/LLM-Dash.git`, reachable.
+- Docs paths: `docs:ok`, `docs/plans:ok`.
+- Target plan: `docs/plans/M8_10_1_VOIDWARE_APP_SHELL_PLAN.md`.
+- Tools available: `npm`, Node v22.14.0, Python 3.13.5, `pip`, `agent-browser`, nano-agent wrapper.
+- Degraded paths: no root `package.json` scripts, no global `pytest`, no global `ruff`.
+- Browser baseline: no CDP listener on `:9222`; memory had about 10 GiB available.
+- `shxdowTracker`: Claude session 0%, weekly 3%; Codex session 23%, weekly 26%. Neither provider at or above 70%.
+- Auth/network prompts: none encountered during preflight.
+- Repo instruction note: `AGENTS.md` says not to touch `web/` for daily benchmark update runs. Phase 8.10.1 is explicitly a frontend overhaul and the user approved this phase after preflight, so this loop treats the phase-specific plan as the active scope while preserving append-only changelog/data rules.
+
+## Branch and Remote
+
+- Branch: `shxdowloop/2026-05-07/phase-8-10-1`
+- Base: `main`
+- Remote push: `origin/shxdowloop/2026-05-07/phase-8-10-1`
+- PR URL hint: `https://github.com/phxntomkid/LLM-Dash/pull/new/shxdowloop/2026-05-07/phase-8-10-1`
+
+## Runtime Budget
+
+No explicit budget provided. Stop for hard blockers only: secret exposure risk, broker/auth commands that would require live user approval or mutate real credentials, production deploys, irreversible schedule changes, or a contradiction that cannot be resolved conservatively.
+
+## Helper Routing
+
+- Native-first route for exploration, stage planning, plan review, and final stage review.
+- Nano-agent fallback only for small directed chores, noisy searches, or if native usage pressure rises above the 70% threshold for both Claude and Codex.
+- Nano-agent wrapper: `/home/phxntom/.codex/skills/nano-agents/scripts/nano-agent.sh`.
+- Nano-agent was not warmed in preflight because no nano-only override was requested and native usage pressure was low.
+- Main agent owns all integrated edits, verification, commits, pushes, and final judgment.
+- Implementation helpers may be used only on isolated scopes. `web/app.js` and `web/style.css` remain main-agent integrated files unless a later stage records a safer split.
+
+## Stage/Phase Outline
+
+## Stage 0 - Loop Setup
+
+**Status:** Complete
+**Goal:** Create the review branch, write the loop plan, sync TODO/LOGBOOK, and checkpoint the setup.
+**Phases:**
+- [x] 0.1 Run gated preflight and receive human proceed.
+- [x] 0.2 Create and push the dedicated branch.
+- [x] 0.3 Write this process plan.
+- [x] 0.4 Update TODO/LOGBOOK for the loop start.
+- [ ] 0.5 Commit and push setup checkpoint.
+**Helpers:** Main agent only.
+**Verification:** `git status --short`, `git diff --check`.
+**Checkpoint:** Pending.
+**Notes:** No application code changes in this stage.
+
+## Stage 1 - Foundation and Auth Boundary
+
+**Status:** Pending
+**Goal:** Establish Voidware 0.8.3 assets, app-shell HTML, state routing, and broker-backed auth plumbing without completing visual polish.
+**Phases:**
+- [ ] 1.1 Audit existing frontend/server/config contracts and Voidware source availability.
+- [ ] 1.2 Vendor Voidware CSS with provenance and checksum verification.
+- [ ] 1.3 Rewrite `web/index.html` into the Voidware app shell skeleton.
+- [ ] 1.4 Add area/subpage state routing and shell render hooks in `web/app.js`.
+- [ ] 1.5 Add server-side Voidware auth wrapper and provider/Exa status endpoints without exposing grants or secrets.
+**Helpers:** Native explorer, native phase planner, native plan reviewer, native final reviewer.
+**Verification:** `node --check web/app.js`; `python3 -m compileall server.py scripts`; Voidware vendor checksum/provenance check; focused auth redaction probes where available.
+**Checkpoint:** Pending.
+**Notes:** Do not mutate real provider, Exa, keyring, auth file, or schedule state.
+
+## Stage 2 - Area Migrations
+
+**Status:** Pending
+**Goal:** Move Models, Changelog, Stats, and Settings into the app shell with compact sub-pages and retained behavior.
+**Phases:**
+- [ ] 2.1 Migrate Models table/chart/detail/filter controls into the Models area.
+- [ ] 2.2 Migrate Changelog and Stats into area renderers with compact headers and retained SQL/data behavior.
+- [ ] 2.3 Split Settings into Provider, Models, Research, and Schedule sub-pages.
+- [ ] 2.4 Add broker auth status/migration UI for provider and Exa without leaking sensitive values.
+- [ ] 2.5 Remove old global chrome render paths after replacement behavior is covered.
+**Helpers:** Native explorer, native phase planner, native plan reviewer, native final reviewer. Execution remains main-agent integrated unless a phase can be safely isolated.
+**Verification:** `node --check web/app.js`; browser smoke test for all areas; API smoke tests for provider/Exa status; no console errors.
+**Checkpoint:** Pending.
+**Notes:** Preserve SQL queries, state data shapes where practical, and existing update/run behavior.
+
+## Stage 3 - Visual Polish, Responsive Contracts, and Docs Sync
+
+**Status:** Pending
+**Goal:** Reduce duplicate CSS, tighten copy/typography, complete mobile/tablet navigation, and update docs that would be actively wrong.
+**Phases:**
+- [ ] 3.1 Replace duplicated tokens/components in `web/style.css` with app-specific Voidware overrides.
+- [ ] 3.2 Add responsive sidebar/drawer, mobile CTA, subnav, and focus/reduced-motion behavior.
+- [ ] 3.3 Polish copy and visual hierarchy across table, chart, changelog, stats, settings, update, and setup surfaces.
+- [ ] 3.4 Minimal docs sync for Voidware 0.8.3, app-shell IA, and broker-backed auth.
+- [ ] 3.5 Update TODO/LOGBOOK and process plan with remaining verification findings.
+**Helpers:** Native explorer, native phase planner, native plan reviewer, native final reviewer; optional nano-agent for CSS dead-selector searches.
+**Verification:** `node --check web/app.js`; `python3 -m compileall server.py scripts`; static searches for old chrome/classes; browser smoke test.
+**Checkpoint:** Pending.
+**Notes:** Keep cards only where they frame repeated items, modals, or real tools.
+
+## Stage 4 - Verification and Evidence
+
+**Status:** Pending
+**Goal:** Prove the phase with syntax checks, browser screenshots, overflow/accessibility probes, auth redaction checks, docs/TODO/LOGBOOK sync, and final review.
+**Phases:**
+- [ ] 4.1 Run syntax and Python compile verification.
+- [ ] 4.2 Start the local server safely and run headed `agent-browser` screenshots for desktop, laptop, tablet, and mobile.
+- [ ] 4.3 Save screenshots and probe artifacts under `artifacts/phase-8-10-1-app-shell/`.
+- [ ] 4.4 Run overflow, clipped text, console error, focus, reduced-motion, and secret-redaction probes.
+- [ ] 4.5 Final diff review, TODO/LOGBOOK/process-plan sync, checkpoint commit, and push.
+**Helpers:** Native final reviewer; optional nano-agent for artifact inventory or probe log summaries.
+**Verification:** Full matrix below.
+**Checkpoint:** Pending.
+**Notes:** If auth broker requires live approval, record the blocked path and verify non-mutating status/redaction behavior only.
+
+## Helper Roles and Iteration Stop Conditions
+
+- Explorer stops when relevant files, contracts, risks, and test hooks are identified.
+- Phase planner stops when each stage has ordered file-level edits and verification commands.
+- Plan reviewer stops after returning actionable issues only, or no findings.
+- Final reviewer stops after checking request alignment, regressions, tests, security, docs/TODO/LOGBOOK/process-plan sync, and checkpoint readiness.
+- Execution iteration stops after two failed verification attempts for the same stage; the stage is then marked Blocked with evidence unless a small obvious fix remains.
+
+## Checkpoint Log
+
+| Stage | Commit | Push | Verification | Notes |
+|---|---|---|---|---|
+| 0 | Pending | Pending | Pending | Branch and plan setup only. |
+| 1 | Pending | Pending | Pending | Foundation and auth boundary. |
+| 2 | Pending | Pending | Pending | Area migrations. |
+| 3 | Pending | Pending | Pending | Polish/responsive/docs. |
+| 4 | Pending | Pending | Pending | Evidence and final readiness. |
+
+## Verification Matrix
+
+| Area | Command or Check | Expected Signal |
+|---|---|---|
+| JS syntax | `node --check web/app.js` | Exit 0 |
+| Python syntax | `python3 -m compileall server.py scripts` | Exit 0 |
+| CSS provenance | Compare vendored Voidware files against `~/Repos/voidware/src/css/` when available | Matching checksum for copied files |
+| Server smoke | Start local server with isolated config/auth roots where supported | App loads and API routes respond |
+| Browser screenshots | Headed `agent-browser` captures at 1920x1080, 1366x768, 820x1180, 390x844 | Saved artifacts, no blank or clipped primary surfaces |
+| UI probes | Overflow, clipped text, console errors, focus order, reduced motion | No blocking findings |
+| Auth safety | Search API/log/screenshot artifacts for grants/secrets patterns such as `vwgr_` | No leaks |
+| Git hygiene | `git diff --check`; final diff review | No whitespace errors or unrelated edits |
+
+## Open Risks
+
+- The app is a monolithic vanilla JS/CSS frontend, so large edits can regress unrelated behavior.
+- `AGENTS.md` frontend boundary is written for daily benchmark update runs; this phase intentionally edits frontend files.
+- Voidware source or CLI may be absent or newer than the pinned 0.8.3 expectation.
+- Broker grant approval may need an external approval surface and should not be forced unattended.
+- Existing pytest/ruff commands are not globally available; verification should use available repo-local or compile/smoke checks unless dependencies are installed safely.
+- Browser verification must remain headed and sequential to avoid WSL/CDP resource issues.
+
+## Merge Readiness Checklist
+
+- [ ] Dedicated branch pushed.
+- [ ] Stage checkpoints committed and pushed.
+- [ ] No old changelog files modified or deleted.
+- [ ] No `data/dash.sqlite` or append-only score history modified.
+- [ ] Voidware vendor provenance recorded.
+- [ ] Broker grants/secrets never exposed in browser responses, logs, changelogs, screenshots, or artifacts.
+- [ ] Desktop, laptop, tablet, and mobile screenshots captured.
+- [ ] Overflow, clipped text, console, focus, reduced-motion, and auth redaction probes passed or have documented blockers.
+- [ ] `TODO.md`, `LOGBOOK.md`, and relevant docs are synced.
+- [ ] Final reviewer has no blocking findings.
