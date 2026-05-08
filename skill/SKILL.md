@@ -19,7 +19,10 @@ Follow this skill end-to-end, no shortcuts.
 - Scoring rubric: 0–10 normalized across `intelligence`, `coding`, `agents`,
   `speed`, `cost`. Never invent a score. Every score claim cites a URL in the
   prose.
-- Architecture reference: [../docs/plans/IMPLEMENTATION_PLAN.md](../docs/plans/IMPLEMENTATION_PLAN.md).
+- Architecture reference: [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
+  The frozen v1 plan at
+  [../docs/plans/IMPLEMENTATION_PLAN.md](../docs/plans/IMPLEMENTATION_PLAN.md)
+  is kept as a Phase 0–5 baseline only.
 
 ## 1. Preflight
 
@@ -129,7 +132,9 @@ Build this JSON in memory. Do not hallucinate any field.
 Rules:
 - `color`: reuse the vendor's existing color if they're already tracked;
   pick a fresh hex for a new vendor and document it in `notes`.
-- All five scores ∈ [0.0, 10.0].
+- All five scores ∈ [0.0, 10.0]. The schema enforces this with CHECK
+  constraints (`schema_version` 2); a write outside the range will fail the
+  transaction.
 - `changelog_markdown` is the **body** of the `.md` (no frontmatter — that's
   step 6; no Run Metadata footer — that's step 6 too).
 
@@ -341,4 +346,6 @@ codex  "<paste>"
 gemini "<paste>"
 ```
 
-Scheduled: a Claude Code `/schedule` trigger fires daily with the same prompt.
+Scheduled: an OS-level scheduled job (systemd timer on Linux/WSL, launchd on
+macOS, Task Scheduler on Windows) installed by the setup wizard runs
+`scripts/run_update.py` at the configured cadence with the same prompt.

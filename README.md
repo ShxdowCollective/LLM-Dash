@@ -130,7 +130,8 @@ provider, research, and schedule configuration.
 
 ### Automated (Agent Provider)
 
-After completing the setup wizard, click **Refresh** in the dashboard header.
+After completing the setup wizard, click **Refresh** in the dashboard
+sidebar footer.
 The app dispatches `skill/SKILL.md` to your configured provider via the OpenAI
 Agents SDK. Progress streams live in an overlay.
 
@@ -180,13 +181,15 @@ LLM-Dash/
 │   └── YYYY-MM-DD.md
 │
 ├── scripts/
-│   ├── schema.sql         # SQLite DDL
-│   ├── config.py          # Provider config + Voidware broker credential layer
-│   ├── init_db.py         # First-run DB seeder
-│   ├── run_update.py      # Agents SDK update executor
+│   ├── schema.sql                # SQLite DDL
+│   ├── config.py                 # Provider config + credential pipeline (env → broker → keyring → auth-file)
+│   ├── voidware_auth.py          # Voidware broker client (primary credential layer)
+│   ├── init_db.py                # First-run DB seeder
+│   ├── migrate_score_checks.py   # 0–10 score CHECK constraint migration (schema_version 2)
+│   ├── run_update.py             # Agents SDK update executor
 │   ├── export_metrics_csv.py
-│   ├── schedule_job.py    # OS-level job installer
-│   └── launch_server.py   # Silent-mode server manager
+│   ├── schedule_job.py           # OS-level job installer
+│   └── launch_server.py          # Silent-mode server manager
 │
 ├── skill/
 │   └── SKILL.md           # Agent-agnostic update contract

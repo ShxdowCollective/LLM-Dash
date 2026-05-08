@@ -118,6 +118,21 @@ per changelog date. The Stats view visualizes this data.
 Key-value store for housekeeping. Current keys: `last_updated` (ISO datetime),
 `schema_version`, `seed_version`.
 
+#### Schema Versioning
+
+`meta.schema_version` tracks the on-disk DDL contract. The current version is
+**2** (Phase 8.11): every `model_scores` benchmark column carries a
+`CHECK (col IS NULL OR (col BETWEEN 0 AND 10))` constraint, so any score
+outside that range fails the transaction at write time, not just the agent
+contract.
+
+Migration is automatic and idempotent. `scripts/migrate_score_checks.py` runs
+on FastAPI startup (`server.py`) and at the top of `scripts/run_update.py`,
+validates existing rows, rebuilds the table with the constraints in place,
+recreates the `v_models_latest` view and indexes, and bumps
+`meta.schema_version` to 2. Fresh installs from `scripts/init_db.py` already
+seed at version 2.
+
 ### Views
 
 #### `v_models_latest`
@@ -150,7 +165,7 @@ changelogs 1──1 run_metrics (via changelog_date)
 | **Chart** | Horizontal bar comparison across models | `v_models_latest` |
 | **Changelog** | Date list + rendered Markdown body | `changelogs` table + `changelogs/*.md` |
 | **Stats** | Token/cost/duration analytics, per-agent breakdowns, time-series charts | `run_metrics` |
-| **Settings** | Provider, Models, Research, Schedule, and Manual Update controls | `/api/provider`, `/api/exa`, `/api/schedule` |
+| **Settings** | Provider, Models, Research, and Schedule subpages, plus a Manual Update card on the Provider subpage and a sidebar-footer Refresh trigger | `/api/provider`, `/api/exa`, `/api/llmstats`, `/api/schedule`, `/api/run-update` |
 
 ### State Management
 
@@ -283,7 +298,7 @@ Re-running an update for the same date upserts rather than duplicates:
 
 | Data | Location | Rationale |
 |---|---|---|
-| API keys | Environment or Voidware broker; legacy keyring/auth-file reads remain migration fallbacks | Secrets never in repo or API responses |
+| Provider, Exa, and LLM Stats API keys | Environment or Voidware broker; legacy keyring/auth-file reads remain migration fallbacks | Secrets never in repo or API responses |
 | Provider base URL, models, headers | `shxdow.llmdash.json` | Non-secret config |
 | Exa API key | Same as provider API key | Same credential pipeline |
 | LLM Stats API key | Same as provider API key | Optional enrichment credential |
@@ -337,5 +352,5 @@ the job entirely.
 | Agent framework | OpenAI Agents SDK | Direct API calls, LangChain | BYOK-compatible, vendor-neutral |
 | Update contract | SKILL.md (agent reads it) | Python `update.py` script | Agent-agnostic; any LLM can follow it |
 | Scheduling | OS-native jobs | Claude Code `/schedule`, cron | Reliable, survives reboots, no dependency on Claude |
-| Credential store | keyring + JSON fallback | env-only, dotenv | Keychain is safer; fallback for headless |
+| Credential store | env → Voidware broker → keyring → JSON fallback | env-only, dotenv | Layered precedence: process env first, then a brokered short-lived grant, with keyring/auth-file kept as legacy migration fallbacks |
 | Chart library | uPlot | Chart.js, plain `<canvas>` | Tiny (52 KB), proper time axes, zero deps |

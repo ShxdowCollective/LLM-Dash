@@ -63,8 +63,11 @@ curl -s http://127.0.0.1:8787/api/prompt | python3 -c "import json,sys; print(js
    - fresh row in `run_metrics` (and mirrored in `data/run_metrics.csv`)
    - `meta.last_updated` moved forward
 4. If that passes, the `/schedule` trigger should do the same thing unattended.
-   For new installs, prefer the Phase 7 OS-level scheduled job once it lands;
-   that path calls `scripts/run_update.py` through your configured Agent Provider.
+   For new installs, prefer the OS-level scheduled job (Phase 7) — systemd timer
+   on Linux/WSL, launchd plist on macOS, or Task Scheduler on Windows. The setup
+   wizard installs it for you, and the same job calls `scripts/run_update.py`
+   through your configured Agent Provider with optional LLM Stats enrichment
+   (Phase 8.11) when a key is present.
 
 ## Changing cadence or prompt
 

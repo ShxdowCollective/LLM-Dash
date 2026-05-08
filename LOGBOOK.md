@@ -4,6 +4,67 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 060 — 2026-05-08
+
+**Agent:** Claude Opus 4.7 (wxlf, shxdow-flow)
+**Cycle:** Phase 8.12
+**Task:** Docs and agent contract pass — sync every Markdown surface, condense
+TODO into forward milestones
+
+---
+
+Ran shxdow-flow with native subagents for exploration/review, pro nano-agents
+(`opencode-go/deepseek-v4-pro`) for bounded doc edits, Codex for final review,
+and main-agent integration of every diff.
+
+**Changed:**
+- `docs/ARCHITECTURE.md`: added Schema Versioning subsection (v2 + CHECK
+  constraints + migration call sites). Refreshed Settings view row to include
+  `/api/llmstats` and the real subpage layout. Updated Key Design Decisions
+  credential store row to reflect env → broker → keyring → auth-file
+  precedence. Tightened Credential storage row label.
+- `docs/DEVELOPMENT.md`: added `scripts/voidware_auth.py` and
+  `scripts/migrate_score_checks.py` to the backend table. Rewrote Schema
+  Changes to point at `migrate_score_checks.py` as the canonical migration
+  example and to require wiring into both `server.py` startup and
+  `scripts/run_update.py`.
+- `README.md`: surfaced `voidware_auth.py` and `migrate_score_checks.py` in
+  the Project Layout block.
+- `skill/SKILL.md`: switched architecture reference from the frozen
+  `IMPLEMENTATION_PLAN.md` to `docs/ARCHITECTURE.md`. Noted that the
+  CHECK-enforced 0–10 score range fails transactions, not just the agent
+  contract.
+- `docs/scheduling.md`: dropped "Phase 7 once it lands" and documented the
+  OS-level scheduled job as the supported first-party path with optional
+  Phase 8.11 LLM Stats enrichment.
+- `docs/update_dashboard.md`: added an Optional Enrichment section pointing
+  at LLM Stats and the `run_metrics.notes` (`llmstats_enriched=true`) flag.
+- `.github/ISSUE_TEMPLATE/bug_report.md`: replaced the Python 3.13 example
+  with a generic `3.10 or newer` prompt.
+- `TODO.md`: collapsed Phase 8.10.1 / 8.11 done-checkpoint detail into
+  Completed History; promoted nice-to-haves into Phase 9.1 (data
+  exploration), Phase 9.2 (power-user UX), and Phase 9.3 (Stats enrichment).
+
+**Verification:**
+- `node --check web/app.js` — passed
+- `python3 -m py_compile` for `server.py`, `scripts/config.py`,
+  `scripts/run_update.py`, `scripts/migrate_score_checks.py`,
+  `scripts/init_db.py`, `scripts/voidware_auth.py` — passed
+- `git diff --check` — no whitespace issues
+- Markdown link sanity script across all in-scope docs — every internal link
+  resolves
+
+**Review route:** native explorer subagent for doc-drift audit, native
+code-reviewer subagent for plan review (5 actionable findings, all folded
+into the plan and executed), pro nano-agents for the six bounded doc passes
+(two passes — ARCHITECTURE.md and SKILL.md — finished only part of the
+scoped work, so the main agent completed those edits directly), Codex final
+review sweep, main-agent final diff review.
+
+**?** None.
+
+---
+
 ## Entry 059 — 2026-05-08
 
 **Agent:** GPT-5 Codex (nightglass, review pass)

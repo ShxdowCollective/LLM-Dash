@@ -1,141 +1,95 @@
 # LLM-Dash Task Board
 
 Rough execution order. Keep this file as the active roadmap: short, current,
-and actionable. Deeper implementation notes belong in `docs/plans/`; handoff
-context belongs in `LOGBOOK.md`.
+and actionable. Per-checkpoint detail lives in `LOGBOOK.md` and the per-phase
+plans under `docs/plans/`. Handoff context belongs in `LOGBOOK.md`.
 
 Use `[x]` for done and `[ ]` for still-open.
 
 ## Active Roadmap
 
-### Phase 8.10.1 - Voidware app shell and UX overhaul
+### Phase 8.12 — Docs and agent contract pass
 
-Plan: [docs/plans/M8_10_1_VOIDWARE_APP_SHELL_PLAN.md](docs/plans/M8_10_1_VOIDWARE_APP_SHELL_PLAN.md)
+Plan: [docs/plans/2026-05-08-phase-8-12-docs-pass-nanoagent-plan.md](docs/plans/2026-05-08-phase-8-12-docs-pass-nanoagent-plan.md)
 
-Depends on: Phase 8.10 Settings backend and functionality
+Goal: bring every Markdown surface back in sync after Phase 8.10.1 (Voidware
+app shell), Phase 8.10 (in-app Settings), and Phase 8.11 (optional LLM Stats
+enrichment + score-range schema hardening) settled.
 
-Voidware: `@shxdowcollective/voidware` 0.8.3
-
-Goal: rebuild the dashboard into a polished, dense, SaaS-grade Voidware app
-instead of continuing to patch the current long-scroll, over-containerized SPA.
-
-Done checkpoints:
-
-- [x] Write the implementation plan before coding.
-- [x] Stay vanilla HTML/CSS/JS; vendor Voidware CSS as static files.
-- [x] Review and harden the plan with native subagents plus a pro nanoagent.
-- [x] Add full broker-backed Voidware auth requirements to the plan.
-- [x] Start shxdowloop execution branch and process plan.
-- [x] Split dashboard-update agent rules into `docs/update_dashboard.md`.
-- [x] Complete Phase 8.10.1 Stage 1 foundation: vendored Voidware CSS, app
-  shell skeleton, route hooks, and broker auth boundary.
-- [x] Complete Phase 8.10.1 Stage 2 area migration: Models, Changelog, Stats,
-  and Settings now render inside the app shell with old global slots removed.
-- [x] Complete Phase 8.10.1 Stage 3 docs/responsive sync: Voidware 0.8.3 docs,
-  stale CSS selector cleanup, and laptop/tablet/mobile smoke screenshots.
-
-Open implementation:
-
-- [x] Replace sticky top navigation with a persistent app shell: left primary
-  nav, compact header/status actions, stable view transitions, and no layout
-  shift between views.
-- [x] Add top sub-page navigation inside primary areas. Settings becomes
-  grouped pages/tabs instead of six stacked collapsible containers.
-- [x] Rework information architecture around Explore/Compare, Changelog,
-  Stats, Settings, and Update/Run controls. Cut duplicate surfaces and move
-  secondary tools behind predictable sub-pages.
-- [x] Rebuild Settings into compact task pages for Agent Provider, Models, Exa,
-  Schedule, Manual Update, and future LLM Stats.
-- [x] Reduce card soup: use cards only for repeated items, modals, and framed
-  tools; prefer workspace regions, tables, toolbars, split panes, and compact
-  forms.
-- [x] Tighten typography and copy so the app reads like a polished operations
-  dashboard: clearer hierarchy, less debug/admin phrasing, and less filler.
-- [x] Establish desktop, tablet, and mobile layout contracts: predictable side
-  nav collapse, reachable subnav, no horizontal clipping, and no giant stacked
-  button walls unless unavoidable.
-- [x] Rebuild mobile navigation/settings for thumb ergonomics: drawer or bottom
-  affordance if needed, short pages, sticky save areas where appropriate, and a
-  visible current location.
-- [x] Restyle table, chart, changelog, stats, detail comparison, run update,
-  setup wizard, and settings views against one cohesive Voidware visual system.
-- [x] Validate with headed screenshots at desktop (1920x1080), laptop
-  (1366x768), tablet (~820x1180), and mobile (390x844). Save artifacts under
-  `artifacts/phase-8-10-1-app-shell/`.
-- [x] Add programmatic UI probes for overflow, clipped text, unreachable
-  controls, console errors, keyboard focus order, and reduced-motion behavior.
-- [x] Update TODO/LOGBOOK after the design plan, after implementation, and
-  after verification. Do not call the UI shippable until screenshots support it.
-
-### Phase 8.11 - Optional LLM Stats enrichment + score hardening
-
-Plan: [docs/plans/M8_11_LLM_STATS_ENRICHMENT_PLAN.md](docs/plans/M8_11_LLM_STATS_ENRICHMENT_PLAN.md)
-
-Goal: enrich update runs with structured model/catalog data from
-[LLM Stats](https://llm-stats.com) while keeping every score claim cited and
-synthesized. Also harden the `model_scores` schema with CHECK constraints.
-
-- [x] Add optional LLM Stats API-key storage using the existing secret boundary.
-- [x] Add bearer-auth connection testing against the Stats API base URL.
-- [x] Use LLM Stats to enrich model catalog, pricing, category-score metadata,
-  and update discovery during agent searches.
-- [x] Keep the update agent responsible for synthesis; every dashboard score or
-  change claim still needs a URL in the changelog.
-- [x] Add optional LLM Stats setup to the wizard and status/test controls to
-  Settings.
-- [x] Record successful LLM Stats enrichment use in run metadata when available.
-- [x] Add score-range schema hardening migration for `model_scores`: validate
-  existing rows, rebuild with `CHECK (col BETWEEN 0 AND 10)` constraints,
-  recreate indexes and view, and bump `meta.schema_version` to 2.
-
-### Phase 8.12 - Docs and agent contract pass
-
-Goal: bring every markdown surface back in sync after Settings, visual polish,
-and optional data-provider work settles.
-
-- [ ] Update `skill/SKILL.md` for current provider setup, optional enrichment,
-  reset behavior, and verification requirements.
-- [ ] Update README, AGENTS, CLAUDE, architecture/development docs, scheduling
-  docs, and stale markdown plans that reference old Data-page or wizard-only
-  configuration flows.
-- [ ] Standardize Settings terminology, API-key storage, optional LLM Stats
-  behavior, Exa behavior, and reset/changelog/log cleanup.
-- [ ] Run a markdown link/path sanity pass.
+- [x] Update `skill/SKILL.md`: switch architecture reference to `docs/ARCHITECTURE.md`
+  and note the schema's CHECK-enforced 0–10 score range.
+- [x] Update `docs/ARCHITECTURE.md`: add Schema Versioning subsection, reflect
+  `/api/llmstats` in the Settings view row, and refresh the Key Design
+  Decisions credential store row.
+- [x] Update `docs/DEVELOPMENT.md`: add `voidware_auth.py` and
+  `migrate_score_checks.py` to the backend table; rewrite Schema Changes to
+  point at the existing migration as the canonical example.
+- [x] Update `README.md`: surface `voidware_auth.py` and
+  `migrate_score_checks.py` in the Project Layout.
+- [x] Update `docs/scheduling.md`: drop the "Phase 7 once it lands" framing
+  and document the OS-level scheduled job as the supported path.
+- [x] Update `docs/update_dashboard.md`: add an Optional Enrichment note
+  pointing at LLM Stats and the `run_metrics.notes` flag.
+- [x] Polish `.github/ISSUE_TEMPLATE/bug_report.md` Python version prompt.
+- [x] Condense `TODO.md`: collapse Phase 8.10.1 / 8.11 done checkpoints into
+  Completed History and promote nice-to-haves to Phase 9.x milestones.
+- [x] Markdown link/path sanity pass over the in-scope docs.
+- [x] Codex final review sweep + main-agent diff review.
 
 ## Active Backlog
 
-(empty — score-range hardening moved to Phase 8.11)
+(empty — open work is grouped under Phase 9.x below.)
 
-## Nice-to-haves
+## Phase 9 — Trend, comparison, and reporting surfaces
 
-- [ ] Sparklines of each model's score trajectory.
-- [ ] Diff view between any two dates.
-- [ ] Markdown-exportable model report.
-- [ ] Keyboard shortcuts (`/` search, `j/k` row nav, `e` export, `r` refresh).
-- [ ] Auto-poll `meta.last_updated` every 15s and show a "new data available"
-  toast.
-- [ ] Agent Provider leaderboard on Stats page: cost-per-word,
-  words-per-dollar, fastest wall-clock.
-- [ ] Per-model score trend chart inside DetailPanel.
+Goal: the dashboard already shows *current* state well. Phase 9.x makes it
+useful for comparing across time and sharing results.
+
+### Phase 9.1 — Data exploration
+
+- [ ] Sparklines of each model's score trajectory in the Table view.
+- [ ] Per-model score trend chart inside the DetailPanel.
+- [ ] Diff view between any two changelog dates.
+- [ ] Markdown-exportable single-model report (frontmatter + score history +
+  citations pulled from changelog notes).
+
+### Phase 9.2 — Power-user UX
+
+- [ ] Keyboard shortcuts: `/` search, `j/k` row nav, `e` export, `r` refresh.
+- [ ] Auto-poll `meta.last_updated` every ~15s and show a "new data
+  available" toast that swaps the active state without a page reload.
+
+### Phase 9.3 — Stats page enrichment
+
+- [ ] Agent Provider leaderboard on the Stats page: cost-per-word,
+  words-per-dollar, fastest wall-clock, grouped by `agent` and
+  `agent_runtime`.
 
 ## Completed History
 
-- [x] Phase 0 - Repo scaffold, agent guides, update contract, implementation
+- [x] Phase 0 — Repo scaffold, agent guides, update contract, implementation
   plan, and core project decisions.
-- [x] Phase 1 - SQLite schema, seed data, changelog seed, metrics CSV export,
+- [x] Phase 1 — SQLite schema, seed data, changelog seed, metrics CSV export,
   and bootstrap `run_metrics` row.
-- [x] Phase 2 - Static frontend with Table, Chart, Changelog, Stats, filters,
+- [x] Phase 2 — Static frontend with Table, Chart, Changelog, Stats, filters,
   freshness pill, sql.js loader, and vendored assets.
-- [x] Phase 3 - Models and metrics CSV exports.
-- [x] Phase 4 - FastAPI static server, first-run bootstrap, prompt API,
+- [x] Phase 3 — Models and metrics CSV exports.
+- [x] Phase 4 — FastAPI static server, first-run bootstrap, prompt API,
   terminal opener, and Refresh modal flow.
-- [x] Phase 5 - POSIX/Windows launchers, scheduling docs, and uPlot stats
+- [x] Phase 5 — POSIX/Windows launchers, scheduling docs, and uPlot stats
   charts.
-- [x] Phase 6 - Agent Provider backend, run-update API, Exa remote MCP wiring,
+- [x] Phase 6 — Agent Provider backend, run-update API, Exa remote MCP wiring,
   provider preset catalog, and Data tab manual prompt escape hatch.
-- [x] Phase 7 - Setup wizard, OS-level scheduling, and Voidware v0.7.1 upgrade.
-- [x] Phase 8.6 - Navigation and panel polish.
-- [x] Phase 8.7 - Multi-model info comparison.
-- [x] Phase 8.8 - Runner and reset reliability.
-- [x] Phase 8.9 - Visual polish and motion pass.
-- [x] Phase 8.10 - In-app Settings backend and UI.
+- [x] Phase 7 — Setup wizard, OS-level scheduling, and Voidware v0.7.1
+  upgrade.
+- [x] Phase 8.6 — Navigation and panel polish.
+- [x] Phase 8.7 — Multi-model info comparison.
+- [x] Phase 8.8 — Runner and reset reliability.
+- [x] Phase 8.9 — Visual polish and motion pass.
+- [x] Phase 8.10 — In-app Settings backend and UI.
+- [x] Phase 8.10.1 — Voidware 0.8.3 app shell and UX overhaul: persistent
+  side nav, grouped Settings sub-pages, responsive desktop/tablet/mobile
+  contracts, and verified screenshot/UI-probe artifacts under
+  `artifacts/phase-8-10-1-app-shell/`.
+- [x] Phase 8.11 — Optional LLM Stats enrichment plus `model_scores` 0–10
+  CHECK-constraint migration and `meta.schema_version` bump to 2.

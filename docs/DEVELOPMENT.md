@@ -74,13 +74,15 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 | File | Responsibility |
 |---|---|
 | `server.py` | FastAPI app: static mounts, API routes, bootstrap, job management |
-| `scripts/config.py` | Provider config + credential read/write (keychain + JSON) |
+| `scripts/config.py` | Provider config + credential pipeline (env → Voidware broker → keyring → legacy auth-file) |
+| `scripts/voidware_auth.py` | Voidware broker client used as the primary credential layer for provider, Exa, and LLM Stats API keys |
 | `scripts/init_db.py` | First-run DB creation from `schema.sql` + 34-model seed |
 | `scripts/run_update.py` | Agent Provider update executor (OpenAI Agents SDK) |
 | `scripts/export_metrics_csv.py` | Regenerates `data/run_metrics.csv` from SQLite |
 | `scripts/schedule_job.py` | OS-level scheduled job installer/remover |
 | `scripts/launch_server.py` | Silent-mode server lifecycle (detach, readiness poll) |
 | `scripts/schema.sql` | DDL source of truth for `data/dash.sqlite` |
+| `scripts/migrate_score_checks.py` | Idempotent migration that adds 0–10 CHECK constraints to `model_scores` and bumps `meta.schema_version` to 2 |
 
 ### Frontend (`web/`)
 
@@ -158,11 +160,15 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 
 ### Schema Changes
 
-1. Update `scripts/schema.sql` with the new DDL
-2. If existing DBs need migration, write a focused migration module or
-   `scripts/init_db.py` helper and call it from startup/update entrypoints
-3. Bump `meta.schema_version`
-4. Test with both fresh DB creation and migration from the previous version
+1. Update `scripts/schema.sql` with the new DDL.
+2. If existing DBs need migration, ship a focused migration module under
+   `scripts/`. Use `scripts/migrate_score_checks.py` as the reference: it
+   validates existing rows, rebuilds the affected table inside a single
+   transaction, recreates indexes/views, and bumps `meta.schema_version`.
+3. Wire the migration into both `server.py` startup and the top of
+   `scripts/run_update.py` so fresh-install and update-run paths converge.
+4. Bump `meta.schema_version` (the current target is `2`).
+5. Test with both fresh DB creation and migration from the previous version.
 
 ### Querying from the Browser
 

@@ -27,7 +27,7 @@ A clear description of the bug.
 ## Environment
 
 - **OS:** (e.g., Windows 11, macOS 15, Ubuntu 24.04)
-- **Python version:** (e.g., 3.13)
+- **Python version:** (3.10 or newer)
 - **Browser:** (e.g., Chrome 130)
 - **Launch method:** (`run.sh` / `run.bat` / `--silent`)
 

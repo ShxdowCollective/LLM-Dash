@@ -17,6 +17,15 @@ the verification checklist in section 10.
 - Manual invocation: `claude "follow skill/SKILL.md"` or your CLI's
   equivalent.
 
+## Optional Enrichment
+
+If an LLM Stats API key is configured (Settings > Research, or set via the
+setup wizard), the runner injects recent model-catalog and update data from
+LLM Stats into the agent prompt as supplementary context. Use it for
+discovery and metadata cross-referencing only — every score claim still needs
+a primary-source URL citation. To verify enrichment ran on a given update,
+check that row's `run_metrics.notes` for `llmstats_enriched=true`.
+
 ## Non-Negotiables
 
 - **Every score claim cites a URL.** No invented numbers, no hallucinated
