@@ -62,6 +62,8 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 | `LLM_DASH_DEFAULT_MODEL` | — | Default model for Agent Provider updates |
 | `LLM_DASH_SHXDOW_ROOT` | `~/.shxdow` | Isolated config/auth root for tests |
 | `EXA_API_KEY` | — | Exa search API key (alternative to wizard config) |
+| `LLM_STATS_API_KEY` | — | Optional LLM Stats enrichment key |
+| `LLM_DASH_LLMSTATS_API_KEY` | — | Alternate LLM-Dash-specific LLM Stats key |
 
 ---
 
@@ -157,7 +159,8 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 ### Schema Changes
 
 1. Update `scripts/schema.sql` with the new DDL
-2. If existing DBs need migration, write a migration function in `scripts/init_db.py`
+2. If existing DBs need migration, write a focused migration module or
+   `scripts/init_db.py` helper and call it from startup/update entrypoints
 3. Bump `meta.schema_version`
 4. Test with both fresh DB creation and migration from the previous version
 

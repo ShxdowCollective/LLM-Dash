@@ -67,23 +67,26 @@ Open implementation:
 - [x] Update TODO/LOGBOOK after the design plan, after implementation, and
   after verification. Do not call the UI shippable until screenshots support it.
 
-### Phase 8.11 - Optional LLM Stats enrichment
+### Phase 8.11 - Optional LLM Stats enrichment + score hardening
+
+Plan: [docs/plans/M8_11_LLM_STATS_ENRICHMENT_PLAN.md](docs/plans/M8_11_LLM_STATS_ENRICHMENT_PLAN.md)
 
 Goal: enrich update runs with structured model/catalog data from
-[LLM Stats](https://docs.llm-stats.com/api-reference/introduction.md) while
-keeping every score claim cited and synthesized.
+[LLM Stats](https://llm-stats.com) while keeping every score claim cited and
+synthesized. Also harden the `model_scores` schema with CHECK constraints.
 
-- [ ] Add optional LLM Stats API-key storage using the existing secret boundary.
-- [ ] Add bearer-auth connection testing against the documented Stats API base
-  URL.
-- [ ] Use LLM Stats to enrich model, cost, ranking, benchmark metadata, and
-  update discovery during agent searches.
-- [ ] Keep the update agent responsible for synthesis; every dashboard score or
+- [x] Add optional LLM Stats API-key storage using the existing secret boundary.
+- [x] Add bearer-auth connection testing against the Stats API base URL.
+- [x] Use LLM Stats to enrich model catalog, pricing, category-score metadata,
+  and update discovery during agent searches.
+- [x] Keep the update agent responsible for synthesis; every dashboard score or
   change claim still needs a URL in the changelog.
-- [ ] Add optional LLM Stats setup to the wizard and status/test controls to
+- [x] Add optional LLM Stats setup to the wizard and status/test controls to
   Settings.
-- [ ] Record whether LLM Stats enrichment was enabled or used in run metadata
-  when available.
+- [x] Record successful LLM Stats enrichment use in run metadata when available.
+- [x] Add score-range schema hardening migration for `model_scores`: validate
+  existing rows, rebuild with `CHECK (col BETWEEN 0 AND 10)` constraints,
+  recreate indexes and view, and bump `meta.schema_version` to 2.
 
 ### Phase 8.12 - Docs and agent contract pass
 
@@ -101,9 +104,7 @@ and optional data-provider work settles.
 
 ## Active Backlog
 
-- [ ] Add score-range schema hardening migration for `model_scores`: validate
-  existing rows, rebuild with `CHECK (col BETWEEN 0 AND 10)` constraints,
-  recreate indexes, and bump `meta.schema_version`.
+(empty — score-range hardening moved to Phase 8.11)
 
 ## Nice-to-haves
 

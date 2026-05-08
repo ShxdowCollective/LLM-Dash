@@ -18,24 +18,30 @@ from typing import Any
 
 try:
     from scripts.config import (
+        LLMSTATS_BASE_URL,
         ConfigError,
         build_auth_headers,
         load_exa_api_key,
+        load_llmstats_api_key,
         load_provider_bundle,
         provider_api_base,
         redact_headers,
         redact_value,
     )
+    from scripts.migrate_score_checks import migrate as migrate_score_checks
 except ModuleNotFoundError:
     from config import (  # type: ignore
+        LLMSTATS_BASE_URL,
         ConfigError,
         build_auth_headers,
         load_exa_api_key,
+        load_llmstats_api_key,
         load_provider_bundle,
         provider_api_base,
         redact_headers,
         redact_value,
     )
+    from migrate_score_checks import migrate as migrate_score_checks  # type: ignore
 
 ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = ROOT / "data" / "dash.sqlite"
@@ -45,6 +51,7 @@ LOGS_DIR = ROOT / "logs"
 AGENT_RUNTIME = "openai-agents"
 EXA_MCP_URL = "https://mcp.exa.ai/mcp"
 MAX_AGENT_TURNS = 50
+LLMSTATS_ENRICHMENT_MAX_CHARS = 8000
 METRICS_COLUMNS = [
     "changelog_date",
     "started_at",
@@ -422,7 +429,9 @@ def apply_update(
             name = str(item.get("name") or "").strip()
             if status not in {"active", "superseded", "deprecated"}:
                 raise RunUpdateError(f"Invalid status: {status}")
-            con.execute("UPDATE models SET status = ?, last_seen = date('now') WHERE name = ?", (status, name))
+            cur = con.execute("UPDATE models SET status = ?, last_seen = date('now') WHERE name = ?", (status, name))
+            if cur.rowcount == 0:
+                raise RunUpdateError(f"Status change references unknown model: {name}")
 
         con.execute(
             """INSERT INTO changelogs (date, title, path, summary, new_models_json, changed_json)
@@ -476,7 +485,7 @@ def apply_update(
                 metrics.get("exa_searches", 0),
                 metrics.get("exa_fetches", 0),
                 metrics.get("word_count"),
-                f"Agent Provider update. Log: {safe_rel_path(log_path)}",
+                metrics.get("notes") or f"Agent Provider update. Log: {safe_rel_path(log_path)}",
             ),
         )
         con.execute(
@@ -643,24 +652,72 @@ async def run_agent_once(model_name: str, prompt: str, exa_key: str, log_path: P
     return str(result.final_output), usage_metrics(result)
 
 
-async def generate_diff(log_path: Path, db_path: Path = DB_PATH) -> tuple[dict[str, Any], dict[str, Any], str]:
+def fetch_llmstats_enrichment(api_key: str, since_date: str | None, log_path: Path) -> str | None:
+    import httpx
+
+    headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json"}
+    results: dict[str, Any] = {}
+    try:
+        with httpx.Client(timeout=15) as client:
+            days = 7
+            if since_date:
+                try:
+                    delta = (dt.date.today() - dt.date.fromisoformat(since_date[:10])).days
+                    days = max(1, min(delta + 1, 30))
+                except ValueError:
+                    pass
+            resp = client.get(f"{LLMSTATS_BASE_URL}/v1/updates", headers=headers, params={"days": str(days)})
+            if resp.status_code == 200:
+                results["updates"] = resp.json()
+
+            resp = client.get(f"{LLMSTATS_BASE_URL}/v1/models", headers=headers, params={"limit": "50"})
+            if resp.status_code == 200:
+                results["models_catalog"] = resp.json()
+    except Exception as exc:
+        write_log(log_path, f"llmstats_enrichment_error={type(exc).__name__}: {exc}")
+        return None
+
+    if not results:
+        write_log(log_path, "llmstats_enrichment_empty")
+        return None
+
+    text = json.dumps(results, ensure_ascii=False)
+    if len(text) > LLMSTATS_ENRICHMENT_MAX_CHARS:
+        text = text[:LLMSTATS_ENRICHMENT_MAX_CHARS] + "…(truncated)"
+    write_log(log_path, f"llmstats_enrichment_ok chars={len(text)}")
+    return text
+
+
+async def generate_diff(log_path: Path, db_path: Path = DB_PATH) -> tuple[dict[str, Any], dict[str, Any], str, bool]:
     bundle = load_provider_bundle()
     if not bundle.has_provider:
         raise ConfigError("Agent Provider requires base_url, api_key, and default_model")
     state = current_state(db_path)
     skill = SKILL_PATH.read_text(encoding="utf-8")
     exa_key = load_exa_api_key()
-    prompt = "\n\n".join(
-        [
-            "Produce today's LLM-Dash update diff as JSON only.",
-            f"Today: {local_date()}",
-            "Current dashboard state JSON:",
-            json.dumps(state, ensure_ascii=False),
-            "SKILL.md contract:",
-            skill,
-            "Required JSON keys: date, title, summary, new_models, score_updates, status_changes, changelog_markdown.",
-        ]
-    )
+    llmstats_key = load_llmstats_api_key()
+
+    prompt_parts = [
+        "Produce today's LLM-Dash update diff as JSON only.",
+        f"Today: {local_date()}",
+        "Current dashboard state JSON:",
+        json.dumps(state, ensure_ascii=False),
+        "SKILL.md contract:",
+        skill,
+        "Required JSON keys: date, title, summary, new_models, score_updates, status_changes, changelog_markdown.",
+    ]
+
+    llmstats_enriched = False
+    if llmstats_key:
+        enrichment = fetch_llmstats_enrichment(llmstats_key, state.get("last_updated"), log_path)
+        if enrichment:
+            llmstats_enriched = True
+            prompt_parts.append(
+                "LLM Stats enrichment data (supplementary context — prefer primary sources for final scoring):"
+            )
+            prompt_parts.append(enrichment)
+
+    prompt = "\n\n".join(prompt_parts)
 
     errors: list[str] = []
     for model_name in [bundle.config.default_model, bundle.config.backup_model]:
@@ -678,13 +735,14 @@ async def generate_diff(log_path: Path, db_path: Path = DB_PATH) -> tuple[dict[s
                         "headers": redact_headers(bundle.config.request_headers),
                         "exa_mcp": True,
                         "exa_auth": "key" if exa_key else "free",
+                        "llmstats_enriched": llmstats_enriched,
                     }
                 ),
             )
             output, usage = await run_agent_once(model_name, prompt, exa_key, log_path)
             update = parse_json_output(output)
             validate_update(update, db_path)
-            return update, usage, model_name
+            return update, usage, model_name, llmstats_enriched
         except Exception as exc:
             errors.append(f"{model_name}: {type(exc).__name__}: {exc}")
             write_log(log_path, f"agent_error model={model_name} error={type(exc).__name__}: {exc}")
@@ -709,6 +767,7 @@ def dry_run(log_path: Path) -> None:
         "provider_key": redact_value(bundle.secrets.api_key),
         "headers": redact_headers(build_auth_headers(bundle)),
         "exa_configured": bool(load_exa_api_key()),
+        "llmstats_configured": bool(load_llmstats_api_key()),
     }
     write_log(log_path, "dry_run " + json.dumps(safe))
     print(json.dumps({"ok": True, **safe}, indent=2))
@@ -737,15 +796,22 @@ def main() -> int:
 
         if not db_path.exists():
             raise RunUpdateError(f"Missing database: {db_path}")
+        if migrate_score_checks(db_path):
+            write_log(log_path, "score_check_migration_applied")
 
+        enriched = False
         if args.diff_json:
             update = json.loads(Path(args.diff_json).read_text(encoding="utf-8"))
+            validate_update(update, db_path)
             usage = {"tokens_input": None, "tokens_output": None, "tokens_cached": None, "cost_usd": None}
             agent_name = "diff-json"
         else:
-            update, usage, agent_name = asyncio.run(generate_diff(log_path, db_path))
+            update, usage, agent_name, enriched = asyncio.run(generate_diff(log_path, db_path))
 
         completed = utc_now()
+        notes_parts = [f"Agent Provider update. Log: {safe_rel_path(log_path)}"]
+        if enriched:
+            notes_parts.append("llmstats_enriched=true")
         metrics = {
             "started_at": iso_z(started),
             "completed_at": iso_z(completed),
@@ -753,6 +819,7 @@ def main() -> int:
             "agent_name": agent_name,
             "exa_searches": 0,
             "exa_fetches": 0,
+            "notes": " ".join(notes_parts),
             **usage,
         }
         apply_update(update, metrics, db_path, log_path, changelogs_dir, csv_path)

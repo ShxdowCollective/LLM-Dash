@@ -15,6 +15,7 @@ from typing import Any
 APP_NAME = "llm-dash"
 PROVIDER_SECRET_NAME = "llmdash.provider.api_key"
 EXA_SECRET_NAME = "llmdash.exa.api_key"
+LLMSTATS_SECRET_NAME = "llmdash.llmstats.api_key"
 # Request the longest broker grant lifetime Voidware currently accepts.
 MAX_GRANT_TTL = "120d"
 ROOT = Path(__file__).resolve().parents[1]

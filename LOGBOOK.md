@@ -4,6 +4,116 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 059 — 2026-05-08
+
+**Agent:** GPT-5 Codex (nightglass, review pass)
+**Cycle:** Phase 8.11 review hardening
+**Task:** Review Phase 8.11 with subagents, fix findings, final review
+
+---
+
+Reviewed Phase 8.11 with backend, frontend, docs, and final-review subagents,
+then patched the real findings.
+
+**Fixed:**
+- Bumped fresh DB `schema_version` to 2 and made score-check migration compare
+  integer versions.
+- Added migration execution to direct `scripts/run_update.py` runs, not only
+  FastAPI startup.
+- Made server startup fail on score migration failure instead of serving stale
+  schema.
+- Hardened bootstrap readiness to validate the DB instead of trusting file
+  existence.
+- Validated `--diff-json` updates before writes and made status changes fail
+  when the target model does not exist.
+- Fixed direct `cd scripts && python3 run_update.py --help` import behavior.
+- Preserved provider `request_headers` when Settings saves provider fields.
+- Cleared Exa/LLM Stats draft secrets and reveal state on key removal.
+- Added wizard step-save guarding and allowed the optional LLM Stats wizard
+  step to continue empty.
+- Added distinct accessible labels for Provider, Exa, and LLM Stats reveal
+  buttons.
+- Redacted LLM Stats/provided secrets from test-connection exception details.
+- Aligned README, TODO, Architecture, Development, plan, and update-contract
+  docs with the actual LLM Stats scope and 0-10 score constraint.
+- Narrowed `.gitignore` so the Phase 8.11 plan is no longer hidden.
+
+**Verification:**
+- `node --check web/app.js`
+- `python3 -m py_compile server.py scripts/config.py scripts/run_update.py scripts/migrate_score_checks.py scripts/init_db.py scripts/voidware_auth.py`
+- `git diff --check`
+- Migration copy test: first run migrates, second run is idempotent, schema
+  version is 2, and score 11 is rejected.
+- Bad `--diff-json` status-change probe fails before writing.
+- Provider and LLM Stats test-connection exception probes redact injected fake
+  secrets from 502 details.
+- `cd scripts && ../.venv/bin/python run_update.py --help` succeeds.
+- Headed `agent-browser` smoke for Settings > Research with env-only fake
+  Provider/Exa/LLM Stats: both research credential sections render, reveal
+  buttons have distinct labels, and console/page errors are clean. Screenshot:
+  `artifacts/phase-8-11-review/settings-research-fixed.png`.
+- Setup wizard opened in first-run mode; provider test failure exposed Skip and
+  enabled the next-step path without browser errors.
+
+**Review route:** native subagents for backend, frontend, docs, and final diff.
+Final reviewer findings were fixed except for staging state: new files remain
+untracked until commit time (`scripts/migrate_score_checks.py` and the Phase
+8.11 plan).
+
+**?** None.
+
+---
+
+## Entry 058 — 2026-05-07
+
+**Agent:** Claude Opus 4.6 (shxdow-flow)
+**Cycle:** Phase 8.11
+**Task:** Optional LLM Stats enrichment + score-range schema hardening
+
+---
+
+Implemented Phase 8.11 end-to-end using shxdow-flow with nano-agent exploration,
+native subagent plan review, and Codex final review.
+
+**Changed:**
+- Added LLM Stats API key storage to `scripts/config.py` and
+  `scripts/voidware_auth.py`, following the existing Exa credential pattern
+  (env → broker → keyring/auth-file fallback).
+- Added `POST/DELETE /api/llmstats` and `GET /api/llmstats/test-connection`
+  endpoints to `server.py`. Updated `_redact_known_secrets` to cover the new key.
+- Updated `scripts/run_update.py` to fetch enrichment from LLM Stats
+  `/v1/updates` and `/v1/models` when a key is configured, injecting it into the
+  agent prompt (capped at 8000 chars). Records `llmstats_enriched=true` in notes.
+- Replaced the disabled placeholder in `web/app.js` Settings > Research with a
+  functional LLM Stats section (save/remove/test-connection, broker/credential
+  status display).
+- Added LLM Stats as wizard step 4 (between Exa and Schedule). Wizard now has
+  7 steps. All hardcoded step indices were shifted and audited.
+- Updated `skill/SKILL.md` to document optional LLM Stats enrichment context.
+- Added `scripts/migrate_score_checks.py`: rebuilds `model_scores` with
+  `CHECK (col BETWEEN 0 AND 10)` constraints, recreates indexes and the
+  `v_models_latest` view, and bumps `meta.schema_version` to 2.
+- Updated `scripts/schema.sql` DDL with the CHECK constraints.
+- Wired auto-migration into `server.py` startup with logged warnings on failure.
+- Wrote implementation plan at `docs/plans/M8_11_LLM_STATS_ENRICHMENT_PLAN.md`.
+
+**Verification:**
+- `node --check web/app.js` — passed
+- `python3 -m py_compile` for all modified Python files — passed
+- `git diff --check` — no whitespace issues
+- Migration tested on copy of database: constraints enforced, idempotent
+- CHECK constraint rejects score of 11.0 — confirmed
+- Wizard step audit: all 17 step-number references verified correct
+- No API keys leak through `public_provider_state()` or log tails
+
+**Review route:** native subagent plan review (8 findings, all addressed), Codex
+final diff review (2 actionable findings: migration logging improved, Exa
+test-connection confirmed as pre-existing gap not a regression).
+
+**?** None.
+
+---
+
 ## Entry 057 — 2026-05-07
 
 **Agent:** GPT-5 Codex (vesperline, shxdowloop)

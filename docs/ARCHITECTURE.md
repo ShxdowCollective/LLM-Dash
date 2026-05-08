@@ -49,7 +49,7 @@ daily changelogs. It separates **writing** (AI agent update runs) from
 │                                                                     │
 │  Browser app (web/)                                                 │
 │   • sql.js loads dash.sqlite into WASM-SQLite                       │
-│   • Five views: Table, Chart, Changelog, Stats, Data                │
+│   • App areas: Models, Changelog, Stats, Settings                   │
 │   • Complex filtering via parameterized SQL                         │
 │   • Offline-capable once loaded                                     │
 └─────────────────────────────────────────────────────────────────────┘
@@ -97,7 +97,7 @@ Append-only score history. Each row records five benchmark dimensions
 (`intelligence`, `coding`, `agents`, `speed`, `cost`) for a `(model_id, as_of)`
 pair. Re-running an update for the same date upserts via the `UNIQUE` constraint.
 
-Scores are normalized to a 1.0–10.0 scale. Every score claim in a changelog
+Scores are normalized to a 0.0–10.0 scale. Every score claim in a changelog
 must cite a source URL.
 
 #### `changelogs`
@@ -218,6 +218,9 @@ Three explicit mounts maintain the frontend's fetch contract:
 | `/api/provider/models` | GET | Fetch + normalize available models from provider |
 | `/api/provider/test-model` | POST | Short-prompt roundtrip to verify model access |
 | `/api/exa` | POST | Save Exa API key |
+| `/api/exa` | DELETE | Remove Exa API key |
+| `/api/llmstats` | POST/DELETE | Save/remove optional LLM Stats API key |
+| `/api/llmstats/test-connection` | GET | Test LLM Stats bearer-auth catalog access |
 | `/api/schedule` | GET/POST/DELETE | Manage OS-level scheduled update jobs |
 | `/api/run-update` | POST | Kick off a background update via Agents SDK |
 | `/api/run-update/{id}` | GET | Poll update job status + log tail |
@@ -283,6 +286,7 @@ Re-running an update for the same date upserts rather than duplicates:
 | API keys | Environment or Voidware broker; legacy keyring/auth-file reads remain migration fallbacks | Secrets never in repo or API responses |
 | Provider base URL, models, headers | `shxdow.llmdash.json` | Non-secret config |
 | Exa API key | Same as provider API key | Same credential pipeline |
+| LLM Stats API key | Same as provider API key | Optional enrichment credential |
 
 API keys are **never** returned in API responses, logged, or written to any
 on-disk trace outside the credential store. Broker requests use stdin for secret

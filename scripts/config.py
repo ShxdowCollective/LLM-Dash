@@ -11,7 +11,10 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from scripts import voidware_auth
+try:
+    from scripts import voidware_auth
+except ModuleNotFoundError:
+    import voidware_auth  # type: ignore
 
 APP_NAME = "llmdash"
 KEYRING_SERVICE = "shxdow.llmdash"
@@ -29,6 +32,9 @@ BACKUP_MODEL_ENVS = ("LLM_DASH_BACKUP_MODEL", "BACKUP_MODEL")
 REQUEST_HEADERS_ENV = "LLM_DASH_REQUEST_HEADERS_JSON"
 ENDPOINT_MODE_ENV = "LLM_DASH_ENDPOINT_MODE"
 EXA_API_KEY_ENVS = ("EXA_API_KEY", "LLM_DASH_EXA_API_KEY")
+LLMSTATS_KEY_NAME = "LLM_STATS_API_KEY"
+LLMSTATS_API_KEY_ENVS = ("LLM_STATS_API_KEY", "LLM_DASH_LLMSTATS_API_KEY")
+LLMSTATS_BASE_URL = "https://api.llm-stats.com/stats"
 
 SENSITIVE_HEADER_PARTS = ("authorization", "api-key", "apikey", "x-api-key", "token", "secret", "key")
 ENDPOINT_MODE_APPEND_V1 = "append_v1"
@@ -357,6 +363,7 @@ def public_provider_state() -> dict[str, Any]:
     bundle = load_provider_bundle()
     provider_auth = _credential_source(PROVIDER_API_KEY_ENVS, PROVIDER_KEY_NAMES, voidware_auth.PROVIDER_SECRET_NAME)
     exa_auth = _credential_source(EXA_API_KEY_ENVS, EXA_KEY_NAME, voidware_auth.EXA_SECRET_NAME)
+    llmstats_auth = _credential_source(LLMSTATS_API_KEY_ENVS, LLMSTATS_KEY_NAME, voidware_auth.LLMSTATS_SECRET_NAME)
     return {
         "has_provider": bundle.has_provider,
         "base_url": bundle.config.base_url,
@@ -367,11 +374,13 @@ def public_provider_state() -> dict[str, Any]:
         "backup_model": bundle.config.backup_model,
         "endpoint_mode": bundle.config.endpoint_mode,
         "exa_configured": bool(load_exa_api_key()),
+        "llmstats_configured": bool(load_llmstats_api_key()),
         "auth": {
             "precedence": ["env", "voidware-broker", "keyring-legacy", "auth-file-legacy"],
             "broker": voidware_auth.broker_status(),
             "provider": provider_auth,
             "exa": exa_auth,
+            "llmstats": llmstats_auth,
         },
     }
 
@@ -494,6 +503,32 @@ def save_exa_api_key(api_key: str) -> None:
 def remove_exa_api_key() -> None:
     try:
         voidware_auth.delete_secret(voidware_auth.EXA_SECRET_NAME)
+    except voidware_auth.VoidwareAuthError as exc:
+        raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
+
+
+def load_llmstats_api_key() -> str:
+    return _read_secret(LLMSTATS_API_KEY_ENVS, LLMSTATS_KEY_NAME, voidware_auth.LLMSTATS_SECRET_NAME)
+
+
+def save_llmstats_api_key(api_key: str) -> None:
+    secret = str(api_key or "").strip()
+    if not secret:
+        raise ConfigError("api_key is required")
+    try:
+        voidware_auth.write_secret(
+            voidware_auth.LLMSTATS_SECRET_NAME,
+            secret,
+            metadata={"label": "LLM-Dash LLM Stats", "envVar": LLMSTATS_KEY_NAME},
+            custom={"app": APP_NAME, "kind": "llmstats"},
+        )
+    except voidware_auth.VoidwareAuthError as exc:
+        raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
+
+
+def remove_llmstats_api_key() -> None:
+    try:
+        voidware_auth.delete_secret(voidware_auth.LLMSTATS_SECRET_NAME)
     except voidware_auth.VoidwareAuthError as exc:
         raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
 

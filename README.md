@@ -45,7 +45,8 @@
 - **Stats & analytics** — token usage, cost tracking, duration metrics, and
   per-agent breakdowns across every update run.
 - **Setup wizard** — first-run walkthrough configures your BYOK provider,
-  models, Exa API key, and OS-level scheduling in under two minutes.
+  models, Exa API key, optional LLM Stats enrichment, and OS-level scheduling
+  in under two minutes.
 - **Agent-agnostic updates** — any AI agent (Claude, Codex, Gemini, etc.)
   follows `skill/SKILL.md` to research, score, and commit new data.
 - **Zero build step** — vanilla HTML/CSS/JS served by a tiny FastAPI server.
@@ -124,7 +125,8 @@ Historical `changelogs/*.md`, Voidware broker grants/secrets, legacy
 ## How Updates Work
 
 LLM-Dash separates **reading** (the dashboard) from **writing** (AI agents).
-The UI is read-only; all data changes come from update runs.
+Benchmark data changes come from update runs; Settings only writes local
+provider, research, and schedule configuration.
 
 ### Automated (Agent Provider)
 

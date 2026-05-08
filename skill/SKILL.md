@@ -16,7 +16,7 @@ Follow this skill end-to-end, no shortcuts.
 - Changelogs: `changelogs/YYYY-MM-DD.md`. **Append-only.** Never modify prior files.
 - Run metrics: `run_metrics` table in SQLite + a human-readable mirror at
   `data/run_metrics.csv`.
-- Scoring rubric: 1–10 normalized across `intelligence`, `coding`, `agents`,
+- Scoring rubric: 0–10 normalized across `intelligence`, `coding`, `agents`,
   `speed`, `cost`. Never invent a score. Every score claim cites a URL in the
   prose.
 - Architecture reference: [../docs/plans/IMPLEMENTATION_PLAN.md](../docs/plans/IMPLEMENTATION_PLAN.md).
@@ -66,6 +66,15 @@ Goal: find every newsworthy LLM release and benchmark update since
 
 For the top ~20 results across queries, pull full text. Skip paywalls. Skip
 aggregators citing themselves.
+
+### LLM Stats enrichment (optional)
+
+If an LLM Stats API key is configured, the update runner injects recent model
+catalog and update data from LLM Stats into your prompt as supplementary
+context. Use this data for discovery (new model releases you might otherwise
+miss), cross-referencing metadata (pricing, parameter counts, release dates),
+and benchmark score context. Prefer primary sources for final scoring — every
+dashboard score still needs a URL citation in the changelog prose.
 
 ### Triage
 
@@ -120,7 +129,7 @@ Build this JSON in memory. Do not hallucinate any field.
 Rules:
 - `color`: reuse the vendor's existing color if they're already tracked;
   pick a fresh hex for a new vendor and document it in `notes`.
-- All five scores ∈ [1.0, 10.0].
+- All five scores ∈ [0.0, 10.0].
 - `changelog_markdown` is the **body** of the `.md` (no frontmatter — that's
   step 6; no Run Metadata footer — that's step 6 too).
 

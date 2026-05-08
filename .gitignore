@@ -6,7 +6,8 @@ logs/
 
 # Local-only docs (kept on disk, not in repo)
 LOGBOOK.md
-docs/plans/
+docs/plans/*
+!docs/plans/M8_11_LLM_STATS_ENRICHMENT_PLAN.md
 docs/logbooks/
 
 # Generated data (recreated on first launch)

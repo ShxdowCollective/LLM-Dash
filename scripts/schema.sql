@@ -23,11 +23,11 @@ CREATE TABLE model_scores (
     id              INTEGER PRIMARY KEY,
     model_id        INTEGER NOT NULL REFERENCES models(id) ON DELETE CASCADE,
     as_of           TEXT NOT NULL,
-    intelligence    REAL,
-    coding          REAL,
-    agents          REAL,
-    speed           REAL,
-    cost            REAL,
+    intelligence    REAL CHECK (intelligence IS NULL OR (intelligence BETWEEN 0 AND 10)),
+    coding          REAL CHECK (coding IS NULL OR (coding BETWEEN 0 AND 10)),
+    agents          REAL CHECK (agents IS NULL OR (agents BETWEEN 0 AND 10)),
+    speed           REAL CHECK (speed IS NULL OR (speed BETWEEN 0 AND 10)),
+    cost            REAL CHECK (cost IS NULL OR (cost BETWEEN 0 AND 10)),
     source_notes    TEXT,
     UNIQUE (model_id, as_of)
 );

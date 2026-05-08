@@ -15,25 +15,30 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from scripts import voidware_auth
 from scripts.config import (
+    LLMSTATS_BASE_URL,
     ConfigError,
     ProviderBundle,
     ProviderConfig,
     ProviderSecrets,
     build_auth_headers,
     load_exa_api_key,
+    load_llmstats_api_key,
     load_provider_bundle,
     normalize_base_url,
     normalize_endpoint_mode,
     public_provider_state,
     remove_exa_api_key,
+    remove_llmstats_api_key,
     remove_provider_api_key,
     save_exa_api_key,
+    save_llmstats_api_key,
     save_provider,
 )
+from scripts.migrate_score_checks import migrate as migrate_score_checks
 from scripts.schedule_job import ScheduleError, apply_schedule, remove_schedule, status as schedule_status
 
 ROOT = Path(__file__).resolve().parent
@@ -69,7 +74,7 @@ class ProviderPayload(BaseModel):
     default_model: str = ""
     backup_model: str = ""
     endpoint_mode: str = "append_v1"
-    request_headers: dict[str, str] = Field(default_factory=dict)
+    request_headers: dict[str, str] | None = None
 
 
 class TestModelPayload(BaseModel):
@@ -77,6 +82,10 @@ class TestModelPayload(BaseModel):
 
 
 class ExaPayload(BaseModel):
+    api_key: str
+
+
+class LLMStatsPayload(BaseModel):
     api_key: str
 
 
@@ -119,6 +128,12 @@ def _redact_known_secrets(text: str) -> str:
         exa_key = load_exa_api_key()
         if exa_key:
             secrets.append(exa_key)
+    except Exception:
+        pass
+    try:
+        llmstats_key = load_llmstats_api_key()
+        if llmstats_key:
+            secrets.append(llmstats_key)
     except Exception:
         pass
     redacted = text
@@ -252,6 +267,10 @@ def _last_updated() -> str | None:
     return row[0] if row else None
 
 
+def _database_ready() -> bool:
+    return _last_updated() is not None
+
+
 def _run_bootstrap() -> None:
     try:
         result = subprocess.run(
@@ -273,10 +292,10 @@ def _run_bootstrap() -> None:
         )
         return
 
-    if not DB_PATH.exists():
+    if not _database_ready():
         _set_bootstrap_state(
             "error",
-            "Bootstrap finished, but dash.sqlite never appeared.",
+            "Bootstrap finished, but dash.sqlite was not queryable.",
             _tail_output(result.stdout, result.stderr),
         )
         return
@@ -287,12 +306,17 @@ def _run_bootstrap() -> None:
 def ensure_bootstrap_started() -> None:
     global _bootstrap_thread
 
-    if DB_PATH.exists() and _bootstrap_state["state"] != "initializing":
+    if _bootstrap_state["state"] == "initializing" and _bootstrap_thread and _bootstrap_thread.is_alive():
+        return
+
+    if _database_ready() and _bootstrap_state["state"] != "initializing":
         _set_bootstrap_state("ready", "Dashboard database ready.", "")
         return
 
     with _bootstrap_lock:
-        if DB_PATH.exists():
+        if _bootstrap_thread and _bootstrap_thread.is_alive():
+            return
+        if _database_ready():
             _bootstrap_state["state"] = "ready"
             _bootstrap_state["message"] = "Dashboard database ready."
             _bootstrap_state["detail"] = ""
@@ -367,6 +391,13 @@ def _open_terminal(cwd: Path) -> str | None:
 @app.on_event("startup")
 def _startup() -> None:
     ensure_bootstrap_started()
+    if DB_PATH.exists():
+        try:
+            migrate_score_checks(DB_PATH)
+        except Exception as exc:
+            import logging
+            logging.getLogger("llm-dash").warning("score-check migration skipped: %s", exc)
+            raise
 
 
 @app.get("/api/prompt")
@@ -425,7 +456,7 @@ def post_provider(payload: ProviderPayload) -> dict[str, Any]:
             default_model=payload.default_model,
             backup_model=payload.backup_model,
             endpoint_mode=payload.endpoint_mode,
-            request_headers=payload.request_headers,
+            request_headers=payload.request_headers if payload.request_headers is not None else load_provider_bundle().config.request_headers,
         )
         return public_provider_state()
     except ConfigError as exc:
@@ -439,7 +470,7 @@ async def test_provider_connection() -> dict[str, Any]:
     except ConfigError as exc:
         raise _http_error(exc)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(status_code=502, detail=_redact_known_secrets(str(exc)))
     return {"ok": status_code == 200, "status_code": status_code, "models_count": len(_normalize_models(payload))}
 
 
@@ -450,7 +481,7 @@ async def test_provider_connection_payload(payload: ProviderPayload) -> dict[str
     except ConfigError as exc:
         raise _http_error(exc)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(status_code=502, detail=str(exc).replace(key, "***"))
     return {"ok": status_code == 200, "status_code": status_code, "models_count": len(_normalize_models(body))}
 
 
@@ -461,7 +492,7 @@ async def provider_models() -> dict[str, Any]:
     except ConfigError as exc:
         raise _http_error(exc)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(status_code=502, detail=str(exc).replace(key, "***"))
     if status_code != 200:
         raise HTTPException(status_code=502, detail=f"Provider models endpoint returned {status_code}.")
     return {"models": _normalize_models(payload)}
@@ -530,6 +561,53 @@ def delete_exa() -> dict[str, Any]:
         raise _http_error(exc)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/llmstats")
+def post_llmstats(payload: LLMStatsPayload) -> dict[str, Any]:
+    try:
+        save_llmstats_api_key(payload.api_key)
+        return {"llmstats_configured": True}
+    except ConfigError as exc:
+        raise _http_error(exc)
+
+
+@app.delete("/api/llmstats")
+def delete_llmstats() -> dict[str, Any]:
+    try:
+        remove_llmstats_api_key()
+        return {"llmstats_configured": False}
+    except ConfigError as exc:
+        raise _http_error(exc)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/llmstats/test-connection")
+async def test_llmstats_connection() -> dict[str, Any]:
+    import httpx
+
+    key = load_llmstats_api_key()
+    if not key:
+        raise HTTPException(status_code=400, detail="LLM Stats API key is not configured.")
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.get(
+                f"{LLMSTATS_BASE_URL}/v1/models",
+                headers={"Authorization": f"Bearer {key}", "Accept": "application/json"},
+                params={"limit": "1"},
+            )
+        try:
+            data: Any = response.json()
+        except ValueError:
+            data = {}
+        models_count = 0
+        if isinstance(data, dict):
+            items = data.get("data") or data.get("models") or []
+            models_count = len(items) if isinstance(items, list) else 0
+        return {"ok": response.status_code == 200, "status_code": response.status_code, "models_count": models_count}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc).replace(key, "***"))
 
 
 @app.delete("/api/provider/key")

@@ -96,12 +96,13 @@
   });
   const BOOTSTRAP_POLL_MS = 1000;
   const RUN_UPDATE_POLL_MS = 3000;
-  const WIZARD_STEPS = ["Provider", "Models", "Test", "Exa", "Schedule", "Summary"];
+  const WIZARD_STEPS = ["Provider", "Models", "Test", "Exa", "LLM Stats", "Schedule", "Summary"];
   const WIZARD_SUBTITLES = [
     "Connect to your LLM provider",
     "Choose default and backup models",
     "Verify your models work",
     "Enable web research with Exa",
+    "Enrich updates with LLM Stats data",
     "Set automatic update frequency",
     "Review and finish setup",
   ];
@@ -185,6 +186,7 @@
       backup_model: "",
       endpoint_mode: "append_v1",
       exa_configured: false,
+      llmstats_configured: false,
       _fetching: false,
     },
     providerPresets: {
@@ -236,6 +238,10 @@
       exaKey: "",
       exaSkipped: false,
       exaAlreadyConfigured: false,
+      llmstatsKey: "",
+      llmstatsSkipped: false,
+      llmstatsAlreadyConfigured: false,
+      stepSaving: false,
       scheduleCadence: "off",
       scheduleDayOfWeek: 1,
       scheduleDayOfMonth: 1,
@@ -303,6 +309,15 @@
       scheduleDayOfMonth: 1,
       showApiKey: false,
       showExaKey: false,
+      llmstatsSaving: false,
+      llmstatsRemoving: false,
+      llmstatsConfirmRemove: false,
+      draftLLMStatsKey: "",
+      llmstatsStatus: "",
+      llmstatsStatusTone: "idle",
+      showLLMStatsKey: false,
+      llmstatsTesting: false,
+      llmstatsTestResult: null,
     },
     manualRefreshModal: {
       open: false,
@@ -1075,6 +1090,10 @@
       exaKey: "",
       exaSkipped: false,
       exaAlreadyConfigured: Boolean(state.provider.exa_configured),
+      llmstatsKey: "",
+      llmstatsSkipped: false,
+      llmstatsAlreadyConfigured: Boolean(state.provider.llmstats_configured),
+      stepSaving: false,
       scheduleCadence,
       scheduleDayOfWeek: Number(state.schedule.day_of_week || 1),
       scheduleDayOfMonth: Number(state.schedule.day_of_month || 1),
@@ -1227,6 +1246,17 @@
     state.wizard.exaAlreadyConfigured = state.provider.exa_configured;
   }
 
+  async function saveWizardLLMStats() {
+    if (!state.wizard.llmstatsKey.trim() || state.wizard.llmstatsAlreadyConfigured || state.wizard.llmstatsSkipped) return;
+    const payload = await fetchJson("/api/llmstats", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: state.wizard.llmstatsKey.trim() }),
+    });
+    state.provider.llmstats_configured = Boolean(payload.llmstats_configured);
+    state.wizard.llmstatsAlreadyConfigured = state.provider.llmstats_configured;
+  }
+
   async function saveWizardSchedule() {
     state.wizard.scheduleState = "saving";
     state.wizard.scheduleError = "";
@@ -1257,8 +1287,10 @@
   }
 
   async function wizardNext() {
-    if (state.wizard.saving) return;
+    if (state.wizard.saving || state.wizard.stepSaving) return;
     state.wizard.saveError = "";
+    state.wizard.stepSaving = true;
+    render();
     try {
       if (state.wizard.step === 0) {
         await saveProviderFromWizard(false);
@@ -1286,24 +1318,36 @@
       }
       if (state.wizard.step === 2) {
         if (state.wizard.modelTestState !== "success") return;
-        state.wizard.step = state.wizard.exaAlreadyConfigured ? 4 : 3;
+        var nextAfterTest = 3;
+        if (state.wizard.exaAlreadyConfigured) nextAfterTest = state.wizard.llmstatsAlreadyConfigured ? 5 : 4;
+        state.wizard.step = nextAfterTest;
         render();
         return;
       }
       if (state.wizard.step === 3) {
         await saveWizardExa();
-        state.wizard.step = 4;
+        state.wizard.step = state.wizard.llmstatsAlreadyConfigured ? 5 : 4;
         render();
         return;
       }
       if (state.wizard.step === 4) {
-        await saveWizardSchedule();
+        if (!state.wizard.llmstatsAlreadyConfigured && !state.wizard.llmstatsKey.trim()) {
+          state.wizard.llmstatsSkipped = true;
+        }
+        await saveWizardLLMStats();
         state.wizard.step = 5;
         render();
         return;
       }
       if (state.wizard.step === 5) {
+        await saveWizardSchedule();
+        state.wizard.step = 6;
+        render();
+        return;
+      }
+      if (state.wizard.step === 6) {
         state.wizard.saving = true;
+        state.wizard.stepSaving = false;
         render();
         await fetchProvider();
         await fetchSchedule();
@@ -1314,11 +1358,16 @@
       state.wizard.saving = false;
       state.wizard.saveError = String((error && error.message) || error);
       render();
+    } finally {
+      if (state.wizard.open) {
+        state.wizard.stepSaving = false;
+        render();
+      }
     }
   }
 
   function wizardBack() {
-    if (state.wizard.saving || state.wizard.step === 0) return;
+    if (state.wizard.saving || state.wizard.stepSaving || state.wizard.step === 0) return;
     state.wizard.step -= 1;
     render();
     if (state.wizard.step === 1) ensureWizardModelsLoaded();
@@ -1331,10 +1380,14 @@
     } else if (state.wizard.step === 3) {
       if (window.confirm("Skip Exa? Updates can still run, but web research may hit provider limits.")) {
         state.wizard.exaSkipped = true;
-        state.wizard.step = 4;
+        state.wizard.step = state.wizard.llmstatsAlreadyConfigured ? 5 : 4;
         render();
       }
     } else if (state.wizard.step === 4) {
+      state.wizard.llmstatsSkipped = true;
+      state.wizard.step = 5;
+      render();
+    } else if (state.wizard.step === 5) {
       state.wizard.scheduleCadence = "off";
       wizardNext();
     }
@@ -2564,6 +2617,28 @@
     ]);
   }
 
+  function renderWizardLLMStatsStep() {
+    if (state.wizard.llmstatsAlreadyConfigured) {
+      return h("div", { class: "wizard-step-body" }, [
+        wizardStatusChip("success", "LLM Stats already configured"),
+      ]);
+    }
+    return h("div", { class: "wizard-step-body" }, [
+      wizardField("LLM Stats API key", h("input", {
+        id: "wizard-llmstats-key",
+        class: "vw-input",
+        type: "password",
+        value: state.wizard.llmstatsKey,
+        placeholder: "ze_…",
+        oninput: (event) => {
+          state.wizard.llmstatsKey = event.target.value;
+          render();
+        },
+      }), "Optional. Enriches updates with model catalog and benchmark data."),
+      h("a", { class: "wizard-link", href: "https://llm-stats.com/developer", target: "_blank", rel: "noreferrer" }, "Get a key at llm-stats.com"),
+    ]);
+  }
+
   function renderWizardScheduleStep() {
     return h("div", { class: "wizard-step-body" }, [
       h("div", { class: "wizard-segmented" }, ["off", "daily", "weekly", "monthly"].map((cadence) => h("button", {
@@ -2621,6 +2696,7 @@
         h("div", null, [h("span", null, "Default"), h("strong", null, state.wizard.defaultModel || "—")]),
         h("div", null, [h("span", null, "Backup"), h("strong", null, state.wizard.backupModel || "—")]),
         h("div", null, [h("span", null, "Exa"), h("strong", null, state.wizard.exaAlreadyConfigured ? "Configured" : state.wizard.exaSkipped ? "Skipped" : state.wizard.exaKey ? redactSecret(state.wizard.exaKey) : "Skipped")]),
+        h("div", null, [h("span", null, "LLM Stats"), h("strong", null, state.wizard.llmstatsAlreadyConfigured ? "Configured" : state.wizard.llmstatsSkipped ? "Skipped" : state.wizard.llmstatsKey ? redactSecret(state.wizard.llmstatsKey) : "Skipped")]),
         h("div", null, [h("span", null, "Schedule"), h("strong", null, scheduleText)]),
       ]),
     ]);
@@ -2636,13 +2712,14 @@
     if (state.wizard.step === 1) return renderWizardModelsStep();
     if (state.wizard.step === 2) return renderWizardTestStep();
     if (state.wizard.step === 3) return renderWizardExaStep();
-    if (state.wizard.step === 4) return renderWizardScheduleStep();
+    if (state.wizard.step === 4) return renderWizardLLMStatsStep();
+    if (state.wizard.step === 5) return renderWizardScheduleStep();
     return renderWizardSummaryStep();
   }
 
   function wizardCanNext() {
     if (state.wizard.loading) return false;
-    if (state.wizard.saving) return false;
+    if (state.wizard.saving || state.wizard.stepSaving) return false;
     if (state.wizard.step === 0) {
       return Boolean(
         state.wizard.baseUrl &&
@@ -2653,32 +2730,34 @@
     if (state.wizard.step === 1) return Boolean(state.wizard.defaultModel && !state.wizard.modelsLoading);
     if (state.wizard.step === 2) return state.wizard.modelTestState === "success";
     if (state.wizard.step === 3) return state.wizard.exaAlreadyConfigured || Boolean(state.wizard.exaKey);
+    if (state.wizard.step === 4) return true;
     return true;
   }
 
   function renderWizardFooter() {
     const skipVisible = (state.wizard.step === 0 && state.wizard.connectionTestState === "failed") ||
       state.wizard.step === 3 ||
-      state.wizard.step === 4;
+      state.wizard.step === 4 ||
+      state.wizard.step === 5;
     const label = state.wizard.loading
       ? "Loading…"
-      : state.wizard.step === 5
+      : state.wizard.step === 6
       ? state.wizard.saving ? "Finishing…" : "Finish"
-      : state.wizard.step === 4
+      : state.wizard.step === 5
         ? state.wizard.scheduleState === "saving" ? "Saving…" : "Next"
         : "Next";
     return h("div", { class: "wizard-footer" }, [
       h("button", {
         class: "vw-btn vw-btn-tertiary",
         type: "button",
-        disabled: state.wizard.loading || state.wizard.step === 0 || state.wizard.saving,
+        disabled: state.wizard.loading || state.wizard.step === 0 || state.wizard.saving || state.wizard.stepSaving,
         onclick: wizardBack,
       }, "Back"),
       h("div", { class: "wizard-footer-actions" }, [
         skipVisible ? h("button", {
           class: "vw-btn vw-btn-secondary",
           type: "button",
-          disabled: state.wizard.loading || state.wizard.saving,
+          disabled: state.wizard.loading || state.wizard.saving || state.wizard.stepSaving,
           onclick: wizardSkip,
         }, "Skip") : null,
         h("button", {
@@ -3485,7 +3564,8 @@
     ]);
   }
 
-  function passwordFieldWithToggle(id, value, onInput, show, onToggleShow, placeholder) {
+  function passwordFieldWithToggle(id, value, onInput, show, onToggleShow, placeholder, label) {
+    const fieldLabel = label || "API key";
     return h("div", { class: "settings-password-wrap" }, [
       h("input", {
         id: id,
@@ -3499,7 +3579,7 @@
       h("button", {
         class: "vw-btn vw-btn-icon settings-password-toggle",
         type: "button",
-        "aria-label": show ? "Hide" : "Show",
+        "aria-label": (show ? "Hide " : "Show ") + fieldLabel,
         onclick: onToggleShow,
       }, [icon(show ? "eye-off" : "eye")]),
     ]);
@@ -3541,10 +3621,9 @@
       const default_model = (s.draftDefaultModel !== null ? s.draftDefaultModel : state.provider.default_model || "").trim();
       const backup_model = (s.draftBackupModel !== null ? s.draftBackupModel : state.provider.backup_model || "").trim();
       const models_override_url = state.provider.models_override_url || "";
-      const request_headers = state.provider.request_headers || {};
       if (!base_url) throw new Error("Base URL is required");
       if (!default_model) throw new Error("Default model is required");
-      const payload = { base_url, endpoint_mode, default_model, backup_model, models_override_url, request_headers };
+      const payload = { base_url, endpoint_mode, default_model, backup_model, models_override_url };
       if (api_key) payload.api_key = api_key;
       await fetchJson("/api/provider", {
         method: "POST",
@@ -3673,11 +3752,83 @@
       s.exaStatus = "Exa key removed";
       s.exaStatusTone = "success";
       s.exaConfirmRemove = false;
+      s.draftExaKey = "";
+      s.showExaKey = false;
     } catch (error) {
       s.exaStatus = String(error?.message || error);
       s.exaStatusTone = "error";
     } finally {
       s.exaRemoving = false;
+      render();
+    }
+  }
+
+  async function settingsSaveLLMStats() {
+    const s = state.settings;
+    const key = s.draftLLMStatsKey.trim();
+    if (!key) { s.llmstatsStatus = "API key is required"; s.llmstatsStatusTone = "error"; render(); return; }
+    s.llmstatsSaving = true;
+    s.llmstatsStatus = "";
+    render();
+    try {
+      await fetchJson("/api/llmstats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: key }),
+      });
+      await fetchProvider();
+      s.llmstatsStatus = "LLM Stats key saved";
+      s.llmstatsStatusTone = "success";
+      s.draftLLMStatsKey = "";
+    } catch (error) {
+      s.llmstatsStatus = String(error?.message || error);
+      s.llmstatsStatusTone = "error";
+    } finally {
+      s.llmstatsSaving = false;
+      render();
+    }
+  }
+
+  async function settingsRemoveLLMStats() {
+    const s = state.settings;
+    s.llmstatsRemoving = true;
+    s.llmstatsStatus = "";
+    render();
+    try {
+      await fetchJson("/api/llmstats", { method: "DELETE" });
+      await fetchProvider();
+      s.llmstatsStatus = "LLM Stats key removed";
+      s.llmstatsStatusTone = "success";
+      s.llmstatsConfirmRemove = false;
+      s.draftLLMStatsKey = "";
+      s.showLLMStatsKey = false;
+      s.llmstatsTestResult = null;
+    } catch (error) {
+      s.llmstatsStatus = String(error?.message || error);
+      s.llmstatsStatusTone = "error";
+    } finally {
+      s.llmstatsRemoving = false;
+      render();
+    }
+  }
+
+  async function settingsTestLLMStats() {
+    const s = state.settings;
+    s.llmstatsTesting = true;
+    s.llmstatsTestResult = null;
+    s.llmstatsStatus = "";
+    render();
+    try {
+      const result = await fetchJson("/api/llmstats/test-connection");
+      s.llmstatsTestResult = result;
+      s.llmstatsStatus = result.ok ? "Connection successful" : "Connection failed (HTTP " + result.status_code + ")";
+      s.llmstatsStatusTone = result.ok ? "success" : "error";
+    } catch (error) {
+      s.llmstatsTestResult = { ok: false, error: String(error?.message || error) };
+      s.llmstatsStatus = String(error?.message || error);
+      s.llmstatsStatusTone = "error";
+    } finally {
+      s.llmstatsTesting = false;
       render();
     }
   }
@@ -3797,7 +3948,8 @@
           settingsField("API key", passwordFieldWithToggle(
             "settings-api-key", s.draftApiKey, (e) => { s.draftApiKey = e.target.value; }, s.showApiKey,
             () => { s.showApiKey = !s.showApiKey; render(); },
-            state.provider.has_provider ? "••••••••  (leave empty to keep current)" : "Enter API key"
+            state.provider.has_provider ? "••••••••  (leave empty to keep current)" : "Enter API key",
+            "provider API key"
           )),
           renderBrokerStatus(),
           renderCredentialStatus("Provider key", state.provider.auth && state.provider.auth.provider),
@@ -3881,7 +4033,8 @@
           settingsField("API key", passwordFieldWithToggle(
             "settings-exa-key", s.draftExaKey, (e) => { s.draftExaKey = e.target.value; }, s.showExaKey,
             () => { s.showExaKey = !s.showExaKey; render(); },
-            state.provider.exa_configured ? "••••••••  (leave empty to keep current)" : "Enter Exa API key"
+            state.provider.exa_configured ? "••••••••  (leave empty to keep current)" : "Enter Exa API key",
+            "Exa API key"
           )),
           h("div", { class: "settings-actions" }, [
             h("button", { class: "vw-btn vw-btn-primary", type: "button", disabled: s.exaSaving, onclick: settingsSaveExa }, s.exaSaving ? "Saving…" : "Save Exa Key"),
@@ -3901,23 +4054,40 @@
   }
 
   function renderSettingsLLMStatsSection() {
+    const s = state.settings;
     return renderSettingsGroup({
       id: "settings-llmstats",
       title: "LLM Stats",
-      summary: "Coming in Phase 8.11",
+      summary: state.provider.llmstats_configured ? "Configured" : "Not set",
       children: [
-        h("div", { class: "settings-form settings-disabled-section" }, [
-          settingsField("API key", h("input", {
-            class: "vw-input",
-            type: "password",
-            disabled: true,
-            placeholder: "Available in Phase 8.11",
-          })),
+        h("div", { class: "settings-form" }, [
+          h("p", { class: "settings-field-status" }, state.provider.llmstats_configured ? "LLM Stats API key is configured." : "No LLM Stats API key set. Update enrichment will be unavailable."),
+          renderBrokerStatus(),
+          renderCredentialStatus("LLM Stats key", state.provider.auth && state.provider.auth.llmstats),
+          settingsField("API key", passwordFieldWithToggle(
+            "settings-llmstats-key", s.draftLLMStatsKey, (e) => { s.draftLLMStatsKey = e.target.value; }, s.showLLMStatsKey,
+            () => { s.showLLMStatsKey = !s.showLLMStatsKey; render(); },
+            state.provider.llmstats_configured ? "••••••••  (leave empty to keep current)" : "ze_…",
+            "LLM Stats API key"
+          )),
           h("div", { class: "settings-actions" }, [
-            h("button", { class: "vw-btn vw-btn-primary", type: "button", disabled: true }, "Save"),
-            h("button", { class: "vw-btn vw-btn-secondary", type: "button", disabled: true }, "Test Connection"),
+            h("button", { class: "vw-btn vw-btn-primary", type: "button", disabled: s.llmstatsSaving, onclick: settingsSaveLLMStats }, s.llmstatsSaving ? "Saving…" : "Save LLM Stats Key"),
+            state.provider.llmstats_configured ? h("button", {
+              class: "vw-btn vw-btn-secondary", type: "button",
+              disabled: s.llmstatsTesting,
+              onclick: settingsTestLLMStats,
+            }, s.llmstatsTesting ? "Testing…" : "Test Connection") : null,
+            state.provider.llmstats_configured ? h("button", {
+              class: "vw-btn vw-btn-danger", type: "button",
+              disabled: s.llmstatsRemoving,
+              onclick: () => {
+                if (s.llmstatsConfirmRemove) { settingsRemoveLLMStats(); } else { s.llmstatsConfirmRemove = true; render(); }
+              },
+            }, s.llmstatsConfirmRemove ? "Confirm Remove" : "Remove Key") : null,
+            s.llmstatsConfirmRemove ? h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: () => { s.llmstatsConfirmRemove = false; render(); } }, "Cancel") : null,
           ]),
-          h("p", { class: "vw-hint" }, "Optional data enrichment source for model metadata and benchmark data."),
+          settingsStatusChip(s.llmstatsStatus, s.llmstatsStatusTone),
+          h("p", { class: "vw-hint" }, "Optional. Enriches update runs with model catalog and benchmark data from LLM Stats."),
         ]),
       ],
     });
