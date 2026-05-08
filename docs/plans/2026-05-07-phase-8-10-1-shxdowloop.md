@@ -87,7 +87,7 @@ No explicit budget provided. Stop for hard blockers only: secret exposure risk, 
 - [x] 2.5 Remove old global chrome render paths after replacement behavior is covered.
 **Helpers:** Native explorer, native phase planner, native plan reviewer, native final reviewer. Execution remains main-agent integrated unless a phase can be safely isolated.
 **Verification:** `node --check web/app.js`; `python3 -m compileall server.py scripts`; `git diff --check`; isolated `/api/provider` redaction check; headed browser smoke for Models table/chart, Changelog, Stats, Settings Provider, and Settings Research.
-**Checkpoint:** Pending commit.
+**Checkpoint:** `b1f80ac` pushed.
 **Notes:** Preserved SQL queries and data shapes. Removed legacy `#view`, `#filters`, `#detail`, `#view-actions`, and `.controls-bar` DOM slots. User reiterated max token lifetime for Voidware auth, so broker UI now calls out the max grant TTL and the wrapper continues to request `--ttl 120d`.
 
 ## Stage 3 - Visual Polish, Responsive Contracts, and Docs Sync
@@ -134,7 +134,7 @@ No explicit budget provided. Stop for hard blockers only: secret exposure risk, 
 |---|---|---|---|---|
 | 0 | `4aa6105`, `00e9b1c` | Pushed | `git diff --check` passed for setup and AGENTS split | Branch/process setup, then AGENTS/update-dashboard split. |
 | 1 | `d81ac94` | Pushed | `node --check`; `python3 -m compileall`; CSS checksum spot-check; isolated auth redaction; headed browser smoke | Foundation and auth boundary. |
-| 2 | Pending | Pending | `node --check`; `python3 -m compileall`; `git diff --check`; isolated `/api/provider` redaction; headed browser smoke | Area migrations. |
+| 2 | `b1f80ac` | Pushed | `node --check`; `python3 -m compileall`; `git diff --check`; isolated `/api/provider` redaction; headed browser smoke | Area migrations. |
 | 3 | Pending | Pending | Pending | Polish/responsive/docs. |
 | 4 | Pending | Pending | Pending | Evidence and final readiness. |
 
