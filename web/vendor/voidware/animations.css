@@ -1,0 +1,542 @@
+/* ── Registered Custom Properties ───────────────────────── */
+
+@property --vw-orbit-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+/* ── Keyframe Animations ─────────────────────────────────── */
+
+@keyframes vw-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes vw-slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes vw-slide-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes vw-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes vw-msg-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes vw-gear-menu-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes vw-error-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes vw-error-slide-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes vw-toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.95);
+  }
+}
+
+@keyframes vw-typing-pulse {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes vw-thinking-bounce {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes vw-blink-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes vw-pulse-tool {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes vw-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes vw-spinner-fade-in {
+  0%, 59% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes vw-skeleton-shimmer {
+  from { background-position: -120% 0; }
+  to { background-position: 120% 0; }
+}
+
+@keyframes vw-progress-slide {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(260%); }
+}
+
+@keyframes vw-heartbeat {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.025); opacity: 0.82; }
+}
+
+@keyframes vw-outline-orbit {
+  from { --vw-orbit-angle: 0deg; }
+  to { --vw-orbit-angle: 360deg; }
+}
+
+@keyframes vw-outline-pulse {
+  0%, 100% { opacity: 0.72; }
+  50% { opacity: 1; }
+}
+
+@keyframes vw-outline-travel {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -100; }
+}
+
+@keyframes vw-rainbow-sweep {
+  0%   { background-position-x: 0%; }
+  100% { background-position-x: 200%; }
+}
+
+@keyframes vw-iridescent-shift {
+  0% { filter: hue-rotate(0deg) saturate(1.05); }
+  100% { filter: hue-rotate(360deg) saturate(1.25); }
+}
+
+/* Shared perimeter-emphasis host contract for CSS and MUI roots */
+.vw-emphasis-host,
+[data-vw-emphasis],
+.vw-animated-outline,
+.vw-btn-active,
+.vw-btn-generating,
+.vw-status-active,
+.vw-status-generating,
+.vw-card-animated,
+.vw-toast-generating {
+  position: relative;
+  isolation: isolate;
+}
+
+.vw-emphasis-host::before,
+[data-vw-emphasis]::before,
+.vw-animated-outline::before,
+.vw-btn-active::before,
+.vw-btn-generating::before,
+.vw-status-active::before,
+.vw-status-generating::before,
+.vw-card-animated::before,
+.vw-toast-generating::before {
+  content: "";
+  position: absolute;
+  /* Ring sits ON the host's edge (inset: 0, padding carves the inner cutout).
+     Both outer and inner curves share the host's border-radius, so the ring
+     is always concentric — no host-radius guesswork, works on any shape. */
+  inset: 0;
+  border-radius: inherit;
+  padding: var(--vw-outline-width, 1.5px);
+  background: var(--vw-outline-gradient, conic-gradient(from var(--vw-orbit-angle), transparent 0deg 90deg, var(--vw-active-outline) 270deg, transparent 360deg));
+  pointer-events: none;
+  opacity: var(--vw-outline-opacity, 1);
+  animation:
+    vw-outline-orbit var(--vw-outline-duration, 3.8s) linear infinite,
+    vw-outline-pulse var(--vw-outline-pulse-duration, 5.0s) ease-in-out infinite;
+  will-change: opacity;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+/* 75% arc — generic emphasis + status chips */
+.vw-emphasis-accent::before,
+[data-vw-emphasis="accent"]::before,
+.vw-animated-outline-active::before,
+.vw-status-active::before {
+  background: conic-gradient(
+    from var(--vw-orbit-angle),
+    transparent 0deg 90deg,
+    color-mix(in srgb, var(--vw-active-outline) 46%, white 54%) 130deg,
+    var(--vw-active-outline) 225deg,
+    color-mix(in srgb, var(--vw-active-outline) 68%, white 32%) 310deg,
+    transparent 360deg
+  );
+}
+
+/* Full 360° — buttons */
+.vw-btn-active::before {
+  background: conic-gradient(
+    from var(--vw-orbit-angle),
+    color-mix(in srgb, var(--vw-active-outline) 46%, white 54%) 0deg,
+    var(--vw-active-outline) 90deg,
+    color-mix(in srgb, var(--vw-active-outline) 68%, white 32%) 180deg,
+    var(--vw-active-outline) 270deg,
+    color-mix(in srgb, var(--vw-active-outline) 46%, white 54%) 360deg
+  );
+}
+
+/* 75% arc — cards + generic iridescent emphasis */
+.vw-emphasis-iridescent::before,
+[data-vw-emphasis="iridescent"]::before,
+.vw-animated-outline-iridescent::before,
+.vw-status-generating::before,
+.vw-card-animated::before {
+  background: conic-gradient(
+    from var(--vw-orbit-angle),
+    transparent 0deg 60deg,
+    var(--vw-iridescent-1) 95deg,
+    var(--vw-iridescent-2) 135deg,
+    var(--vw-iridescent-3) 175deg,
+    var(--vw-iridescent-4) 215deg,
+    var(--vw-iridescent-5) 255deg,
+    var(--vw-iridescent-6) 295deg,
+    var(--vw-iridescent-7) 335deg,
+    transparent 360deg
+  );
+}
+
+/* Pastel rainbow ring — buttons + toasts.
+   Linear-gradient that sweeps horizontally instead of orbiting; the shared
+   mask rule keeps it pinned to the full perimeter (not just the bottom). */
+.vw-btn-generating::before,
+.vw-toast-generating::before {
+  background: linear-gradient(
+    90deg,
+    var(--vw-iridescent-1),
+    var(--vw-iridescent-2),
+    var(--vw-iridescent-3),
+    var(--vw-iridescent-4),
+    var(--vw-iridescent-5),
+    var(--vw-iridescent-6),
+    var(--vw-iridescent-7),
+    var(--vw-iridescent-1)
+  );
+  background-size: 200% 100%;
+  animation:
+    vw-rainbow-sweep var(--vw-outline-duration, 2.4s) linear infinite,
+    vw-outline-pulse var(--vw-outline-pulse-duration, 3.6s) ease-in-out infinite;
+}
+
+/* Outer glow — drop-shadow follows the masked ring shape, so the halo
+   radiates outward from the border without ever bleeding into the interior. */
+.vw-btn-generating::before,
+.vw-toast-generating::before {
+  filter:
+    drop-shadow(0 0 4px color-mix(in srgb, var(--vw-iridescent-5) 70%, transparent))
+    drop-shadow(0 0 8px color-mix(in srgb, var(--vw-iridescent-7) 55%, transparent));
+}
+
+/* Opt-in: fill ANY host with the sweeping pastel rainbow gradient.
+   Works standalone (cards, chips, callouts) or stacked with
+   `.vw-btn-generating` / `.vw-toast-generating` to layer fill under the ring.
+   `!important` is needed because component stylesheets (buttons, chips,
+   toasts) use the `background` shorthand which would otherwise reset
+   `background-image`. */
+.vw-rainbow-filled {
+  background-color: transparent !important;
+  background-image: linear-gradient(
+    90deg,
+    var(--vw-iridescent-1),
+    var(--vw-iridescent-2),
+    var(--vw-iridescent-3),
+    var(--vw-iridescent-4),
+    var(--vw-iridescent-5),
+    var(--vw-iridescent-6),
+    var(--vw-iridescent-7),
+    var(--vw-iridescent-1)
+  ) !important;
+  background-size: 200% 100% !important;
+  animation: vw-rainbow-sweep var(--vw-rainbow-fill-duration, 3.2s) linear infinite;
+  color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.vw-btn.vw-rainbow-filled {
+  border: none;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset;
+}
+
+/* Toasts set their own `animation` shorthand for the enter pop, which would
+   otherwise clobber the sweep. Compound selector wins on specificity. */
+.vw-toast.vw-rainbow-filled {
+  animation:
+    vw-rainbow-sweep var(--vw-rainbow-fill-duration, 3.2s) linear infinite,
+    vw-modal-in 180ms ease;
+}
+
+.vw-toast.vw-rainbow-filled.dismissing {
+  animation: vw-toast-out 200ms ease forwards;
+}
+
+.vw-emphasis-success::before,
+[data-vw-emphasis="success"]::before {
+  background: conic-gradient(
+    from var(--vw-orbit-angle),
+    transparent 0deg 90deg,
+    color-mix(in srgb, var(--vw-success) 52%, white 48%) 130deg,
+    var(--vw-success) 225deg,
+    color-mix(in srgb, var(--vw-success) 70%, white 30%) 310deg,
+    transparent 360deg
+  );
+}
+
+.vw-emphasis-warning::before,
+[data-vw-emphasis="warning"]::before {
+  background: conic-gradient(
+    from var(--vw-orbit-angle),
+    transparent 0deg 90deg,
+    color-mix(in srgb, var(--vw-warning) 54%, white 46%) 130deg,
+    var(--vw-warning) 225deg,
+    color-mix(in srgb, var(--vw-warning) 72%, white 28%) 310deg,
+    transparent 360deg
+  );
+}
+
+.vw-emphasis-error::before,
+[data-vw-emphasis="error"]::before {
+  background: conic-gradient(
+    from var(--vw-orbit-angle),
+    transparent 0deg 90deg,
+    color-mix(in srgb, var(--vw-error) 50%, white 50%) 130deg,
+    var(--vw-error) 225deg,
+    color-mix(in srgb, var(--vw-error) 68%, white 32%) 310deg,
+    transparent 360deg
+  );
+}
+
+.vw-animated-outline-success::before {
+  background: conic-gradient(
+    from var(--vw-orbit-angle),
+    transparent 0deg 90deg,
+    color-mix(in srgb, var(--vw-success) 52%, white 48%) 130deg,
+    var(--vw-success) 225deg,
+    color-mix(in srgb, var(--vw-success) 70%, white 30%) 310deg,
+    transparent 360deg
+  );
+}
+
+.vw-animated-outline-warning::before {
+  background: conic-gradient(
+    from var(--vw-orbit-angle),
+    transparent 0deg 90deg,
+    color-mix(in srgb, var(--vw-warning) 54%, white 46%) 130deg,
+    var(--vw-warning) 225deg,
+    color-mix(in srgb, var(--vw-warning) 72%, white 28%) 310deg,
+    transparent 360deg
+  );
+}
+
+.vw-animated-outline-error::before {
+  background: conic-gradient(
+    from var(--vw-orbit-angle),
+    transparent 0deg 90deg,
+    color-mix(in srgb, var(--vw-error) 50%, white 50%) 130deg,
+    var(--vw-error) 225deg,
+    color-mix(in srgb, var(--vw-error) 68%, white 32%) 310deg,
+    transparent 360deg
+  );
+}
+
+.vw-emphasis-button,
+[data-vw-emphasis-kind="button"],
+.vw-btn-active,
+.vw-btn-generating {
+  --vw-outline-duration: 3.2s;
+  --vw-outline-pulse-duration: 4.4s;
+  --vw-outline-width: 1.5px;
+}
+
+.vw-btn-generating {
+  --vw-outline-duration: 2.4s;
+  --vw-outline-pulse-duration: 3.6s;
+}
+
+.vw-status-active {
+  --vw-outline-duration: 4.0s;
+  --vw-outline-pulse-duration: 5.4s;
+  --vw-outline-width: 1.25px;
+}
+
+.vw-status-generating {
+  --vw-outline-duration: 2.8s;
+  --vw-outline-pulse-duration: 4.2s;
+  --vw-outline-width: 1.25px;
+}
+
+.vw-emphasis-card,
+[data-vw-emphasis-kind="card"],
+.vw-card-animated {
+  --vw-outline-duration: 6.0s;
+  --vw-outline-pulse-duration: 7.5s;
+  --vw-outline-width: 1.5px;
+}
+
+.vw-emphasis-toast,
+[data-vw-emphasis-kind="toast"],
+.vw-toast-generating {
+  --vw-outline-duration: 2.6s;
+  --vw-outline-pulse-duration: 3.4s;
+  --vw-outline-width: 1.25px;
+}
+
+.vw-emphasis-chip,
+[data-vw-emphasis-kind="chip"] {
+  --vw-outline-duration: 4.0s;
+  --vw-outline-pulse-duration: 5.4s;
+  --vw-outline-width: 1.25px;
+}
+
+/* Cards use a full 360° rainbow instead of a rotating arc. Large surfaces
+   made the arc-and-gap pattern read as broken + speed-varying because a
+   conic sweep covers unequal perimeter distance per degree on a wide rect.
+   Full ring + slow hue-shift avoids the illusion entirely — the whole
+   perimeter glows, colors slowly drift around it. */
+.vw-card-animated::before,
+.vw-emphasis-card::before,
+[data-vw-emphasis-kind="card"]::before {
+  /* Full 7-stop spectrum ring. iridescent-6 (purple) reads darker than its
+     siblings, so we lighten it with a white-mix bridge so the pop colors dominate. */
+  background: conic-gradient(
+    from var(--vw-orbit-angle),
+    var(--vw-iridescent-1) 0deg,
+    var(--vw-iridescent-2) 60deg,
+    var(--vw-iridescent-3) 120deg,
+    var(--vw-iridescent-4) 180deg,
+    var(--vw-iridescent-5) 240deg,
+    color-mix(in srgb, var(--vw-iridescent-6) 55%, white 45%) 300deg,
+    var(--vw-iridescent-7) 330deg,
+    var(--vw-iridescent-1) 360deg
+  );
+  filter:
+    saturate(1.3)
+    brightness(1.08)
+    drop-shadow(0 0 6px color-mix(in srgb, var(--vw-iridescent-5) 55%, transparent))
+    drop-shadow(0 0 12px color-mix(in srgb, var(--vw-iridescent-7) 35%, transparent));
+}
+
+/* Legacy SVG helper — animate stroke travel, never rotate the geometry itself */
+.vw-svg-outline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.vw-svg-outline [data-vw-outline] {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+  stroke-dasharray: 24 76;
+  stroke-dashoffset: 0;
+}
+
+.vw-svg-outline-active [data-vw-outline] {
+  stroke: var(--vw-active-outline);
+  stroke-width: 2;
+  animation: vw-outline-travel 3.0s linear infinite, vw-outline-pulse 4.8s ease-in-out infinite;
+}
+
+.vw-svg-outline-iridescent [data-vw-outline] {
+  stroke: var(--vw-iridescent-1);
+  stroke-width: 2;
+  animation:
+    vw-outline-travel 2.6s linear infinite,
+    vw-outline-pulse 4.4s ease-in-out infinite,
+    vw-iridescent-shift 6.0s linear infinite;
+}
+
+/* ── Reduced Motion ──────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .vw-spinner-delayed {
+    opacity: 1;
+    animation: none;
+  }
+
+  .vw-sidebar.open,
+  .vw-sidebar[data-vw-open="true"] {
+    animation: none;
+  }
+}

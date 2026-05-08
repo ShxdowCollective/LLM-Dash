@@ -1,0 +1,144 @@
+/* ── Buttons ─────────────────────────────────────────────── */
+
+.vw-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 18px;
+  border-radius: 9999px;
+  font-family: var(--vw-font-body);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  border: none;
+  cursor: pointer;
+  transition:
+    background-color var(--vw-transition-fast),
+    box-shadow var(--vw-transition-fast),
+    color var(--vw-transition-fast),
+    transform var(--vw-transition-fast);
+  min-height: unset;
+  text-decoration: none;
+  white-space: nowrap;
+  transform-origin: center;
+
+  &:focus-visible {
+    outline: 2px solid var(--vw-border-focus);
+    outline-offset: 2px;
+  }
+
+  &:disabled,
+  &[disabled] {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  &:hover:not(:disabled):not([disabled]) {
+    transform: scale(1.03);
+  }
+
+  &:active:not(:disabled):not([disabled]) {
+    transform: scale(0.97);
+  }
+}
+
+.vw-btn-compact {
+  border-radius: var(--vw-radius-sm);
+}
+
+/* Primary — inverse surface, dark text, single CTA */
+.vw-btn-primary {
+  background: var(--vw-surface-inverse);
+  color: var(--vw-bg);
+
+  &:hover:not(:disabled) {
+    background: var(--vw-surface-inverse-soft);
+  }
+}
+
+/* Secondary — shadow-ring border, muted text */
+.vw-btn-secondary {
+  background: transparent;
+  color: var(--vw-text-muted);
+  box-shadow: 0 0 0 1px var(--vw-border);
+
+  &:hover:not(:disabled) {
+    box-shadow: 0 0 0 1px var(--vw-border-focus);
+    color: var(--vw-text);
+  }
+}
+
+/* Tertiary — text-link CTA, quiet until hovered */
+.vw-btn-tertiary {
+  background: transparent;
+  color: var(--vw-text-muted);
+  padding: 7px 12px;
+
+  &:hover:not(:disabled):not([disabled]) {
+    color: var(--vw-text);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+
+/* Danger — shadow-ring border, faint text, error-colored hover */
+.vw-btn-danger {
+  background: transparent;
+  color: var(--vw-text-faint);
+  box-shadow: 0 0 0 1px var(--vw-border);
+
+  &:hover:not(:disabled) {
+    color: var(--vw-error);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--vw-error) 40%, transparent 60%);
+  }
+}
+
+/* Icon — 36px circle, icon-only */
+.vw-btn-icon {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--vw-text-muted);
+  box-shadow: 0 0 0 1px var(--vw-border);
+
+  &:hover:not(:disabled) {
+    box-shadow: 0 0 0 1px var(--vw-border-focus);
+    color: var(--vw-text);
+    background: var(--vw-surface-2);
+  }
+}
+
+/* Large — start/launch button treatment */
+.vw-btn-lg {
+  padding: 11px 32px;
+  border-radius: 9999px;
+  font-size: 14px;
+  font-weight: 600;
+
+  &:disabled {
+    background: var(--vw-surface-3);
+    color: var(--vw-text-faint);
+    opacity: 1;
+    box-shadow: none;
+  }
+}
+
+.vw-btn-active,
+.vw-btn-generating {
+  position: relative;
+  isolation: isolate;
+}
+
+.vw-btn-active .vw-svg-outline,
+.vw-btn-generating .vw-svg-outline {
+  inset: -2px;
+  display: none;
+}
+
+.vw-btn-active .vw-svg-outline,
+.vw-btn-generating .vw-svg-outline {
+  display: block;
+}
