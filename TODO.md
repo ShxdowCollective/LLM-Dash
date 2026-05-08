@@ -26,6 +26,9 @@ Done checkpoints:
 - [x] Review and harden the plan with native subagents plus a pro nanoagent.
 - [x] Add full broker-backed Voidware auth requirements to the plan.
 - [x] Start shxdowloop execution branch and process plan.
+- [x] Split dashboard-update agent rules into `docs/update_dashboard.md`.
+- [x] Complete Phase 8.10.1 Stage 1 foundation: vendored Voidware CSS, app
+  shell skeleton, route hooks, and broker auth boundary.
 
 Open implementation:
 

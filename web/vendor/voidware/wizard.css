@@ -1,0 +1,86 @@
+/* ── Wizard Progress ──────────────────────────────────────── */
+
+.vw-wizard-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+
+/* Step dot */
+.vw-wizard-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--vw-surface-3);
+  border: 2px solid var(--vw-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--vw-font-body);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--vw-text-faint);
+  transition:
+    border-color var(--vw-transition-fast),
+    background-color var(--vw-transition-fast),
+    color var(--vw-transition-fast);
+  flex-shrink: 0;
+
+  &:focus-visible {
+    outline: 2px solid var(--vw-border-focus);
+    outline-offset: 2px;
+  }
+}
+
+.vw-wizard-dot.active,
+.vw-wizard-step.active .vw-wizard-dot {
+  border-color: var(--vw-text);
+  background: var(--vw-surface-4);
+  color: var(--vw-text);
+}
+
+.vw-wizard-dot.completed,
+.vw-wizard-step.completed .vw-wizard-dot {
+  border-color: var(--vw-accent);
+  background: rgba(124, 92, 196, 0.12);
+  color: var(--vw-accent);
+}
+
+/* Connecting line between dots */
+.vw-wizard-line {
+  width: 40px;
+  height: 2px;
+  background: var(--vw-border);
+  flex-shrink: 0;
+  transition: background-color var(--vw-transition-fast);
+
+  &.completed {
+    background: var(--vw-accent);
+  }
+}
+
+/* Step label below dot */
+.vw-wizard-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--vw-text-faint);
+  text-align: center;
+  margin-top: 6px;
+}
+
+/* Step container (dot + label stacked) */
+.vw-wizard-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.vw-wizard-step.active .vw-wizard-label {
+  color: var(--vw-text);
+}
+
+.vw-wizard-step.completed .vw-wizard-label {
+  color: var(--vw-accent);
+}

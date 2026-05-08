@@ -1,0 +1,274 @@
+/* ── Status Chips & Work Indicators ────────────────────── */
+
+/* Base status chip — compact pill with semantic coloring */
+.vw-status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  position: relative;
+  padding: 5px 12px;
+  border-radius: 9999px;
+  font-family: var(--vw-font-body);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  border: none;
+  background: transparent;
+  color: var(--vw-text-muted);
+  box-shadow: 0 0 0 1px var(--vw-border);
+  transition:
+    background-color var(--vw-transition-fast),
+    box-shadow var(--vw-transition-fast),
+    color var(--vw-transition-fast);
+
+  &:focus-visible {
+    outline: 2px solid var(--vw-border-focus);
+    outline-offset: 2px;
+  }
+
+  &:disabled,
+  &[disabled] {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+/* Status chip with animated active/generating outline — pure CSS, adapts to any width */
+.vw-status-active,
+.vw-status-generating {
+  position: relative;
+  isolation: isolate;
+  overflow: visible;
+}
+
+/* Semantic status variants */
+.vw-status-success {
+  color: var(--vw-success);
+  box-shadow: 0 0 0 1px var(--vw-success);
+}
+
+.vw-status-error {
+  color: var(--vw-error);
+  box-shadow: 0 0 0 1px var(--vw-error);
+}
+
+.vw-status-warning {
+  color: var(--vw-warning);
+  box-shadow: 0 0 0 1px var(--vw-warning);
+}
+
+/* Generating/in-progress status — use subtle accent highlight */
+.vw-status-generating {
+  color: var(--vw-text);
+  box-shadow: none;
+  background: color-mix(in srgb, var(--vw-accent-dim) 50%, var(--vw-bg) 50%);
+}
+
+/* Active — pulsing accent ring that stretches with content */
+@keyframes vw-active-pulse {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 0.25; }
+}
+.vw-status-active::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  padding: 1.5px;
+  background: var(--vw-accent);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  animation: vw-active-pulse 2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Generating — rotating accent arc, stretches with content */
+@property --vw-gen-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes vw-gen-spin {
+  to { --vw-gen-angle: 360deg; }
+}
+.vw-status-generating::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--vw-gen-angle),
+    transparent 0%,
+    color-mix(in srgb, var(--vw-accent) 80%, white 20%) 30%,
+    transparent 60%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  animation: vw-gen-spin 2.5s linear infinite;
+  pointer-events: none;
+}
+
+/* Status badge (smaller, badge-like) — use for module tags or quick status */
+.vw-status-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  background: var(--vw-surface-2);
+  color: var(--vw-text-soft);
+  box-shadow: 0 0 0 1px var(--vw-border);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.vw-status-badge-active,
+.vw-status-badge-generating {
+  position: relative;
+  isolation: isolate;
+  overflow: visible;
+}
+
+/* Badge active — same pulsing ring, tighter inset */
+.vw-status-badge-active::before {
+  content: "";
+  position: absolute;
+  inset: -1.5px;
+  border-radius: 9999px;
+  padding: 1.5px;
+  background: var(--vw-accent);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  animation: vw-active-pulse 2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Badge generating — same rotating arc, tighter inset */
+.vw-status-badge-generating::before {
+  content: "";
+  position: absolute;
+  inset: -1.5px;
+  border-radius: 9999px;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--vw-gen-angle),
+    transparent 0%,
+    color-mix(in srgb, var(--vw-accent) 80%, white 20%) 30%,
+    transparent 60%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  animation: vw-gen-spin 2.5s linear infinite;
+  pointer-events: none;
+}
+
+/* Status indicator dot — minimal, semantic */
+.vw-status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--vw-accent-dim);
+  box-shadow: 0 0 0 1px var(--vw-accent);
+}
+
+.vw-status-dot-success {
+  background: rgba(166, 241, 123, 0.2);
+  box-shadow: 0 0 0 1px var(--vw-success);
+}
+
+.vw-status-dot-error {
+  background: rgba(255, 107, 107, 0.2);
+  box-shadow: 0 0 0 1px var(--vw-error);
+}
+
+.vw-status-dot-warning {
+  background: rgba(241, 212, 123, 0.2);
+  box-shadow: 0 0 0 1px var(--vw-warning);
+}
+
+/* Animated generating dot — pulse in place */
+.vw-status-dot-generating {
+  animation: vw-pulse-tool 1.5s infinite ease-in-out;
+}
+
+/* ── Streaming chip — slow opacity blink ─────────────────── */
+@keyframes vw-status-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+.vw-status-streaming {
+  color: color-mix(in srgb, var(--vw-accent) 40%, white 60%);
+  background: color-mix(in srgb, var(--vw-accent-dim) 60%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--vw-accent) 50%, transparent);
+  animation: vw-status-blink 2.2s ease-in-out infinite;
+}
+
+/* ── Emphasis chip — iridescent rotating outline (USE SPARINGLY) ── */
+@property --vw-emphasis-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes vw-emphasis-spin {
+  to { --vw-emphasis-angle: 360deg; }
+}
+.vw-status-emphasis {
+  position: relative;
+  isolation: isolate;
+  background: rgba(124, 92, 196, 0.06);
+  box-shadow: none;
+  overflow: visible;
+}
+.vw-status-emphasis::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--vw-emphasis-angle),
+    var(--vw-iridescent-1),
+    var(--vw-iridescent-2),
+    var(--vw-iridescent-3),
+    var(--vw-iridescent-4),
+    var(--vw-iridescent-5),
+    var(--vw-iridescent-6),
+    var(--vw-iridescent-7),
+    var(--vw-iridescent-1)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  animation: vw-emphasis-spin 4s linear infinite;
+  pointer-events: none;
+}
+.vw-status-emphasis > .vw-emphasis-label {
+  color: #ffffff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vw-status-streaming,
+  .vw-status-active::before,
+  .vw-status-generating::before,
+  .vw-status-badge-active::before,
+  .vw-status-badge-generating::before,
+  .vw-status-emphasis::before { animation: none; }
+}

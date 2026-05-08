@@ -62,18 +62,18 @@ No explicit budget provided. Stop for hard blockers only: secret exposure risk, 
 
 ## Stage 1 - Foundation and Auth Boundary
 
-**Status:** Pending
+**Status:** Complete
 **Goal:** Establish Voidware 0.8.3 assets, app-shell HTML, state routing, and broker-backed auth plumbing without completing visual polish.
 **Phases:**
-- [ ] 1.1 Audit existing frontend/server/config contracts and Voidware source availability.
-- [ ] 1.2 Vendor Voidware CSS with provenance and checksum verification.
-- [ ] 1.3 Rewrite `web/index.html` into the Voidware app shell skeleton.
-- [ ] 1.4 Add area/subpage state routing and shell render hooks in `web/app.js`.
-- [ ] 1.5 Add server-side Voidware auth wrapper and provider/Exa status endpoints without exposing grants or secrets.
+- [x] 1.1 Audit existing frontend/server/config contracts and Voidware source availability.
+- [x] 1.2 Vendor Voidware CSS with provenance and checksum verification.
+- [x] 1.3 Rewrite `web/index.html` into the Voidware app shell skeleton.
+- [x] 1.4 Add area/subpage state routing and shell render hooks in `web/app.js`.
+- [x] 1.5 Add server-side Voidware auth wrapper and provider/Exa status endpoints without exposing grants or secrets.
 **Helpers:** Native explorer, native phase planner, native plan reviewer, native final reviewer.
-**Verification:** `node --check web/app.js`; `python3 -m compileall server.py scripts`; Voidware vendor checksum/provenance check; focused auth redaction probes where available.
-**Checkpoint:** Pending.
-**Notes:** Do not mutate real provider, Exa, keyring, auth file, or schedule state.
+**Verification:** `node --check web/app.js`; `python3 -m compileall server.py scripts`; checksum spot-checks for vendored Voidware CSS; isolated provider-state redaction check; headed `agent-browser` smoke for `#models/table`, `#models/chart`, and `#settings/provider`.
+**Checkpoint:** Pending commit.
+**Notes:** Real provider, Exa, keyring, auth file, and schedule state were not mutated. User requested maximum token lifetime; all broker grant requests use `--ttl 120d`, the local Voidware maximum. The app keeps temporary legacy `#filters`, `#detail`, and `#view` slots inside the new shell to avoid a blank app before Stage 2 area migration.
 
 ## Stage 2 - Area Migrations
 
@@ -132,8 +132,8 @@ No explicit budget provided. Stop for hard blockers only: secret exposure risk, 
 
 | Stage | Commit | Push | Verification | Notes |
 |---|---|---|---|---|
-| 0 | `4aa6105` | Pushed | `git diff --check` passed before setup commit | Branch and plan setup; AGENTS split checkpoint pending. |
-| 1 | Pending | Pending | Pending | Foundation and auth boundary. |
+| 0 | `4aa6105`, `00e9b1c` | Pushed | `git diff --check` passed for setup and AGENTS split | Branch/process setup, then AGENTS/update-dashboard split. |
+| 1 | Pending | Pending | `node --check`; `python3 -m compileall`; CSS checksum spot-check; isolated auth redaction; headed browser smoke | Foundation and auth boundary. |
 | 2 | Pending | Pending | Pending | Area migrations. |
 | 3 | Pending | Pending | Pending | Polish/responsive/docs. |
 | 4 | Pending | Pending | Pending | Evidence and final readiness. |
@@ -155,8 +155,9 @@ No explicit budget provided. Stop for hard blockers only: secret exposure risk, 
 
 - The app is a monolithic vanilla JS/CSS frontend, so large edits can regress unrelated behavior.
 - `AGENTS.md` frontend boundary is written for daily benchmark update runs; this phase intentionally edits frontend files.
-- Voidware source or CLI may be absent or newer than the pinned 0.8.3 expectation.
-- Broker grant approval may need an external approval surface and should not be forced unattended.
+- Voidware source may be absent or newer than the pinned 0.8.3 expectation; Stage 1 currently resolves the local 0.8.3 source at commit `84ab12b`.
+- `voidware` may be absent from PATH; Stage 1 resolves `VOIDWARE_CLI`, PATH, then local `node ~/Repos/voidware/packages/cli/dist/bin.js`.
+- Broker grant approval may need an external approval surface and should not be forced unattended. Broker requests use max TTL `120d`.
 - Existing pytest/ruff commands are not globally available; verification should use available repo-local or compile/smoke checks unless dependencies are installed safely.
 - Browser verification must remain headed and sequential to avoid WSL/CDP resource issues.
 

@@ -1,0 +1,54 @@
+/* ── Toasts ───────────────────────────────────────────────── */
+
+.vw-toast-container {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  z-index: 200;
+  pointer-events: none;
+}
+
+.vw-toast {
+  padding: 10px 20px;
+  border-radius: 9999px;
+  position: relative;
+  isolation: isolate;
+  font-family: var(--vw-font-body);
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--vw-bg);
+  border: none;
+  box-shadow: 0 0 0 1px var(--vw-accent), var(--vw-shadow-lg);
+  color: var(--vw-text);
+  max-width: 400px;
+  text-align: center;
+  pointer-events: auto;
+  animation: vw-modal-in 180ms ease;
+}
+
+.vw-toast-warning {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--vw-warning) 72%, white 28%), var(--vw-shadow-lg);
+}
+
+/* Error toast */
+.vw-toast-error {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--vw-error) 70%, white 30%), var(--vw-shadow-lg);
+}
+
+/* Success toast */
+.vw-toast-success {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--vw-success) 72%, white 28%), var(--vw-shadow-lg);
+}
+
+.vw-toast-generating {
+  box-shadow: var(--vw-shadow-lg);
+}
+
+/* Dismiss animation */
+.vw-toast.dismissing {
+  animation: vw-toast-out 200ms ease forwards;
+}

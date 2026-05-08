@@ -17,6 +17,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from scripts import voidware_auth
 from scripts.config import (
     ConfigError,
     ProviderBundle,
@@ -124,7 +125,7 @@ def _redact_known_secrets(text: str) -> str:
     for secret in secrets:
         if secret:
             redacted = redacted.replace(secret, "***")
-    return redacted
+    return voidware_auth.GRANT_RE.sub("vwgr_***", redacted)
 
 
 def _http_error(exc: Exception, status_code: int = 400) -> HTTPException:

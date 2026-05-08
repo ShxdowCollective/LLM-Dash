@@ -46,6 +46,43 @@
     { key: "F", label: "F" },
   ];
   const MODEL_VIEWS = new Set(["table", "chart"]);
+  const VIEW_ROUTES = {
+    table: { area: "models", subview: "table" },
+    chart: { area: "models", subview: "chart" },
+    changelog: { area: "changelog", subview: "index" },
+    stats: { area: "stats", subview: "index" },
+    data: { area: "settings", subview: "provider" },
+  };
+  const AREA_CONFIG = {
+    models: {
+      label: "Models",
+      deck: "Explore benchmark standings, compare model strengths, and export the current leaderboard.",
+      subpages: [
+        { key: "table", label: "Table", view: "table" },
+        { key: "chart", label: "Chart", view: "chart" },
+      ],
+    },
+    changelog: {
+      label: "Changelog",
+      deck: "Read the daily update notes behind each benchmark change.",
+      subpages: [],
+    },
+    stats: {
+      label: "Stats",
+      deck: "Inspect update-run duration, token, cost, and agent-runtime trends.",
+      subpages: [],
+    },
+    settings: {
+      label: "Settings",
+      deck: "Configure providers, model choices, research keys, scheduling, and manual update paths.",
+      subpages: [
+        { key: "provider", label: "Provider", view: "data" },
+        { key: "models", label: "Models", view: "data" },
+        { key: "research", label: "Research", view: "data" },
+        { key: "schedule", label: "Schedule", view: "data" },
+      ],
+    },
+  };
   const COMPACT_NUMBER = new Intl.NumberFormat("en-US", {
     notation: "compact",
     maximumFractionDigits: 1,
@@ -82,8 +119,16 @@
     ready: false,
     error: null,
     view: "table",
+    area: "models",
+    subview: {
+      models: "table",
+      changelog: "index",
+      stats: "index",
+      settings: "provider",
+    },
     sortBy: "overall",
     ui: {
+      sidebarOpen: false,
       modelFiltersCollapsed: false,
       statsFiltersCollapsed: false,
       modelInfoCollapsed: {},
@@ -356,6 +401,69 @@
       const delta = sortKey(b, state.sortBy) - sortKey(a, state.sortBy);
       return delta || String(a.name).localeCompare(String(b.name));
     });
+  }
+
+  function routeForView(view) {
+    return VIEW_ROUTES[view] || VIEW_ROUTES.table;
+  }
+
+  function viewForRoute(area, subview) {
+    const config = AREA_CONFIG[area] || AREA_CONFIG.models;
+    if (!config.subpages.length) {
+      if (area === "changelog") return "changelog";
+      if (area === "stats") return "stats";
+      return "table";
+    }
+    const match = config.subpages.find((item) => item.key === subview) || config.subpages[0];
+    return match.view;
+  }
+
+  function syncRouteFromView() {
+    const route = routeForView(state.view);
+    state.area = route.area;
+    const current = state.subview[route.area];
+    if (!current || viewForRoute(route.area, current) !== state.view) {
+      state.subview[route.area] = route.subview;
+    }
+  }
+
+  function parseHashRoute(rawHash) {
+    const raw = String(rawHash || "").replace(/^#/, "").trim();
+    if (!raw) return { view: "table", area: "models", subview: "table" };
+    const legacy = {
+      table: { view: "table", area: "models", subview: "table" },
+      chart: { view: "chart", area: "models", subview: "chart" },
+      changelog: { view: "changelog", area: "changelog", subview: "index" },
+      stats: { view: "stats", area: "stats", subview: "index" },
+      data: { view: "data", area: "settings", subview: "provider" },
+      settings: { view: "data", area: "settings", subview: "provider" },
+    };
+    if (legacy[raw]) return legacy[raw];
+    const [area, subview] = raw.split("/");
+    if (!AREA_CONFIG[area]) return legacy.table;
+    const normalizedSubview = subview || (AREA_CONFIG[area].subpages[0] && AREA_CONFIG[area].subpages[0].key) || "index";
+    return { view: viewForRoute(area, normalizedSubview), area, subview: normalizedSubview };
+  }
+
+  function hashForRoute(area, subview) {
+    if (area === "models") return "#models/" + (subview === "chart" ? "chart" : "table");
+    if (area === "settings") return "#settings/" + (subview || "provider");
+    return "#" + area;
+  }
+
+  function applyRoute(route, options) {
+    const next = route || parseHashRoute(location.hash);
+    state.view = next.view;
+    state.area = next.area;
+    state.subview[next.area] = next.subview;
+    if (options && options.updateHash) {
+      const hash = hashForRoute(state.area, state.subview[state.area]);
+      if (location.hash !== hash) {
+        const url = location.pathname + location.search + hash;
+        if (options.replace) history.replaceState({}, "", url);
+        else history.pushState({}, "", url);
+      }
+    }
   }
 
   const HEX_COLOR_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
@@ -4016,6 +4124,66 @@
     ]);
   }
 
+  function renderPageHeader() {
+    const slot = document.getElementById("page-header");
+    if (!slot) return;
+    syncRouteFromView();
+    const config = AREA_CONFIG[state.area] || AREA_CONFIG.models;
+    slot.replaceChildren(
+      h("div", { class: "app-page-title" }, [
+        h("p", { class: "shell-kicker" }, state.area === "models" ? "Explore / Compare" : config.label),
+        h("h2", null, config.label),
+        h("p", null, config.deck),
+      ])
+    );
+    const mobileTitle = document.querySelector(".shell-mobile-title");
+    if (mobileTitle) mobileTitle.textContent = config.label;
+  }
+
+  function renderSubpageNav() {
+    const nav = document.getElementById("subpage-nav");
+    if (!nav) return;
+    syncRouteFromView();
+    const config = AREA_CONFIG[state.area] || AREA_CONFIG.models;
+    nav.replaceChildren();
+    if (!config.subpages.length) {
+      nav.hidden = true;
+      return;
+    }
+    nav.hidden = false;
+    const active = state.subview[state.area] || config.subpages[0].key;
+    config.subpages.forEach((item) => {
+      const selected = item.key === active;
+      nav.appendChild(h("button", {
+        class: "vw-subpage-nav-link" + (selected ? " active" : ""),
+        type: "button",
+        "aria-current": selected ? "page" : null,
+        "aria-pressed": selected ? "true" : "false",
+        onclick: () => switchArea(state.area, item.key),
+      }, item.label));
+    });
+  }
+
+  function syncShellNav() {
+    syncRouteFromView();
+    document.querySelectorAll(".vw-sidebar-link").forEach((button) => {
+      const isActive = button.dataset.area === state.area;
+      button.classList.toggle("active", isActive);
+      button.setAttribute("aria-pressed", isActive ? "true" : "false");
+      if (isActive) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
+    });
+    const sidebar = document.getElementById("sidebar");
+    const backdrop = document.getElementById("sidebar-backdrop");
+    const toggle = document.getElementById("sidebar-toggle");
+    if (sidebar) {
+      sidebar.classList.toggle("open", state.ui.sidebarOpen);
+      sidebar.dataset.vwOpen = state.ui.sidebarOpen ? "true" : "false";
+    }
+    if (backdrop) backdrop.classList.toggle("open", state.ui.sidebarOpen);
+    if (toggle) toggle.setAttribute("aria-expanded", state.ui.sidebarOpen ? "true" : "false");
+  }
+
   function finishBootPaint() {
     const app = document.getElementById("app");
     if (app) app.removeAttribute("data-booting");
@@ -4062,10 +4230,14 @@
     teardownWizardPage();
 
     const focus = captureFocus();
+    syncRouteFromView();
+    renderPageHeader();
+    renderSubpageNav();
     renderActionBar();
     renderFilterSlot();
     renderOverlay();
     syncRefreshButton();
+    syncShellNav();
 
     const hasSortControls = state.ready && MODEL_VIEWS.has(state.view);
     const hasViewActions = Boolean(actionSlot && actionSlot.childElementCount);
@@ -4112,6 +4284,7 @@
       if (isActive) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
     });
+    syncShellNav();
 
     updateFreshness();
     if (state.wizard.open || (!state.manualRefreshModal.open && !state.runUpdate.active && state.bootstrap.state !== "initializing")) restoreFocus(focus);
@@ -4125,11 +4298,18 @@
     scheduleChartDraw();
   }
 
-  function switchView(view) {
+  function switchArea(area, subview) {
+    const config = AREA_CONFIG[area] || AREA_CONFIG.models;
+    const nextSubview = subview || (config.subpages[0] && config.subpages[0].key) || "index";
+    applyRoute({ view: viewForRoute(area, nextSubview), area, subview: nextSubview }, { updateHash: true });
+    render();
+  }
+
+  function switchView(view, options) {
     if (!view || view === state.view) return;
     const stage = document.getElementById("view");
     if (stage) stage.classList.add("is-switching");
-    state.view = view;
+    applyRoute(routeForView(view), { updateHash: !(options && options.skipHash), replace: options && options.replace });
     requestAnimationFrame(() => {
       render();
       requestAnimationFrame(() => {
@@ -4147,15 +4327,35 @@
       });
     });
     document.querySelectorAll(".view-btn").forEach((button) => {
-      button.addEventListener("click", () => {
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        if (button.dataset.area && button.dataset.area !== state.area) {
+          switchArea(button.dataset.area, button.dataset.subview);
+          return;
+        }
         switchView(button.dataset.view);
       });
     });
     const refreshButton = document.getElementById("refresh-trigger");
     if (refreshButton) refreshButton.addEventListener("click", handleRefresh);
+    const sidebarToggle = document.getElementById("sidebar-toggle");
+    if (sidebarToggle) sidebarToggle.addEventListener("click", () => {
+      state.ui.sidebarOpen = !state.ui.sidebarOpen;
+      syncShellNav();
+    });
+    const sidebarBackdrop = document.getElementById("sidebar-backdrop");
+    if (sidebarBackdrop) sidebarBackdrop.addEventListener("click", () => {
+      state.ui.sidebarOpen = false;
+      syncShellNav();
+    });
     window.addEventListener("resize", scheduleChartDraw);
     window.addEventListener("keydown", (event) => {
       if (event.key !== "Escape") return;
+      if (state.ui.sidebarOpen) {
+        state.ui.sidebarOpen = false;
+        syncShellNav();
+        return;
+      }
       if (state.wizard.open) return;
       if (isRunUpdateBusy()) return;
       if (state.runUpdate.active && state.runUpdate.state !== "running") {
@@ -4164,9 +4364,15 @@
       }
       if (state.manualRefreshModal.open) closeManualRefreshModal();
     });
-    const hashView = location.hash.replace("#", "");
-    if (hashView === "settings") state.view = "data";
-    else if (["table", "chart", "changelog", "stats", "data"].includes(hashView)) state.view = hashView;
+    applyRoute(parseHashRoute(location.hash), { updateHash: true, replace: true });
+    window.addEventListener("popstate", () => {
+      applyRoute(parseHashRoute(location.hash), { updateHash: false });
+      render();
+    });
+    window.addEventListener("hashchange", () => {
+      applyRoute(parseHashRoute(location.hash), { updateHash: false });
+      render();
+    });
     window.addEventListener("beforeunload", () => {
       resetRunUpdate(false);
       if (state.db) state.db.close();

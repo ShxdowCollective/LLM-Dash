@@ -11,11 +11,14 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from scripts import voidware_auth
+
 APP_NAME = "llmdash"
 KEYRING_SERVICE = "shxdow.llmdash"
 PROVIDER_KEY_NAME = "LLM_DASH_PROVIDER_API_KEY"
 EXA_KEY_NAME = "EXA_API_KEY"
 CONFIG_ENV_PREFIX = "LLM_DASH_"
+SHXDOW_ROOT_ENV = "LLM_DASH_SHXDOW_ROOT"
 
 PROVIDER_BASE_URL_ENVS = ("LLM_DASH_BASE_URL", "LLM_DASH_PROVIDER_BASE_URL", "BASE_URL")
 PROVIDER_API_KEY_ENVS = ("LLM_DASH_API_KEY", "LLM_DASH_PROVIDER_API_KEY", "NANOGPT_API_KEY", "API_KEY")
@@ -72,6 +75,9 @@ class ProviderBundle:
 
 
 def shxdow_root() -> Path:
+    override = os.environ.get(SHXDOW_ROOT_ENV)
+    if override:
+        return Path(override).expanduser()
     return Path.home() / ".shxdow"
 
 
@@ -195,12 +201,48 @@ def _save_auth_file_secret(name: str, secret: str, meta: dict[str, Any] | None =
     _atomic_write_json(auth_path(), data)
 
 
-def _read_secret(envs: tuple[str, ...], key_name: str | tuple[str, ...]) -> str:
+def _legacy_secret(name: str) -> str:
+    return _keyring_get(name) or _credential_from_auth_file(name)
+
+
+def _read_broker_secret(name: str) -> str:
+    try:
+        return voidware_auth.read_secret(name)
+    except voidware_auth.VoidwareAuthError:
+        return ""
+
+
+def _read_secret(envs: tuple[str, ...], key_name: str | tuple[str, ...], broker_name: str | None = None) -> str:
     key_names = (key_name,) if isinstance(key_name, str) else key_name
-    for secret in [_env_first(envs), *(_keyring_get(name) for name in key_names), *(_credential_from_auth_file(name) for name in key_names)]:
+    candidates = [_env_first(envs)]
+    if broker_name:
+        candidates.append(_read_broker_secret(broker_name))
+    candidates.extend(_legacy_secret(name) for name in key_names)
+    for secret in candidates:
         if secret:
             return secret
     return ""
+
+
+def _credential_source(envs: tuple[str, ...], key_name: str | tuple[str, ...], broker_name: str | None = None) -> dict[str, Any]:
+    key_names = (key_name,) if isinstance(key_name, str) else key_name
+    if _env_first(envs):
+        return {"configured": True, "source": "env", "legacy_migration_available": False}
+    if broker_name and _read_broker_secret(broker_name):
+        return {"configured": True, "source": "voidware-broker", "legacy_migration_available": any(_legacy_secret(name) for name in key_names)}
+    legacy_source = ""
+    for name in key_names:
+        if _keyring_get(name):
+            legacy_source = "keyring-legacy"
+            break
+        if _credential_from_auth_file(name):
+            legacy_source = "auth-file-legacy"
+            break
+    return {
+        "configured": bool(legacy_source),
+        "source": legacy_source or "missing",
+        "legacy_migration_available": bool(legacy_source),
+    }
 
 
 def _normalize_header_map(raw: Any) -> dict[str, str]:
@@ -313,6 +355,8 @@ def build_auth_headers(bundle: ProviderBundle) -> dict[str, str]:
 
 def public_provider_state() -> dict[str, Any]:
     bundle = load_provider_bundle()
+    provider_auth = _credential_source(PROVIDER_API_KEY_ENVS, PROVIDER_KEY_NAMES, voidware_auth.PROVIDER_SECRET_NAME)
+    exa_auth = _credential_source(EXA_API_KEY_ENVS, EXA_KEY_NAME, voidware_auth.EXA_SECRET_NAME)
     return {
         "has_provider": bundle.has_provider,
         "base_url": bundle.config.base_url,
@@ -323,6 +367,12 @@ def public_provider_state() -> dict[str, Any]:
         "backup_model": bundle.config.backup_model,
         "endpoint_mode": bundle.config.endpoint_mode,
         "exa_configured": bool(load_exa_api_key()),
+        "auth": {
+            "precedence": ["env", "voidware-broker", "keyring-legacy", "auth-file-legacy"],
+            "broker": voidware_auth.broker_status(),
+            "provider": provider_auth,
+            "exa": exa_auth,
+        },
     }
 
 
@@ -360,7 +410,7 @@ def load_provider_config() -> ProviderConfig:
 def load_provider_bundle() -> ProviderBundle:
     return ProviderBundle(
         config=load_provider_config(),
-        secrets=ProviderSecrets(api_key=_read_secret(PROVIDER_API_KEY_ENVS, PROVIDER_KEY_NAMES)),
+        secrets=ProviderSecrets(api_key=_read_secret(PROVIDER_API_KEY_ENVS, PROVIDER_KEY_NAMES, voidware_auth.PROVIDER_SECRET_NAME)),
     )
 
 
@@ -411,27 +461,45 @@ def save_provider_api_key(api_key: str) -> None:
     secret = str(api_key or "").strip()
     if not secret:
         raise ConfigError("api_key is required")
-    if not _keyring_set_verified(PROVIDER_KEY_NAME, secret):
-        _save_auth_file_secret(PROVIDER_KEY_NAME, secret, {"app": APP_NAME, "kind": "agent-provider"})
+    try:
+        voidware_auth.write_secret(
+            voidware_auth.PROVIDER_SECRET_NAME,
+            secret,
+            metadata={"label": "LLM-Dash Agent Provider", "envVar": PROVIDER_KEY_NAME},
+            custom={"app": APP_NAME, "kind": "agent-provider"},
+        )
+    except voidware_auth.VoidwareAuthError as exc:
+        raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
 
 
 def load_exa_api_key() -> str:
-    return _read_secret(EXA_API_KEY_ENVS, EXA_KEY_NAME)
+    return _read_secret(EXA_API_KEY_ENVS, EXA_KEY_NAME, voidware_auth.EXA_SECRET_NAME)
 
 
 def save_exa_api_key(api_key: str) -> None:
     secret = str(api_key or "").strip()
     if not secret:
         raise ConfigError("api_key is required")
-    if not _keyring_set_verified(EXA_KEY_NAME, secret):
-        _save_auth_file_secret(EXA_KEY_NAME, secret, {"app": APP_NAME, "kind": "exa"})
+    try:
+        voidware_auth.write_secret(
+            voidware_auth.EXA_SECRET_NAME,
+            secret,
+            metadata={"label": "LLM-Dash Exa", "envVar": EXA_KEY_NAME},
+            custom={"app": APP_NAME, "kind": "exa"},
+        )
+    except voidware_auth.VoidwareAuthError as exc:
+        raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
 
 
 def remove_exa_api_key() -> None:
-    _delete_keyring_secret(EXA_KEY_NAME)
-    _delete_auth_file_secret(EXA_KEY_NAME)
+    try:
+        voidware_auth.delete_secret(voidware_auth.EXA_SECRET_NAME)
+    except voidware_auth.VoidwareAuthError as exc:
+        raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
 
 
 def remove_provider_api_key() -> None:
-    _delete_keyring_secret(PROVIDER_KEY_NAME)
-    _delete_auth_file_secret(PROVIDER_KEY_NAME)
+    try:
+        voidware_auth.delete_secret(voidware_auth.PROVIDER_SECRET_NAME)
+    except voidware_auth.VoidwareAuthError as exc:
+        raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc

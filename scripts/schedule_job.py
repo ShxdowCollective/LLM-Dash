@@ -10,19 +10,22 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import os
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 RUN_UPDATE_PATH = ROOT / "scripts" / "run_update.py"
 LOGS_DIR = ROOT / "logs"
-SCHEDULE_PATH = Path.home() / ".shxdow" / "config" / "shxdow.llmdash.schedule.json"
 
-JOB_NAME = "shxdow.llmdash.update"
+SHXDOW_ROOT = Path(os.environ.get("LLM_DASH_SHXDOW_ROOT", Path.home() / ".shxdow")).expanduser()
+SCHEDULE_PATH = SHXDOW_ROOT / "config" / "shxdow.llmdash.schedule.json"
+
+JOB_NAME = os.environ.get("LLM_DASH_SCHEDULE_JOB_NAME", "shxdow.llmdash.update")
 SYSTEMD_SERVICE = f"{JOB_NAME}.service"
 SYSTEMD_TIMER = f"{JOB_NAME}.timer"
 LAUNCHD_LABEL = JOB_NAME
-WINDOWS_TASK = r"Shxdow\LLM-Dash Update"
+WINDOWS_TASK = os.environ.get("LLM_DASH_WINDOWS_TASK_NAME", r"Shxdow\LLM-Dash Update")
 
 
 class ScheduleError(RuntimeError):

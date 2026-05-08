@@ -4,6 +4,38 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 054 — 2026-05-07
+
+**Agent:** GPT-5 Codex (vesperline, shxdowloop)
+**Cycle:** Phase 8.10.1 Stage 1
+**Task:** Build the Voidware app-shell and auth-boundary foundation
+
+---
+
+Completed Stage 1 of the shxdowloop plan on `shxdowloop/2026-05-07/phase-8-10-1`.
+
+**Changed:**
+- Vendored Voidware 0.8.3 CSS from `/home/phxntom/Repos/voidware/src/css` at commit `84ab12b`, with provenance in `web/vendor/voidware/VERSION.md`.
+- Reworked `web/index.html` into a Voidware page shell with sidebar navigation, mobile header/drawer hooks, page header, subpage nav, and retained legacy content slots so the app does not blank before the full Stage 2 migration.
+- Added `state.area`/`state.subview`, new `#models/table`-style hash routing, legacy hash compatibility, sidebar sync, and mobile drawer Escape/backdrop behavior in `web/app.js`.
+- Added `scripts/voidware_auth.py` with CLI resolution via `VOIDWARE_CLI`, PATH `voidware`, or local `node ~/Repos/voidware/packages/cli/dist/bin.js`.
+- Added Voidware broker auth precedence after env keys and before legacy keyring/auth-file reads. Secret writes/deletes now use the broker with `--ttl 120d`; legacy stores remain migration fallback for reads.
+- Added `LLM_DASH_SHXDOW_ROOT` isolation support for config/auth and schedule state, plus schedule job-name env overrides.
+- Redacted `vwgr_...` grant tokens from server log tails.
+
+**Verification:**
+- `node --check web/app.js`
+- `python3 -m compileall server.py scripts`
+- Voidware CSS checksum spot-checks for `index.css`, `layout.css`, and `responsive.css`
+- Isolated `public_provider_state()` check: no `vwgr_` or `api_key` strings in JSON
+- Headed `agent-browser` smoke with isolated root and env-only fake provider: no page errors, `#models/table` rendered, `#models/chart` and `#settings/provider` routed correctly
+
+**Helper route:** native explorer, native phase planner, native plan reviewer; main-agent implementation.
+**Degraded paths:** `voidware` is not on PATH, but the local CLI fallback works for broker status calls. Broker itself was unavailable, returning deterministic `broker_unavailable`.
+**?** None.
+
+---
+
 ## Entry 053 — 2026-05-07
 
 **Agent:** GPT-5 Codex (vesperline, docs cleanup)
