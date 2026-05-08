@@ -31,6 +31,8 @@ Done checkpoints:
   shell skeleton, route hooks, and broker auth boundary.
 - [x] Complete Phase 8.10.1 Stage 2 area migration: Models, Changelog, Stats,
   and Settings now render inside the app shell with old global slots removed.
+- [x] Complete Phase 8.10.1 Stage 3 docs/responsive sync: Voidware 0.8.3 docs,
+  stale CSS selector cleanup, and laptop/tablet/mobile smoke screenshots.
 
 Open implementation:
 

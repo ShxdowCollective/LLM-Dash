@@ -48,8 +48,8 @@ To return a local install to first-run state, use `./run.sh --reset` or
 | UI state | `localStorage` (cleared via `?reset=1` on next load) |
 
 **Not removed:** `changelogs/*.md` (append-only audit history),
-`~/.shxdow/auth.json`, keyring/keystore secrets, `web/` static assets,
-Python virtual environment.
+Voidware broker grants/secrets, legacy `~/.shxdow/auth.json`,
+keyring/keystore secrets, `web/` static assets, Python virtual environment.
 
 ### Environment Variables
 
@@ -57,6 +57,10 @@ Python virtual environment.
 |---|---|---|
 | `LLM_DASH_HOST` | `127.0.0.1` | Server bind address |
 | `LLM_DASH_PORT` | `8787` | Server port |
+| `LLM_DASH_BASE_URL` | — | OpenAI-compatible provider base URL |
+| `LLM_DASH_API_KEY` | — | Provider API key; takes precedence over broker/legacy stores |
+| `LLM_DASH_DEFAULT_MODEL` | — | Default model for Agent Provider updates |
+| `LLM_DASH_SHXDOW_ROOT` | `~/.shxdow` | Isolated config/auth root for tests |
 | `EXA_API_KEY` | — | Exa search API key (alternative to wizard config) |
 
 ---
@@ -81,8 +85,8 @@ Python virtual environment.
 | File | Responsibility |
 |---|---|
 | `web/index.html` | App shell, font imports, mount points |
-| `web/style.css` | Voidware v0.7.1 tokens + all component styles |
-| `web/app.js` | sql.js bootstrap, state management, rendering for all five views, wizard, overlays |
+| `web/style.css` | App-specific Voidware 0.8.3 overrides and component styles |
+| `web/app.js` | sql.js bootstrap, route state, area renderers, wizard, overlays |
 | `web/provider-presets.json` | Static catalog of provider presets for the setup wizard |
 | `web/vendor/` | Vendored libraries (sql-wasm, marked.js, uPlot) — committed, not installed |
 
@@ -131,7 +135,8 @@ Python virtual environment.
 
 ### CSS
 
-- Voidware v0.7.1 design tokens on `:root`
+- Voidware v0.8.3 CSS is vendored under `web/vendor/voidware/`; keep
+  provenance current in `web/vendor/voidware/VERSION.md`
 - Shadow-as-border: `box-shadow: 0 0 0 1px var(--vw-border)` instead of `border`
 - Focus: `outline` with `outline-offset`, not box-shadow
 - Typography: `--vw-font-body` (SUSE/Roboto) for prose, `--vw-font-mono`

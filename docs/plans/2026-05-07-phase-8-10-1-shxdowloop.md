@@ -92,22 +92,22 @@ No explicit budget provided. Stop for hard blockers only: secret exposure risk, 
 
 ## Stage 3 - Visual Polish, Responsive Contracts, and Docs Sync
 
-**Status:** Active
+**Status:** Complete
 **Goal:** Reduce duplicate CSS, tighten copy/typography, complete mobile/tablet navigation, and update docs that would be actively wrong.
 **Phases:**
-- [ ] 3.1 Replace duplicated tokens/components in `web/style.css` with app-specific Voidware overrides.
-- [ ] 3.2 Add responsive sidebar/drawer, mobile CTA, subnav, and focus/reduced-motion behavior.
-- [ ] 3.3 Polish copy and visual hierarchy across table, chart, changelog, stats, settings, update, and setup surfaces.
-- [ ] 3.4 Minimal docs sync for Voidware 0.8.3, app-shell IA, and broker-backed auth.
-- [ ] 3.5 Update TODO/LOGBOOK and process plan with remaining verification findings.
+- [x] 3.1 Replace duplicated tokens/components in `web/style.css` with app-specific Voidware overrides.
+- [x] 3.2 Add responsive sidebar/drawer, mobile CTA, subnav, and focus/reduced-motion behavior.
+- [x] 3.3 Polish copy and visual hierarchy across table, chart, changelog, stats, settings, update, and setup surfaces.
+- [x] 3.4 Minimal docs sync for Voidware 0.8.3, app-shell IA, and broker-backed auth.
+- [x] 3.5 Update TODO/LOGBOOK and process plan with remaining verification findings.
 **Helpers:** Native explorer, native phase planner, native plan reviewer, native final reviewer; optional nano-agent for CSS dead-selector searches.
-**Verification:** `node --check web/app.js`; `python3 -m compileall server.py scripts`; static searches for old chrome/classes; browser smoke test.
-**Checkpoint:** Pending.
-**Notes:** Keep cards only where they frame repeated items, modals, or real tools.
+**Verification:** `node --check web/app.js`; `python3 -m compileall server.py scripts`; `git diff --check`; stale docs/CSS searches; headed responsive smoke at 1366x768, 820x1180, and 390x844 plus mobile drawer Escape behavior.
+**Checkpoint:** Pending commit.
+**Notes:** Full desktop/tablet/mobile evidence matrix remains in Stage 4. Stage 3 focused on stale docs/CSS cleanup and responsive smoke rather than final visual sign-off.
 
 ## Stage 4 - Verification and Evidence
 
-**Status:** Pending
+**Status:** Active
 **Goal:** Prove the phase with syntax checks, browser screenshots, overflow/accessibility probes, auth redaction checks, docs/TODO/LOGBOOK sync, and final review.
 **Phases:**
 - [ ] 4.1 Run syntax and Python compile verification.
@@ -135,7 +135,7 @@ No explicit budget provided. Stop for hard blockers only: secret exposure risk, 
 | 0 | `4aa6105`, `00e9b1c` | Pushed | `git diff --check` passed for setup and AGENTS split | Branch/process setup, then AGENTS/update-dashboard split. |
 | 1 | `d81ac94` | Pushed | `node --check`; `python3 -m compileall`; CSS checksum spot-check; isolated auth redaction; headed browser smoke | Foundation and auth boundary. |
 | 2 | `b1f80ac` | Pushed | `node --check`; `python3 -m compileall`; `git diff --check`; isolated `/api/provider` redaction; headed browser smoke | Area migrations. |
-| 3 | Pending | Pending | Pending | Polish/responsive/docs. |
+| 3 | Pending | Pending | `node --check`; `python3 -m compileall`; `git diff --check`; stale-reference search; responsive browser smoke | Polish/responsive/docs. |
 | 4 | Pending | Pending | Pending | Evidence and final readiness. |
 
 ## Verification Matrix

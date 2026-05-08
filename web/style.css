@@ -353,8 +353,7 @@ a {
   padding: 28px 20px;
 }
 
-#app[data-booting="true"] .content-slot,
-#app[data-booting="true"] .view-slot {
+#app[data-booting="true"] .content-slot {
   width: min(420px, 100%);
   text-align: center;
 }
@@ -1012,14 +1011,12 @@ table.models tbody tr:focus-visible,
   box-shadow: 0 0 0 1px var(--vw-border-focus);
 }
 
-.content-slot,
-.view-slot {
+.content-slot {
   min-height: 220px;
   transition: opacity 150ms ease, transform 120ms ease;
 }
 
-.content-slot.is-switching,
-.view-slot.is-switching {
+.content-slot.is-switching {
   opacity: 0.3;
   transform: translateY(2px);
 }
@@ -2386,7 +2383,7 @@ table.data-table thead th.num,
     inset 0 -8px 8px -4px rgba(0, 0, 0, 0.4);
 }
 
-/* ─── Voidware v0.7.1 Component Classes ─── */
+/* ─── Voidware component classes ─── */
 
 .vw-btn {
   display: inline-flex;
@@ -3125,7 +3122,7 @@ table.data-table thead th.num,
 }
 
 @media (max-width: 640px) {
-  .view-slot {
+  .content-slot {
     overflow-x: hidden;
   }
 }

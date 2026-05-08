@@ -14,7 +14,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org)
 [![sql.js](https://img.shields.io/badge/sql.js-WASM-4B32C3)](https://sql.js.org)
-[![voidware](https://img.shields.io/badge/voidware-v0.7.1-7c5cc4)](https://github.com/shxdow)
+[![voidware](https://img.shields.io/badge/voidware-v0.8.3-7c5cc4)](https://github.com/shxdow)
 [![License: MIT](https://img.shields.io/badge/license-MIT-a6f17b)](LICENSE)
 [![OpenAI Agents SDK](https://img.shields.io/badge/OpenAI_Agents-SDK-412991?logo=openai&logoColor=white)](https://github.com/openai/openai-agents-python)
 <a href="https://buymeacoffee.com/shxdowenby">
@@ -110,8 +110,8 @@ run.bat --reset               # Windows
 
 Clears local provider/schedule settings, deletes generated dashboard data and
 run logs, restarts from the bootstrap seed, and opens the setup wizard.
-Historical `changelogs/*.md`, `~/.shxdow/auth.json`, and keyring/keystore
-secrets are left alone.
+Historical `changelogs/*.md`, Voidware broker grants/secrets, legacy
+`~/.shxdow/auth.json`, and keyring/keystore secrets are left alone.
 
 ### Desktop Shortcuts
 
@@ -166,7 +166,7 @@ LLM-Dash/
 │
 ├── web/                   # Static frontend (vanilla HTML/CSS/JS)
 │   ├── index.html
-│   ├── style.css          # Voidware v0.7.1 design tokens
+│   ├── style.css          # App-specific Voidware 0.8.3 overrides
 │   ├── app.js             # sql.js bootstrap, state, rendering
 │   └── vendor/            # Vendored libs (sql-wasm, marked, uPlot)
 │
@@ -179,7 +179,7 @@ LLM-Dash/
 │
 ├── scripts/
 │   ├── schema.sql         # SQLite DDL
-│   ├── config.py          # Provider config + credential layer
+│   ├── config.py          # Provider config + Voidware broker credential layer
 │   ├── init_db.py         # First-run DB seeder
 │   ├── run_update.py      # Agents SDK update executor
 │   ├── export_metrics_csv.py

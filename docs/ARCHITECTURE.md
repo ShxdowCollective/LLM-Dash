@@ -71,9 +71,9 @@ in-progress update. Killing the agent doesn't affect the dashboard.
 | Local server | FastAPI + uvicorn | Needed for API routes; bare `http.server` can't do `/api/*` |
 | Agent execution | OpenAI Agents SDK | BYOK-compatible; runs against any OpenAI-compatible endpoint |
 | Research | Exa (preferred) | Structured search + content fetch with citation control |
-| Credential storage | `keyring` → `~/.shxdow/auth.json` fallback | OS keychain first; JSON fallback for headless environments |
+| Credential storage | Env → Voidware broker → legacy keyring/auth file | Secrets stay outside repo/API responses; broker grants request the max supported TTL |
 | Scheduling | OS-native jobs | systemd timer (Linux/WSL), launchd (macOS), Task Scheduler (Windows) |
-| Design system | Voidware v0.7.1 | Dark-native, monochrome-first with 7-color iridescent palette |
+| Design system | Voidware v0.8.3 | Sidebar app shell, dark-native surfaces, and iridescent accent system |
 
 ---
 
@@ -150,7 +150,7 @@ changelogs 1──1 run_metrics (via changelog_date)
 | **Chart** | Horizontal bar comparison across models | `v_models_latest` |
 | **Changelog** | Date list + rendered Markdown body | `changelogs` table + `changelogs/*.md` |
 | **Stats** | Token/cost/duration analytics, per-agent breakdowns, time-series charts | `run_metrics` |
-| **Data** | Agent Provider status, manual prompt card, setup wizard entry | `/api/provider` |
+| **Settings** | Provider, Models, Research, Schedule, and Manual Update controls | `/api/provider`, `/api/exa`, `/api/schedule` |
 
 ### State Management
 
@@ -272,24 +272,26 @@ Re-running an update for the same date upserts rather than duplicates:
 ### Precedence (read order)
 
 1. Environment variables
-2. OS keychain (via `keyring` package)
-3. `~/.shxdow/auth.json`
-4. `~/.shxdow/config/shxdow.llmdash.json`
+2. Voidware auth broker
+3. Legacy OS keychain (via `keyring` package)
+4. Legacy `~/.shxdow/auth.json`
 
 ### What's stored where
 
 | Data | Location | Rationale |
 |---|---|---|
-| API keys | Keychain → `auth.json` fallback | Secrets never in repo or API responses |
+| API keys | Environment or Voidware broker; legacy keyring/auth-file reads remain migration fallbacks | Secrets never in repo or API responses |
 | Provider base URL, models, headers | `shxdow.llmdash.json` | Non-secret config |
 | Exa API key | Same as provider API key | Same credential pipeline |
 
 API keys are **never** returned in API responses, logged, or written to any
-on-disk trace outside the credential store.
+on-disk trace outside the credential store. Broker requests use stdin for secret
+writes and request the longest supported grant lifetime (`120d`) so routine
+dashboard use does not churn approvals.
 
 ---
 
-## Design System — Voidware v0.7.1
+## Design System — Voidware v0.8.3
 
 The UI follows the Voidware design specification:
 

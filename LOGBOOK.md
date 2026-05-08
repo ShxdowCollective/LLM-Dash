@@ -4,6 +4,34 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 056 — 2026-05-07
+
+**Agent:** GPT-5 Codex (vesperline, shxdowloop)
+**Cycle:** Phase 8.10.1 Stage 3
+**Task:** Sync Voidware 0.8.3 docs and responsive shell polish
+
+---
+
+Completed the Stage 3 docs/responsive pass.
+
+**Changed:**
+- Updated README, Architecture, and Development docs from Voidware 0.7.1/keyring-first language to Voidware 0.8.3 with broker-backed credential writes and legacy read fallback.
+- Documented that Voidware broker grant requests use the max supported `120d` TTL and that reset leaves broker grants/secrets alone.
+- Trimmed stale CSS references left behind by the removed global app slots.
+
+**Verification:**
+- `node --check web/app.js`
+- `python3 -m compileall server.py scripts`
+- `git diff --check`
+- Static stale-reference search for old chrome slots, Voidware 0.7.1 references, and old Data-page docs returned no matches.
+- Headed `agent-browser` responsive smoke: 1366x768 Models, 820x1180 Stats, and 390x844 Settings Research had no horizontal page overflow; mobile sidebar opened and closed with Escape.
+
+**Helper route:** main-agent implementation and verification.
+**Degraded paths:** none new.
+**?** None.
+
+---
+
 ## Entry 055 — 2026-05-07
 
 **Agent:** GPT-5 Codex (vesperline, shxdowloop)
