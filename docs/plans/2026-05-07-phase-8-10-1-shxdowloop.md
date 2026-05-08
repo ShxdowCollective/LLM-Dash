@@ -117,7 +117,7 @@ No explicit budget provided. Stop for hard blockers only: secret exposure risk, 
 - [x] 4.5 Final diff review, TODO/LOGBOOK/process-plan sync, checkpoint commit, and push.
 **Helpers:** Native final reviewer; optional nano-agent for artifact inventory or probe log summaries.
 **Verification:** Full matrix below passed with headed `agent-browser` evidence at 1920x1080, 1366x768, 820x1180, and 390x844.
-**Checkpoint:** Pending commit.
+**Checkpoint:** `8e6bc7e` pushed.
 **Notes:** Broker status remained `broker_unavailable` in isolated test roots, so verification covered non-mutating status/redaction behavior. Secret writes were not attempted.
 
 ## Helper Roles and Iteration Stop Conditions
@@ -136,7 +136,7 @@ No explicit budget provided. Stop for hard blockers only: secret exposure risk, 
 | 1 | `d81ac94` | Pushed | `node --check`; `python3 -m compileall`; CSS checksum spot-check; isolated auth redaction; headed browser smoke | Foundation and auth boundary. |
 | 2 | `b1f80ac` | Pushed | `node --check`; `python3 -m compileall`; `git diff --check`; isolated `/api/provider` redaction; headed browser smoke | Area migrations. |
 | 3 | `78806dd` | Pushed | `node --check`; `python3 -m compileall`; `git diff --check`; stale-reference search; responsive browser smoke | Polish/responsive/docs. |
-| 4 | Pending | Pending | `node --check`; `python3 -m compileall`; `git diff --check`; final browser screenshot matrix; overflow/clipped/console/focus/reduced-motion/auth probes | Evidence and final readiness. |
+| 4 | `8e6bc7e` | Pushed | `node --check`; `python3 -m compileall`; `git diff --check`; final browser screenshot matrix; overflow/clipped/console/focus/reduced-motion/auth probes | Evidence and final readiness. |
 
 ## Verification Matrix
 
