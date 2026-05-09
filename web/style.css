@@ -2611,7 +2611,10 @@ table.data-table thead th.num,
 #overlay-root {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  /* Above mobile chrome (.app-sidebar at 90, .mobile-shell-header at 80) so
+     modals opened on small viewports paint over the drawer/header instead of
+     under them. */
+  z-index: 100;
   pointer-events: none;
 }
 

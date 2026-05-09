@@ -13,7 +13,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -702,7 +702,8 @@ def run_update_status(job_id: str) -> dict[str, Any]:
 
 
 @app.get("/api/meta")
-def get_meta() -> dict[str, Any]:
+def get_meta(response: Response) -> dict[str, Any]:
+    response.headers["Cache-Control"] = "no-store"
     return {"last_updated": _last_updated()}
 
 

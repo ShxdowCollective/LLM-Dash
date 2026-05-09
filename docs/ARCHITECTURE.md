@@ -176,15 +176,23 @@ that this is performant without diffing.
 ```js
 state = {
   view,              // table | chart | changelog | stats | data
+  area, subview,     // sidebar area + subpage routing
   models,            // from v_models_latest
   changelogs,        // from changelogs table
   metrics,           // from run_metrics
+  scoreHistory,      // Map<modelId, Array<row>> from model_scores (Phase 9.1)
   filter,            // vendors, text, tier, range sliders
   statsFilter,       // date range, agent filter
-  sortBy,            // column + direction
-  selectedModel,     // detail panel target
+  sortBy,            // column + direction (incl. "trend")
+  ui,                // persistent UI prefs (filters collapsed, leaderboard sort)
+  selectedModelIds,  // detail panel + comparison targets
+  focusedRowIndex,   // j/k row nav target (Phase 9.2)
   activeChangelogDate,
-  lastUpdated,       // from meta.last_updated
+  changelogCompare,  // { from, to, active } for the Compare tab (Phase 9.1)
+  lastUpdated,       // from meta.last_updated; polled via /api/meta
+  uiToastShownFor,   // dedupe key for the new-data toast (Phase 9.2)
+  uiToastDismissed,  // suppression key set on user dismiss
+  detailUplots,      // separate uPlot map so Stats scheduler doesn't wipe it
   provider,          // from GET /api/provider
 };
 ```

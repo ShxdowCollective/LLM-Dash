@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -95,15 +96,37 @@ def config_path() -> Path:
     return shxdow_root() / "config" / "shxdow.llmdash.json"
 
 
+# Tolerates JSONC: line comments, block comments, and trailing commas. Other
+# Voidware tools may write to ~/.shxdow/config/shxdow.llmdash.json and add
+# comments back, so a strict json.load was a permanent wizard-auto-open trap.
+_JSONC_TOKENS = re.compile(
+    r'"(?:\\.|[^"\\])*"|/\*[\s\S]*?\*/|//[^\n]*',
+)
+_JSONC_TRAILING_COMMAS = re.compile(r",(\s*[\]}])")
+
+
+def _strip_jsonc(text: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        token = match.group(0)
+        return token if token.startswith('"') else ""
+
+    stripped = _JSONC_TOKENS.sub(replace, text)
+    return _JSONC_TRAILING_COMMAS.sub(r"\1", stripped)
+
+
 def _read_json(path: Path) -> dict[str, Any]:
     try:
-        with path.open("r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, dict) else {}
+        text = path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return {}
-    except json.JSONDecodeError as exc:
-        raise ConfigError(f"Invalid JSON in {path}: {exc}") from exc
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        try:
+            data = json.loads(_strip_jsonc(text))
+        except json.JSONDecodeError as exc:
+            raise ConfigError(f"Invalid JSON in {path}: {exc}") from exc
+    return data if isinstance(data, dict) else {}
 
 
 def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:

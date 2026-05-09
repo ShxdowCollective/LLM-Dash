@@ -4,6 +4,185 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 067 — 2026-05-08
+
+**Agent:** Claude Opus 4.7 (driftvein, follow-up sweep)
+**Cycle:** Phase 9.x post-loop review — out-of-scope follow-ups
+**Task:** Address the three items flagged at the bottom of Entry 066:
+JSONC-tolerant config loader, overlay-root z-index vs. mobile chrome, and
+error-toast ARIA politeness.
+
+---
+
+Two parallel `feature-dev:code-explorer` subagents to scope the fixes:
+the config-loader chain (file → parse-fail → wizard auto-open) and the
+overlay/drawer/header stacking-context geometry. Both came back with
+file:line refs and a recommended fix shape; main-agent did the patches.
+
+**Patched (scripts/config.py):**
+- `_read_json` now tries strict `json.loads` first, then falls back to a
+  hand-rolled `_strip_jsonc` pass that removes `//` line comments,
+  `/* */` block comments, and trailing commas before retrying. String
+  contents are preserved (the regex matches whole quoted strings as a
+  single alternative and returns them unchanged), so a key like
+  `"https://example.com/api"` or `"sk-//notacomment"` survives intact.
+- Closes the bug noted in entries 063 and 065: a `~/.shxdow/config/
+  shxdow.llmdash.json` written with comments by another Voidware tool
+  raised `ConfigError` → HTTP 400 → `fetchProvider()` swallowed it
+  silently → `state.provider.has_provider` stayed `false` → `boot()`
+  popped the setup wizard on every load.
+- No new dependency. The fallback only runs when strict JSON fails, so
+  clean config files take the fast path.
+
+**Patched (web/style.css):**
+- `#overlay-root` z-index bumped from `20` to `100`. Mobile chrome lives
+  outside the overlay-root stacking context — `.app-sidebar` at `90` and
+  `.mobile-shell-header` at `80` — so opening any modal (run-update,
+  manual-refresh, help) on a small viewport while the drawer was visible
+  used to paint the modal under the drawer/header. The single value
+  change clears both. Added an inline comment at the bump site so the
+  next contributor doesn't undo it.
+
+**Patched (web/app.js):**
+- `showToast`: when `tone === "error"` or `"warning"`, the per-toast div
+  now sets `role="alert"` and `aria-live="assertive"` to override the
+  container's polite default. Success/info toasts continue to use the
+  container's `role="status" aria-live="polite"`. This way reload
+  failures and the like surface immediately to assistive tech instead of
+  waiting for the user to finish their current action.
+
+**Verification:**
+- `node --check web/app.js` — passed
+- `python3 -m py_compile scripts/config.py server.py` — passed
+- `git diff --check` — no whitespace issues
+- JSONC parser unit smoke (6 cases): clean JSON round-trips; line
+  comments stripped; block comments stripped; trailing commas allowed in
+  arrays and objects; strings containing `//`, `/*`, and escaped quotes
+  preserved verbatim. All 6 pass.
+- End-to-end loader smoke: wrote a JSONC `shxdow.llmdash.json` with line
+  comments, block comments, and a trailing comma to a temp
+  `LLM_DASH_SHXDOW_ROOT`; `load_provider_config()` returned the expected
+  `ProviderConfig` with `base_url`, `default_model`, and
+  `request_headers` populated; `public_provider_state()` returned
+  successfully (no raise).
+
+**Files touched:** scripts/config.py, web/style.css, web/app.js.
+
+**Open follow-ups (still latent):**
+- The `fetchProvider` silent-catch at `web/app.js:1086-1092` masks any
+  500-class server error as "no provider configured." That's a separate
+  defensive-error-handling cleanup — the JSONC fix removes the most
+  likely trigger but the silent catch is still imprecise. Worth a
+  targeted `state.provider.lastError` surface in a future cycle.
+- No automated test coverage for the config loader. The repo has no
+  `tests/` dir today; adding one for this loader (and the credential
+  precedence chain) is a real backlog item.
+
+**?** None.
+
+**Checkpoint:** TBD (working tree clean, awaiting user commit).
+
+---
+
+## Entry 066 — 2026-05-08
+
+**Agent:** Claude Opus 4.7 (driftvein, review pass)
+**Cycle:** Phase 9.x post-loop review
+**Task:** Review the shxdowloop Phase 9.1/9.2/9.3 work with subagents,
+implement valid findings, final Codex pass.
+
+---
+
+Three parallel `feature-dev:code-reviewer` subagents on the loop's working
+tree (`7be5d26~1..HEAD`): JS correctness on `web/app.js`, CSS/voidware-fit on
+`style.css`+`index.html`, and server+plan adherence on `server.py`/docs/TODO.
+
+**Triage:** filtered out three false positives — the `destroyAllDetailUplots`
+double-cancel claim (the two loops are sequential synchronous code, no rAF
+can fire between them), a speculative `last_updated` string-format mismatch,
+and a popstate edge the reviewer itself withdrew. Cosmetic items (route
+placement, vendored CSS duplication, voidware token nitpicks) deferred.
+
+**Patched (web/app.js):**
+- `moveTableFocus`: added `if (state.focusedRowIndex < 0 && direction < 0) return;`
+  so pressing `k` first stays put instead of jumping to row 0.
+- `reloadDB`: now resets `state.uiToastShownFor` and `state.uiToastDismissed`
+  so a DB reload (e.g. after `--reset`) cannot permanently suppress the
+  new-data toast for a previously-dismissed timestamp.
+- `yamlScalar`: tightened with a YAML-reserved regex (null/true/false/yes/no/
+  on/off/~, signed integers/floats with optional exponent, leading-dot
+  fractions, hex, .nan, ±.inf), case-insensitive. Added tab to the special
+  class and `?` to the leading-character class. Validated with a spot-check
+  matrix — `GPT-5`, `null-model`, `1.5x` stay bare; `null`, `True`, `+1`,
+  `1.`, `.5`, `0xFF` get quoted.
+- `deriveLeaderboardMetrics`: now reads `group.minDuration` (uncapped)
+  instead of recomputing from `group.durations` (capped at 200). Agents with
+  >200 timed runs no longer show an inflated minimum.
+- Help modal focus management: `state.helpModal.returnFocus = captureFocus()`
+  on open; rAF-defer focuses the close button on mount; `closeHelpModal`
+  calls `restoreFocus(focusToRestore)`. `state.helpModal` initialized with a
+  `returnFocus: null` slot.
+- Keydown guard tightened from `state.runUpdate.state === "running"` to
+  `state.runUpdate.active`, so `j/k/e/r/?` cannot fire while the run-update
+  overlay is in the succeeded/failed reading state. Overlay
+  Reload/Close/Retry buttons use direct `onclick` handlers, unaffected.
+- Leaderboard `renderHeaderCell`: emits `aria-sort="ascending|descending|
+  none"` on each `<th>` based on the active sort key + direction.
+
+**Patched (server.py):** `/api/meta` now sets `Cache-Control: no-store` via
+an injected `Response` (imported from fastapi). Closes the gap where the
+client polled with `cache: "no-store"` but the server emitted no cache
+hints — could let intermediate proxies serve stale data.
+
+**Patched (docs/ARCHITECTURE.md):** State Management snippet expanded with
+`area`/`subview`, `scoreHistory`, `ui`, `selectedModelIds`, `focusedRowIndex`,
+`changelogCompare` (`{from,to,active}`), `uiToastShownFor`/`uiToastDismissed`,
+and `detailUplots`. Field names verified against the actual `state` init
+block at `web/app.js:140`–`170`.
+
+**Patched (TODO.md):** Phase 9.1/9.2/9.3 sections rotated from the active
+Phase 9 heading into Completed History as a single condensed entry per
+milestone, matching how every prior phase was handled and what the three
+9.x plans explicitly required on close.
+
+**Codex final review (codex:codex-rescue):** confirmed 7/10 patches,
+flagged 3 follow-ups: yamlScalar missing case-insensitivity and edge
+numeric forms (`+1`, `1.`); ARCHITECTURE.md state snippet had two field
+mismatches (`selectedModel` → `selectedModelIds`, `changelogCompare.tab` →
+`changelogCompare.active`); help-modal focus restore was already correctly
+passing the snapshot to `restoreFocus()`, just asked me to verify (it does).
+All three folded back in. Re-verified with `node --check`, `py_compile`, and
+the regex spot-check.
+
+**Verification:**
+- `node --check web/app.js` — passed
+- `python3 -m py_compile server.py` — passed
+- `git diff --check` — no whitespace issues
+- yamlScalar regex spot-check matrix (24 inputs) — output matches intent
+- Diff stat: 4 files, +62 -65 (TODO net shrinks; rest are surgical)
+
+**Files touched:** web/app.js, server.py, docs/ARCHITECTURE.md, TODO.md.
+
+**Open follow-ups (out of scope, flagged for next cycle):**
+- Help-modal/run-update overlay z-index: both live inside `#overlay-root`
+  (z-index 20). On mobile, the sidebar drawer (z-90) and header (z-80) live
+  outside that root and would paint over any modal that opens during a
+  drawer slide. The existing wizard/manual-refresh overlays share the same
+  constraint and have not actually broken in practice, so this is a class
+  of latent risk rather than a regression introduced here.
+- Toast container uses `role="status" aria-live="polite"` for all tones;
+  error toasts in particular should switch to `role="alert"` /
+  `aria-live="assertive"` for assistive tech.
+- Pre-existing `~/.shxdow/config/shxdow.llmdash.json` JSON-with-comments
+  parse failure noted in entries 063/065 — still a real bug, still out of
+  scope.
+
+**?** None.
+
+**Checkpoint:** TBD (working tree clean, awaiting user commit).
+
+---
+
 ## Entry 065 — 2026-05-08
 
 **Agent:** Claude Opus 4.7 (shxdowloop-9x, shxdowloop main agent)

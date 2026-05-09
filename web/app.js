@@ -161,7 +161,7 @@
     activeChangelogTab: "read",
     changelogCompare: { from: null, to: null, active: false },
     focusedRowIndex: -1,
-    helpModal: { open: false },
+    helpModal: { open: false, returnFocus: null },
     uiToastShownFor: null,
     uiToastDismissed: null,
     uiToastHandle: null,
@@ -1824,6 +1824,8 @@
     state.changelogBodies = {};
     state.dataPrompt = "";
     state.dataPromptLoaded = false;
+    state.uiToastShownFor = null;
+    state.uiToastDismissed = null;
     loadStaticState();
     await fetchProvider();
     resetRunUpdate(false);
@@ -2197,17 +2199,12 @@
       ? group.totalWordsForCostCalc / group.totalCostForWordCalc
       : null;
     const fastestEligible = group.durations.length >= FASTEST_RUN_MIN_SAMPLES;
-    let minDuration = null;
-    if (fastestEligible) {
-      minDuration = group.durations[0];
-      for (let i = 1; i < group.durations.length; i++) {
-        if (group.durations[i] < minDuration) minDuration = group.durations[i];
-      }
-    }
     return {
       costPerWord,
       wordsPerDollar,
-      minDuration,
+      // group.minDuration is uncapped; group.durations is capped at
+      // DURATIONS_PER_GROUP_CAP, so the median is approximate but the min is exact.
+      minDuration: fastestEligible ? group.minDuration : null,
       medianDuration: fastestEligible ? median(group.durations) : null,
       fastestEligible,
     };
@@ -3907,7 +3904,9 @@
 
     const renderHeaderCell = (column) => {
       const cls = column.numeric ? "num" : null;
-      return h("th", { class: cls }, h("button", {
+      const isActive = activeKey === column.key;
+      const ariaSort = isActive ? (activeDir === "asc" ? "ascending" : "descending") : "none";
+      return h("th", { class: cls, "aria-sort": ariaSort }, h("button", {
         class: "table-sort-btn",
         type: "button",
         onclick: () => toggleLeaderboardSort(column.key),
@@ -5258,8 +5257,14 @@
   function yamlScalar(value) {
     const text = String(value === null || value === undefined ? "" : value);
     if (!text) return "\"\"";
-    if (/[:#\[\]{}>|&*!%@`\n\r"'\\]/.test(text) || /^[\s-]/.test(text) || /\s$/.test(text)) {
-      return "\"" + text.replace(/\\/g, "\\\\").replace(/"/g, "\\\"").replace(/\n/g, " ").replace(/\r/g, "") + "\"";
+    const YAML_RESERVED = /^(null|true|false|yes|no|on|off|~|[+-]?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?|[+-]?\.\d+(?:[eE][+-]?\d+)?|0x[0-9a-fA-F]+|\.nan|[+-]?\.inf)$/i;
+    if (
+      /[:#\[\]{}>|&*!%@`\n\r\t"'\\]/.test(text) ||
+      /^[\s-?]/.test(text) ||
+      /\s$/.test(text) ||
+      YAML_RESERVED.test(text)
+    ) {
+      return "\"" + text.replace(/\\/g, "\\\\").replace(/"/g, "\\\"").replace(/\n/g, " ").replace(/\r/g, "").replace(/\t/g, " ") + "\"";
     }
     return text;
   }
@@ -5574,6 +5579,7 @@
   function moveTableFocus(direction) {
     if (!state.models.length) return;
     if (state.area !== "models" || state.view !== "table") return;
+    if (state.focusedRowIndex < 0 && direction < 0) return;
     const next = clamp(state.focusedRowIndex + direction, 0, state.models.length - 1);
     state.focusedRowIndex = next;
     const id = state.models[next] && state.models[next].id;
@@ -5607,13 +5613,23 @@
     if (state.bootstrap.state === "initializing") return;
     if (state.manualRefreshModal && state.manualRefreshModal.open) return;
     state.helpModal.open = true;
+    state.helpModal.returnFocus = captureFocus();
     render();
+    window.requestAnimationFrame(() => {
+      const closeBtn = document.querySelector(".help-modal .help-modal-close");
+      if (closeBtn && typeof closeBtn.focus === "function") {
+        try { closeBtn.focus({ preventScroll: true }); } catch (_) { closeBtn.focus(); }
+      }
+    });
   }
 
   function closeHelpModal() {
     if (!state.helpModal.open) return;
+    const focusToRestore = state.helpModal.returnFocus;
     state.helpModal.open = false;
+    state.helpModal.returnFocus = null;
     render();
+    if (focusToRestore) restoreFocus(focusToRestore);
   }
 
   function renderHelpModal() {
@@ -5662,6 +5678,10 @@
     const tone = opts && opts.tone ? opts.tone : "info";
     const toast = document.createElement("div");
     toast.className = "vw-toast vw-toast-" + tone;
+    if (tone === "error" || tone === "warning") {
+      toast.setAttribute("role", "alert");
+      toast.setAttribute("aria-live", "assertive");
+    }
     let timer = null;
     let actionTaken = false;
     const dismiss = (viaAction) => {
@@ -5930,7 +5950,7 @@
       if (isEditingTarget(document.activeElement)) return;
       if (!shortcutsAllowed()) return;
       if (state.manualRefreshModal && state.manualRefreshModal.open) return;
-      if (state.runUpdate.active && state.runUpdate.state === "running") return;
+      if (state.runUpdate.active) return;
       if (state.helpModal.open) return;
 
       const key = String(event.key || "").toLowerCase();
