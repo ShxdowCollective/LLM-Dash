@@ -4,6 +4,37 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 068 — 2026-05-09
+
+**Agent:** GPT-5 Codex (sable, investigator/docs)
+**Cycle:** Voidware auth provider reuse scoping
+**Task:** Record blockers found before the screenshot e2e run
+
+---
+
+Scoped the auth path before running the wizard/app screenshot e2e. The useful
+finding: Voidware can enumerate redacted credential metadata, including
+reusable provider candidates with `baseURL`, but LLM-Dash only knows how to
+read/write/delete fixed app-owned secret names through `scripts/voidware_auth.py`.
+
+Current blocker shape:
+- LLM-Dash does not expose a redacted provider discovery endpoint or wizard
+  branch for selecting existing Voidware AI provider credentials.
+- LLM-Dash still treats legacy `~/.shxdow/auth.json` file entries as plaintext
+  `secret` fields. Current Voidware v3 stores encrypted `encryptedSecret`
+  envelopes, so metadata is visible through Voidware but the LLM-Dash fallback
+  cannot load the secret.
+- The app has no grant-token/expiration model yet, so it cannot request a
+  120-day scoped broker grant, track renewal, or prompt at the 90-day mark.
+
+Updated `TODO.md` with Phase 9.4 high-level goals and an active backlog note
+for focused auth tests plus the pending `e2e/screenshots/` gitignore/e2e pass.
+
+Verification:
+- Docs-only change; no runtime tests run.
+
+---
+
 ## Entry 067 — 2026-05-08
 
 **Agent:** Claude Opus 4.7 (driftvein, follow-up sweep)
