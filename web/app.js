@@ -141,6 +141,7 @@
         schedule: false,
         manual: true,
       },
+      statsLeaderboardSort: { sortBy: "costPerWord", direction: "asc" },
     },
     selectedModelIds: [],
     models: [],
@@ -154,6 +155,17 @@
     statsSort: { key: "changelog_date", dir: "desc" },
     chartFrame: 0,
     uplots: {},
+    detailUplots: {},
+    detailChartFrames: {},
+    scoreHistory: new Map(),
+    activeChangelogTab: "read",
+    changelogCompare: { from: null, to: null, active: false },
+    focusedRowIndex: -1,
+    helpModal: { open: false, returnFocus: null },
+    uiToastShownFor: null,
+    uiToastDismissed: null,
+    uiToastHandle: null,
+    metaPollFrame: 0,
     filter: {
       vendors: new Set(),
       text: "",
@@ -348,6 +360,30 @@
     return overall !== null ? avg([overall, model.cost]) : model.cost;
   }
 
+  function avgOverallRow(row) {
+    return avg([row.intelligence, row.coding, row.agents, row.speed]);
+  }
+
+  function modelHistory(modelId) {
+    return state.scoreHistory.get(modelId) || null;
+  }
+
+  function modelOverallSeries(history) {
+    if (!history || !history.length) return [];
+    const points = [];
+    for (const row of history) {
+      const value = avgOverallRow(row);
+      if (value !== null && Number.isFinite(value)) points.push(value);
+    }
+    return points;
+  }
+
+  function sparkDelta(modelId) {
+    const points = modelOverallSeries(modelHistory(modelId));
+    if (points.length < 2) return null;
+    return points[points.length - 1] - points[points.length - 2];
+  }
+
   function tier(score) {
     if (score === null || score === undefined || Number.isNaN(score)) {
       return { label: "N/A", cls: "tier-N" };
@@ -409,6 +445,10 @@
   function sortKey(model, key) {
     if (key === "overall") return getOverall(model) ?? 0;
     if (key === "value") return getValue(model) ?? 0;
+    if (key === "trend") {
+      const delta = sparkDelta(model.id);
+      return delta !== null ? delta : -Infinity;
+    }
     return model[key] ?? 0;
   }
 
@@ -446,7 +486,16 @@
 
   function parseHashRoute(rawHash) {
     const raw = String(rawHash || "").replace(/^#/, "").trim();
-    if (!raw) return { view: "table", area: "models", subview: "table" };
+    if (!raw) return { view: "table", area: "models", subview: "table", params: {} };
+    const [pathPart, queryPart] = raw.split("?");
+    const params = {};
+    if (queryPart) {
+      for (const segment of queryPart.split("&")) {
+        if (!segment) continue;
+        const [k, v] = segment.split("=");
+        if (k) params[decodeURIComponent(k)] = v === undefined ? "" : decodeURIComponent(v);
+      }
+    }
     const legacy = {
       table: { view: "table", area: "models", subview: "table" },
       chart: { view: "chart", area: "models", subview: "chart" },
@@ -455,17 +504,35 @@
       data: { view: "data", area: "settings", subview: "provider" },
       settings: { view: "data", area: "settings", subview: "provider" },
     };
-    if (legacy[raw]) return legacy[raw];
-    const [area, subview] = raw.split("/");
-    if (!AREA_CONFIG[area]) return legacy.table;
+    if (legacy[pathPart]) return { ...legacy[pathPart], params };
+    const [area, subview] = pathPart.split("/");
+    if (!AREA_CONFIG[area]) return { ...legacy.table, params };
     const normalizedSubview = subview || (AREA_CONFIG[area].subpages[0] && AREA_CONFIG[area].subpages[0].key) || "index";
-    return { view: viewForRoute(area, normalizedSubview), area, subview: normalizedSubview };
+    return { view: viewForRoute(area, normalizedSubview), area, subview: normalizedSubview, params };
   }
 
-  function hashForRoute(area, subview) {
-    if (area === "models") return "#models/" + (subview === "chart" ? "chart" : "table");
-    if (area === "settings") return "#settings/" + (subview || "provider");
-    return "#" + area;
+  function hashForRoute(area, subview, params) {
+    let base;
+    if (area === "models") base = "#models/" + (subview === "chart" ? "chart" : "table");
+    else if (area === "settings") base = "#settings/" + (subview || "provider");
+    else base = "#" + area;
+    if (params && typeof params === "object") {
+      const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== "");
+      if (entries.length) {
+        return base + "?" + entries.map(([k, v]) => encodeURIComponent(k) + "=" + encodeURIComponent(v)).join("&");
+      }
+    }
+    return base;
+  }
+
+  function currentRouteParams() {
+    if (state.area === "changelog" && state.activeChangelogTab === "compare") {
+      const params = { tab: "compare" };
+      if (state.changelogCompare.from) params.from = state.changelogCompare.from;
+      if (state.changelogCompare.to) params.to = state.changelogCompare.to;
+      return params;
+    }
+    return null;
   }
 
   function applyRoute(route, options) {
@@ -473,14 +540,33 @@
     state.view = next.view;
     state.area = next.area;
     state.subview[next.area] = next.subview;
+    if (next.area === "changelog" && next.params) {
+      const tab = next.params.tab === "compare" ? "compare" : "read";
+      state.activeChangelogTab = tab;
+      if (tab === "compare") {
+        state.changelogCompare.active = true;
+        state.changelogCompare.from = next.params.from || state.changelogCompare.from || null;
+        state.changelogCompare.to = next.params.to || state.changelogCompare.to || null;
+      }
+    } else if (next.area === "changelog") {
+      state.activeChangelogTab = "read";
+    }
     if (options && options.updateHash) {
-      const hash = hashForRoute(state.area, state.subview[state.area]);
+      const hash = hashForRoute(state.area, state.subview[state.area], currentRouteParams());
       if (location.hash !== hash) {
         const url = location.pathname + location.search + hash;
         if (options.replace) history.replaceState({}, "", url);
         else history.pushState({}, "", url);
       }
     }
+  }
+
+  function pushChangelogRouteHash(replace) {
+    const hash = hashForRoute(state.area, state.subview[state.area], currentRouteParams());
+    if (location.hash === hash) return;
+    const url = location.pathname + location.search + hash;
+    if (replace) history.replaceState({}, "", url);
+    else history.pushState({}, "", url);
   }
 
   const HEX_COLOR_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
@@ -597,6 +683,14 @@
     if (stored.settingsCollapsed && typeof stored.settingsCollapsed === "object") {
       Object.assign(state.ui.settingsCollapsed, stored.settingsCollapsed);
     }
+    if (stored.statsLeaderboardSort && typeof stored.statsLeaderboardSort === "object") {
+      const allowedKeys = new Set(["runs", "totalCost", "costPerWord", "wordsPerDollar", "minDuration"]);
+      const allowedDir = new Set(["asc", "desc"]);
+      const next = { ...state.ui.statsLeaderboardSort };
+      if (allowedKeys.has(stored.statsLeaderboardSort.sortBy)) next.sortBy = stored.statsLeaderboardSort.sortBy;
+      if (allowedDir.has(stored.statsLeaderboardSort.direction)) next.direction = stored.statsLeaderboardSort.direction;
+      state.ui.statsLeaderboardSort = next;
+    }
   }
 
   function consumeResetLaunchFlag() {
@@ -640,12 +734,14 @@
     if (idx !== -1) {
       state.selectedModelIds.splice(idx, 1);
       delete state.ui.modelInfoCollapsed[String(modelId)];
+      destroyDetailUplot("detail-chart-" + modelId);
       persistUIState();
     } else if (state.selectedModelIds.length < MAX_COMPARISON_MODELS) {
       state.selectedModelIds.push(modelId);
     } else {
       const evicted = state.selectedModelIds.shift();
       delete state.ui.modelInfoCollapsed[String(evicted)];
+      destroyDetailUplot("detail-chart-" + evicted);
       state.selectedModelIds.push(modelId);
       persistUIState();
     }
@@ -779,6 +875,14 @@
     return MONEY.format(number);
   }
 
+  function formatMicroCost(value) {
+    if (value === null || value === undefined || value === "") return "—";
+    const number = Number(value);
+    if (!Number.isFinite(number) || number === 0) return "—";
+    if (number >= 0.01) return MONEY.format(number);
+    return "$" + number.toPrecision(4);
+  }
+
   function formatDuration(value) {
     if (value === null || value === undefined || value === "") return "—";
     const seconds = Number(value);
@@ -791,6 +895,48 @@
 
   function formatAgentKey(row) {
     return (row.agent_name || "") + "|" + (row.agent_runtime || "");
+  }
+
+  const SPARK_WIDTH = 80;
+  const SPARK_HEIGHT = 24;
+  const SPARK_MIN = 0;
+  const SPARK_MAX = 10;
+
+  function renderSparkline(modelId) {
+    const points = modelOverallSeries(modelHistory(modelId));
+    const wrap = document.createElement("span");
+    if (points.length < 2) {
+      wrap.className = "spark spark-empty";
+      wrap.setAttribute("aria-label", "no trend yet");
+      wrap.textContent = "—";
+      return wrap;
+    }
+    const stepX = SPARK_WIDTH / (points.length - 1);
+    let pathD = "";
+    for (let i = 0; i < points.length; i++) {
+      const x = (i * stepX).toFixed(2);
+      const yNorm = (points[i] - SPARK_MIN) / (SPARK_MAX - SPARK_MIN);
+      const y = (SPARK_HEIGHT - yNorm * SPARK_HEIGHT).toFixed(2);
+      pathD += (i === 0 ? "M" : "L") + x + "," + y + " ";
+    }
+    const last = points[points.length - 1];
+    const prev = points[points.length - 2];
+    const delta = last - prev;
+    const colorVar =
+      delta > 0.05 ? "--vw-iridescent-3" :
+      delta < -0.05 ? "--vw-iridescent-7" :
+      "--vw-iridescent-5";
+    const lastX = ((points.length - 1) * stepX).toFixed(2);
+    const lastY = (SPARK_HEIGHT - ((last - SPARK_MIN) / (SPARK_MAX - SPARK_MIN)) * SPARK_HEIGHT).toFixed(2);
+    wrap.className = "spark";
+    wrap.setAttribute("role", "img");
+    wrap.setAttribute("aria-label", points.length + "-point overall trend, latest " + last.toFixed(1));
+    wrap.innerHTML =
+      '<svg width="' + SPARK_WIDTH + '" height="' + SPARK_HEIGHT + '" viewBox="0 0 ' + SPARK_WIDTH + ' ' + SPARK_HEIGHT + '">' +
+        '<path d="' + pathD.trim() + '" fill="none" stroke="var(' + colorVar + ')" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+        '<circle cx="' + lastX + '" cy="' + lastY + '" r="1.8" fill="var(' + colorVar + ')"/>' +
+      '</svg>';
+    return wrap;
   }
 
   function formatAgentLabel(row) {
@@ -1678,6 +1824,8 @@
     state.changelogBodies = {};
     state.dataPrompt = "";
     state.dataPromptLoaded = false;
+    state.uiToastShownFor = null;
+    state.uiToastDismissed = null;
     loadStaticState();
     await fetchProvider();
     resetRunUpdate(false);
@@ -1745,6 +1893,21 @@
       "FROM run_metrics ORDER BY changelog_date DESC, completed_at DESC"
     );
     state.lastUpdated = queryRows("SELECT value FROM meta WHERE key = 'last_updated'")[0]?.value || null;
+    const historyRows = queryRows(
+      "SELECT model_id, as_of, intelligence, coding, agents, speed, cost " +
+      "FROM model_scores ORDER BY model_id ASC, as_of ASC"
+    );
+    const historyMap = new Map();
+    for (const row of historyRows) {
+      const modelId = row.model_id;
+      let bucket = historyMap.get(modelId);
+      if (!bucket) {
+        bucket = [];
+        historyMap.set(modelId, bucket);
+      }
+      bucket.push(row);
+    }
+    state.scoreHistory = historyMap;
     if (!state.activeChangelogDate && state.changelogs.length) {
       state.activeChangelogDate = state.changelogs[0].date;
     }
@@ -1786,6 +1949,7 @@
       rows = rows.filter((row) => tier(getOverall(row)).label === state.filter.tier);
     }
     state.models = sortedModels(rows);
+    state.focusedRowIndex = -1;
     const visibleIds = new Set(state.models.map((row) => row.id));
     const before = state.selectedModelIds.length;
     state.selectedModelIds = state.selectedModelIds.filter((id) => visibleIds.has(id));
@@ -1938,6 +2102,16 @@
     return denominator ? numerator / denominator : null;
   }
 
+  function median(values) {
+    if (!values || !values.length) return null;
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    if (sorted.length % 2) return sorted[mid];
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+
+  const DURATIONS_PER_GROUP_CAP = 200;
+
   function groupMetricsByAgent(rows) {
     const groups = new Map();
     for (const row of rows) {
@@ -1946,28 +2120,46 @@
         groups.set(key, {
           key,
           label: formatAgentLabel(row),
+          agentName: row.agent_name || "",
+          agentRuntime: row.agent_runtime || "",
           runs: 0,
           totalCost: 0,
           costCount: 0,
           totalDuration: 0,
           durationCount: 0,
+          minDuration: Infinity,
+          durations: [],
           totalInput: 0,
           inputCount: 0,
           totalOutput: 0,
           outputCount: 0,
           totalWords: 0,
           wordCountCount: 0,
+          totalCostForWordCalc: 0,
+          totalWordsForCostCalc: 0,
+          pairedRunCount: 0,
         });
       }
       const group = groups.get(key);
       group.runs += 1;
-      if (row.cost_usd !== null && row.cost_usd !== undefined && row.cost_usd !== "") {
-        group.totalCost += Number(row.cost_usd);
+      const costRaw = row.cost_usd;
+      const durationRaw = row.duration_sec;
+      const wordsRaw = row.word_count;
+      const hasCost = costRaw !== null && costRaw !== undefined && costRaw !== "";
+      const hasDuration = durationRaw !== null && durationRaw !== undefined && durationRaw !== "";
+      const hasWords = wordsRaw !== null && wordsRaw !== undefined && wordsRaw !== "";
+      if (hasCost) {
+        group.totalCost += Number(costRaw);
         group.costCount += 1;
       }
-      if (row.duration_sec !== null && row.duration_sec !== undefined && row.duration_sec !== "") {
-        group.totalDuration += Number(row.duration_sec);
-        group.durationCount += 1;
+      if (hasDuration) {
+        const d = Number(durationRaw);
+        if (Number.isFinite(d) && d > 0) {
+          group.totalDuration += d;
+          group.durationCount += 1;
+          if (d < group.minDuration) group.minDuration = d;
+          if (group.durations.length < DURATIONS_PER_GROUP_CAP) group.durations.push(d);
+        }
       }
       if (row.tokens_input !== null && row.tokens_input !== undefined && row.tokens_input !== "") {
         group.totalInput += Number(row.tokens_input);
@@ -1977,12 +2169,45 @@
         group.totalOutput += Number(row.tokens_output);
         group.outputCount += 1;
       }
-      if (row.word_count !== null && row.word_count !== undefined && row.word_count !== "") {
-        group.totalWords += Number(row.word_count);
+      if (hasWords) {
+        group.totalWords += Number(wordsRaw);
         group.wordCountCount += 1;
       }
+      if (hasCost && hasWords) {
+        const c = Number(costRaw);
+        const w = Number(wordsRaw);
+        if (Number.isFinite(c) && Number.isFinite(w) && c > 0 && w > 0) {
+          group.totalCostForWordCalc += c;
+          group.totalWordsForCostCalc += w;
+          group.pairedRunCount += 1;
+        }
+      }
+    }
+    for (const group of groups.values()) {
+      if (!Number.isFinite(group.minDuration)) group.minDuration = null;
     }
     return [...groups.values()].sort((a, b) => b.runs - a.runs || b.totalCost - a.totalCost || a.label.localeCompare(b.label));
+  }
+
+  const FASTEST_RUN_MIN_SAMPLES = 3;
+
+  function deriveLeaderboardMetrics(group) {
+    const costPerWord = group.totalCostForWordCalc > 0 && group.totalWordsForCostCalc > 0
+      ? group.totalCostForWordCalc / group.totalWordsForCostCalc
+      : null;
+    const wordsPerDollar = group.totalCostForWordCalc > 0 && group.totalWordsForCostCalc > 0
+      ? group.totalWordsForCostCalc / group.totalCostForWordCalc
+      : null;
+    const fastestEligible = group.durations.length >= FASTEST_RUN_MIN_SAMPLES;
+    return {
+      costPerWord,
+      wordsPerDollar,
+      // group.minDuration is uncapped; group.durations is capped at
+      // DURATIONS_PER_GROUP_CAP, so the median is approximate but the min is exact.
+      minDuration: fastestEligible ? group.minDuration : null,
+      medianDuration: fastestEligible ? median(group.durations) : null,
+      fastestEligible,
+    };
   }
 
   function toggleStatsSort(key) {
@@ -2075,6 +2300,8 @@
   function renderModelCardBody(model) {
     const overall = getOverall(model);
     const value = getValue(model);
+    const history = modelHistory(model.id);
+    const hasHistory = history && history.length >= 2;
     const metricRows = [
       ["Intelligence (GPQA/AA)", model.intelligence],
       ["Coding (SWE-bench)", model.coding],
@@ -2124,6 +2351,30 @@
         ]),
       ]),
       h("div", { class: "detail-grid" }, metricRows),
+      hasHistory ? h("div", { class: "detail-chart-section" }, [
+        h("div", { class: "detail-chart-head" }, [
+          h("h3", null, "Score history"),
+          h("div", { class: "detail-chart-legend" }, DETAIL_CHART_FIELDS.map((field) =>
+            h("span", { class: "detail-chart-legend-item" }, [
+              h("span", { class: "detail-chart-swatch", style: { backgroundColor: "var(" + field.color.replace(/^var\(|\)$/g, "") + ")" } }),
+              field.label,
+            ])
+          )),
+        ]),
+        h("div", { id: "detail-chart-" + model.id, class: "detail-chart" }),
+      ]) : null,
+      h("div", { class: "detail-actions" }, [
+        h("button", {
+          class: "vw-btn vw-btn-secondary",
+          type: "button",
+          disabled: !hasHistory,
+          title: hasHistory ? "Download a Markdown report" : "Not enough history yet",
+          onclick: (e) => {
+            e.stopPropagation();
+            downloadModelReport(model);
+          },
+        }, "Export report"),
+      ]),
       model.notes ? h("p", { class: "detail-notes" }, model.notes) : null,
     ]);
   }
@@ -2131,7 +2382,8 @@
   function renderSingleModelCard(model) {
     const key = String(model.id);
     const overall = getOverall(model);
-    return renderCollapsiblePanel({
+    const collapsed = !!state.ui.modelInfoCollapsed[key];
+    const node = renderCollapsiblePanel({
       id: "model-info-" + model.id,
       title: model.name,
       summary: [overall !== null ? "overall " + overall.toFixed(1) : "N/A"],
@@ -2146,15 +2398,19 @@
             const idx = state.selectedModelIds.indexOf(model.id);
             if (idx !== -1) state.selectedModelIds.splice(idx, 1);
             delete state.ui.modelInfoCollapsed[key];
+            destroyDetailUplot("detail-chart-" + model.id);
             persistUIState();
             render();
           },
         }, icon("x")),
       ],
-      collapsed: !!state.ui.modelInfoCollapsed[key],
+      collapsed,
       onToggle: () => toggleSingleModelCollapse(model.id),
       children: renderModelCardBody(model),
     });
+    if (!collapsed) scheduleDetailChartDraw(model.id);
+    else destroyDetailUplot("detail-chart-" + model.id);
+    return node;
   }
 
   function renderDetailPanelsNode(models) {
@@ -2978,6 +3234,10 @@
     if (state.bootstrap.state === "initializing") nodes.push(renderBootstrapOverlay());
     else if (state.runUpdate.active) nodes.push(renderRunUpdateOverlay());
     else if (state.manualRefreshModal.open) nodes.push(renderManualRefreshModal());
+    if (state.helpModal.open) {
+      const helpNode = renderHelpModal();
+      if (helpNode) nodes.push(helpNode);
+    }
     slot.replaceChildren(...nodes);
     document.body.classList.toggle("has-overlay", nodes.length > 0);
   }
@@ -3038,6 +3298,7 @@
       h("th", null, "Agent Tasks"),
       h("th", null, "Speed"),
       h("th", { class: "num" }, "Overall"),
+      h("th", { class: "trend-col" }, "Trend"),
       h("th", { class: "num" }, "Cost"),
       h("th", { class: "num" }, "Value"),
     ]));
@@ -3072,6 +3333,7 @@
         h("td", null, renderScoreCell(model.agents)),
         h("td", null, renderScoreCell(model.speed)),
         h("td", { class: "summary-cell " + tier(overall).cls }, overall !== null ? overall.toFixed(1) : "—"),
+        h("td", { class: "trend-col" }, renderSparkline(model.id)),
         h("td", { class: "summary-cell " + tier(model.cost).cls }, model.cost !== null ? Number(model.cost).toFixed(1) : "—"),
         h("td", { class: "summary-cell " + tier(value).cls }, value !== null ? value.toFixed(1) : "—"),
       ]);
@@ -3133,6 +3395,7 @@
     const options = [
       ["overall", "Overall"],
       ["value", "Value"],
+      ["trend", "Trend"],
       ["intelligence", "Intelligence"],
       ["coding", "Coding"],
       ["agents", "Agents"],
@@ -3218,6 +3481,78 @@
     }
   }
 
+  function safeParseJson(value) {
+    if (!value) return null;
+    try { return JSON.parse(value); } catch (_) { return null; }
+  }
+
+  function lookupPriorScore(modelName, field, asOfDate) {
+    if (!METRIC_KEYS.includes(field)) return null;
+    const lcName = String(modelName || "").toLowerCase();
+    const model = state.models.find((m) => String(m.name || "").toLowerCase() === lcName);
+    const history = model ? state.scoreHistory.get(model.id) : null;
+    if (!history || !history.length) return null;
+    let prior = null;
+    for (const row of history) {
+      if (row.as_of < asOfDate) {
+        const value = row[field];
+        if (value !== null && value !== undefined && value !== "") prior = Number(value);
+      } else {
+        break;
+      }
+    }
+    return prior;
+  }
+
+  function diffChangelogs(fromDate, toDate) {
+    if (!fromDate || !toDate || fromDate >= toDate) {
+      return { newModels: [], scoreChanges: [], statusChanges: [] };
+    }
+    const newSinceA = new Map();
+    const scoreDeltas = new Map();
+    const statusDeltas = new Map();
+    const ascending = [...state.changelogs].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    for (const row of ascending) {
+      if (row.date <= fromDate || row.date > toDate) continue;
+      const parsed = safeParseJson(row.changed_json) || {};
+      const newModelsRaw = parseJsonArray(row.new_models_json);
+      for (const m of newModelsRaw) {
+        const entry = typeof m === "string" ? { name: m } : m;
+        const name = entry && entry.name;
+        if (name && !newSinceA.has(name)) newSinceA.set(name, entry);
+      }
+      for (const u of (parsed.score_updates || [])) {
+        if (!u || !u.name || !u.field) continue;
+        const k = u.name + "|" + u.field;
+        const existing = scoreDeltas.get(k);
+        scoreDeltas.set(k, {
+          name: u.name,
+          field: u.field,
+          from: existing && existing.from !== undefined ? existing.from : lookupPriorScore(u.name, u.field, row.date),
+          to: u.new === undefined ? u.to : u.new,
+          occurred: row.date,
+          source_url: u.source_url || (existing && existing.source_url) || "",
+        });
+      }
+      for (const s of (parsed.status_changes || [])) {
+        if (!s || !s.name) continue;
+        const existing = statusDeltas.get(s.name);
+        statusDeltas.set(s.name, {
+          name: s.name,
+          from: existing && existing.from !== undefined ? existing.from : null,
+          to: s.to,
+          occurred: row.date,
+          source_url: s.source_url || (existing && existing.source_url) || "",
+        });
+      }
+    }
+    return {
+      newModels: [...newSinceA.values()],
+      scoreChanges: [...scoreDeltas.values()],
+      statusChanges: [...statusDeltas.values()],
+    };
+  }
+
   function renderMarkdown(markdown) {
     const article = h("article", { class: "markdown vw-markdown" });
     if (window.marked && typeof window.marked.parse === "function") {
@@ -3232,19 +3567,126 @@
     return article;
   }
 
-  function renderChangelog() {
-    if (!state.changelogs.length) {
-      return renderEmptyState("No Changelogs Yet", "Run a daily update and entries will appear here.");
+  function setChangelogTab(tab) {
+    const next = tab === "compare" ? "compare" : "read";
+    if (state.activeChangelogTab === next) return;
+    state.activeChangelogTab = next;
+    if (next === "compare") {
+      state.changelogCompare.active = true;
+      const dates = state.changelogs.map((c) => c.date).sort();
+      if (!state.changelogCompare.from && dates.length) state.changelogCompare.from = dates[0];
+      if (!state.changelogCompare.to && dates.length) state.changelogCompare.to = dates[dates.length - 1];
     }
-    const active = state.changelogs.find((row) => row.date === state.activeChangelogDate) || state.changelogs[0];
-    if (active && state.activeChangelogDate !== active.date) state.activeChangelogDate = active.date;
-    if (active) ensureChangelogBody(active.date);
-    const cache = active ? state.changelogBodies[active.date] : null;
-    let body;
+    pushChangelogRouteHash(false);
+    render();
+  }
+
+  function setCompareDate(field, value) {
+    if (field !== "from" && field !== "to") return;
+    state.changelogCompare[field] = value || null;
+    pushChangelogRouteHash(true);
+    render();
+  }
+
+  function renderCompareDatePicker(label, value, field) {
+    const dates = state.changelogs.map((c) => c.date).sort();
+    return h("label", { class: "compare-date-field" }, [
+      h("span", { class: "compare-date-label" }, label),
+      h("select", {
+        class: "compare-date-select",
+        value: value || "",
+        onchange: (event) => setCompareDate(field, event.target.value),
+      }, [
+        h("option", { value: "" }, "—"),
+        ...dates.map((date) => h("option", { value: date, selected: date === value }, formatShortDate(date))),
+      ]),
+    ]);
+  }
+
+  function renderCompareScoreArrow(from, to) {
+    const fromText = from === null || from === undefined ? "—" : Number(from).toFixed(1);
+    const toText = to === null || to === undefined ? "—" : Number(to).toFixed(1);
+    let cls = "compare-arrow";
+    if (typeof from === "number" && typeof to === "number") {
+      if (to > from + 0.05) cls += " up";
+      else if (to < from - 0.05) cls += " down";
+      else cls += " flat";
+    }
+    return h("span", { class: cls }, [
+      h("span", { class: "compare-from" }, fromText),
+      h("span", { class: "compare-arrow-glyph" }, " → "),
+      h("span", { class: "compare-to" }, toText),
+    ]);
+  }
+
+  function renderCompareSection(diff) {
+    const { newModels, scoreChanges, statusChanges } = diff;
+    const totalChanges = newModels.length + scoreChanges.length + statusChanges.length;
+    if (!totalChanges) {
+      return h("div", { class: "compare-empty" }, "No changes between " +
+        (state.changelogCompare.from || "—") + " and " + (state.changelogCompare.to || "—") + ".");
+    }
+    const newModelsBlock = newModels.length ? h("div", { class: "compare-block" }, [
+      h("div", { class: "compare-block-head" }, [
+        h("h3", null, "New models"),
+        h("span", { class: "compare-count" }, String(newModels.length)),
+      ]),
+      h("ul", { class: "compare-new-list" }, newModels.map((m) => h("li", null, [
+        h("span", { class: "compare-model-name" }, m.name || ""),
+        m.vendor ? h("span", { class: "compare-vendor-pill" }, m.vendor) : null,
+      ]))),
+    ]) : null;
+    const byModel = new Map();
+    for (const change of scoreChanges) {
+      if (!byModel.has(change.name)) byModel.set(change.name, []);
+      byModel.get(change.name).push(change);
+    }
+    const scoreBlock = scoreChanges.length ? h("div", { class: "compare-block" }, [
+      h("div", { class: "compare-block-head" }, [
+        h("h3", null, "Score changes"),
+        h("span", { class: "compare-count" }, String(scoreChanges.length)),
+      ]),
+      h("div", { class: "compare-score-groups" }, [...byModel.entries()].map(([name, changes]) =>
+        h("div", { class: "compare-score-group" }, [
+          h("div", { class: "compare-score-group-head" }, name),
+          h("ul", { class: "compare-score-list" }, changes.map((c) => h("li", null, [
+            h("span", { class: "compare-field" }, c.field),
+            renderCompareScoreArrow(c.from, c.to),
+            h("span", { class: "compare-occurred" }, formatShortDate(c.occurred)),
+            c.source_url ? h("a", {
+              class: "compare-source",
+              href: c.source_url,
+              target: "_blank",
+              rel: "noopener noreferrer",
+            }, "source") : null,
+          ]))),
+        ])
+      )),
+    ]) : null;
+    const statusBlock = statusChanges.length ? h("div", { class: "compare-block" }, [
+      h("div", { class: "compare-block-head" }, [
+        h("h3", null, "Status changes"),
+        h("span", { class: "compare-count" }, String(statusChanges.length)),
+      ]),
+      h("ul", { class: "compare-status-list" }, statusChanges.map((s) => h("li", null, [
+        h("span", { class: "compare-model-name" }, s.name),
+        h("span", { class: "compare-arrow flat" }, [
+          h("span", { class: "compare-from" }, s.from || "—"),
+          h("span", { class: "compare-arrow-glyph" }, " → "),
+          h("span", { class: "compare-to" }, s.to || "—"),
+        ]),
+        h("span", { class: "compare-occurred" }, formatShortDate(s.occurred)),
+      ]))),
+    ]) : null;
+    return h("div", { class: "compare-sections" }, [newModelsBlock, scoreBlock, statusBlock].filter(Boolean));
+  }
+
+  function renderChangelogReadBody(active, cache) {
     if (!active) {
-      body = renderEmptyState("Select an Entry", "Choose a date from the sidebar to view its changelog.");
-    } else if (!cache || cache.status === "loading") {
-      body = h("div", { class: "changelog-body" }, [
+      return renderEmptyState("Select an Entry", "Choose a date from the sidebar to view its changelog.");
+    }
+    if (!cache || cache.status === "loading") {
+      return h("div", { class: "changelog-body" }, [
         h("div", { class: "changelog-skeleton" }, [
           h("div", { class: "skeleton-line w-60" }),
           h("div", { class: "skeleton-line w-80" }),
@@ -3252,11 +3694,49 @@
           h("div", { class: "skeleton-line w-70" }),
         ]),
       ]);
-    } else if (cache.status === "error") {
-      body = h("p", { class: "status-msg error" }, "Failed to load changelog: " + cache.error);
-    } else {
-      body = renderMarkdown(cache.body);
     }
+    if (cache.status === "error") {
+      return h("p", { class: "status-msg error" }, "Failed to load changelog: " + cache.error);
+    }
+    return renderMarkdown(cache.body);
+  }
+
+  function renderChangelogCompareBody() {
+    const fromDate = state.changelogCompare.from;
+    const toDate = state.changelogCompare.to;
+    const validRange = fromDate && toDate && fromDate < toDate;
+    const diff = validRange ? diffChangelogs(fromDate, toDate) : { newModels: [], scoreChanges: [], statusChanges: [] };
+    return h("div", { class: "compare-body" }, [
+      h("div", { class: "compare-controls" }, [
+        renderCompareDatePicker("From (older)", fromDate, "from"),
+        renderCompareDatePicker("To (newer)", toDate, "to"),
+      ]),
+      validRange
+        ? renderCompareSection(diff)
+        : h("div", { class: "compare-empty" }, "Pick two changelog dates above (older on the left, newer on the right) to compare."),
+    ]);
+  }
+
+  function renderChangelog() {
+    if (!state.changelogs.length) {
+      return renderEmptyState("No Changelogs Yet", "Run a daily update and entries will appear here.");
+    }
+    const active = state.changelogs.find((row) => row.date === state.activeChangelogDate) || state.changelogs[0];
+    if (active && state.activeChangelogDate !== active.date) state.activeChangelogDate = active.date;
+    if (active && state.activeChangelogTab !== "compare") ensureChangelogBody(active.date);
+    const cache = active ? state.changelogBodies[active.date] : null;
+    const tab = state.activeChangelogTab === "compare" ? "compare" : "read";
+    const body = tab === "compare" ? renderChangelogCompareBody() : renderChangelogReadBody(active, cache);
+    const tabStrip = h("div", { class: "changelog-tabs vw-segmented", role: "tablist" }, [
+      ["read", "Read"],
+      ["compare", "Compare"],
+    ].map(([key, label]) => h("button", {
+      class: "vw-segmented-item" + (tab === key ? " active" : ""),
+      type: "button",
+      role: "tab",
+      "aria-selected": String(tab === key),
+      onclick: () => setChangelogTab(key),
+    }, label)));
 
     return h("div", { class: "changelog-view" }, [
       h("aside", { class: "changelog-list" }, state.changelogs.map((entry) => {
@@ -3267,6 +3747,10 @@
           type: "button",
           onclick: () => {
             state.activeChangelogDate = entry.date;
+            if (state.activeChangelogTab !== "read") {
+              state.activeChangelogTab = "read";
+              pushChangelogRouteHash(true);
+            }
             render();
           },
         }, [
@@ -3281,10 +3765,11 @@
       h("section", { class: "changelog-panel" }, [
         h("div", { class: "changelog-panel-head" }, [
           h("div", null, [
-            h("p", { class: "eyebrow" }, active ? active.date : ""),
-            h("h2", null, active ? (active.title || formatDate(active.date)) : "Changelog"),
+            h("p", { class: "eyebrow" }, tab === "compare" ? "Compare" : (active ? active.date : "")),
+            h("h2", null, tab === "compare" ? "Compare changelogs" : (active ? (active.title || formatDate(active.date)) : "Changelog")),
           ]),
-          active && active.summary ? h("p", { class: "panel-summary" }, active.summary) : null,
+          tab === "read" && active && active.summary ? h("p", { class: "panel-summary" }, active.summary) : null,
+          tabStrip,
         ]),
         body,
       ]),
@@ -3300,6 +3785,209 @@
       h("div", { class: "stats-value vw-metric-value" }, value),
       h("div", { class: "stats-label vw-metric-label" }, label),
       note ? h("div", { class: "stats-note vw-hint" }, note) : null,
+    ]);
+  }
+
+  const LEADERBOARD_COLUMNS = [
+    { key: "runs", label: "Runs", sortable: true, defaultDir: "desc", numeric: true },
+    { key: "totalCost", label: "Total cost", sortable: true, defaultDir: "desc", numeric: true },
+    { key: "costPerWord", label: "Cost / word", sortable: true, defaultDir: "asc", numeric: true },
+    { key: "wordsPerDollar", label: "Words / $", sortable: true, defaultDir: "desc", numeric: true },
+    { key: "minDuration", label: "Fastest run (min)", sortable: true, defaultDir: "asc", numeric: true },
+  ];
+  const LEADERBOARD_KEYS = new Set(LEADERBOARD_COLUMNS.map((column) => column.key));
+
+  function leaderboardSortMarker(key) {
+    const sort = state.ui.statsLeaderboardSort;
+    if (!sort || sort.sortBy !== key) return "";
+    return sort.direction === "asc" ? " ↑" : " ↓";
+  }
+
+  function toggleLeaderboardSort(key) {
+    if (!LEADERBOARD_KEYS.has(key)) return;
+    const sort = state.ui.statsLeaderboardSort;
+    if (sort.sortBy === key) {
+      sort.direction = sort.direction === "asc" ? "desc" : "asc";
+    } else {
+      const column = LEADERBOARD_COLUMNS.find((c) => c.key === key);
+      sort.sortBy = key;
+      sort.direction = column?.defaultDir || "desc";
+    }
+    persistUIState();
+    render();
+  }
+
+  function compareLeaderboardEntries(a, b, key, dir) {
+    const left = a[key];
+    const right = b[key];
+    const leftMissing = left === null || left === undefined || !Number.isFinite(left);
+    const rightMissing = right === null || right === undefined || !Number.isFinite(right);
+    if (leftMissing && rightMissing) return a.group.label.localeCompare(b.group.label);
+    if (leftMissing) return 1;
+    if (rightMissing) return -1;
+    const sign = dir === "asc" ? 1 : -1;
+    if (left === right) return a.group.label.localeCompare(b.group.label);
+    return left < right ? -1 * sign : 1 * sign;
+  }
+
+  function renderAgentLeaderboard(rows) {
+    const grouped = groupMetricsByAgent(rows);
+    if (!grouped.length) {
+      return h("div", { class: "leaderboard-empty stats-card vw-metric" }, [
+        h("div", { class: "stats-value vw-metric-value" }, "—"),
+        h("div", { class: "stats-label vw-metric-label" }, "No agents match the current filter"),
+      ]);
+    }
+    const entries = grouped.map((group) => {
+      const derived = deriveLeaderboardMetrics(group);
+      return {
+        group,
+        runs: group.runs,
+        totalCost: group.costCount > 0 ? group.totalCost : null,
+        costPerWord: derived.costPerWord,
+        wordsPerDollar: derived.wordsPerDollar,
+        minDuration: derived.minDuration,
+        medianDuration: derived.medianDuration,
+        fastestEligible: derived.fastestEligible,
+      };
+    });
+
+    const bestEntries = {};
+    for (const column of LEADERBOARD_COLUMNS) {
+      const dir = column.defaultDir;
+      const ranked = [...entries].sort((a, b) => compareLeaderboardEntries(a, b, column.key, dir));
+      const top = ranked.find((e) => {
+        const v = e[column.key];
+        return v !== null && v !== undefined && Number.isFinite(v);
+      });
+      bestEntries[column.key] = top || null;
+    }
+
+    const summaryTiles = [];
+    if (bestEntries.costPerWord) {
+      summaryTiles.push(statCard(
+        "Best cost / word",
+        formatMicroCost(bestEntries.costPerWord.costPerWord),
+        bestEntries.costPerWord.group.label,
+      ));
+    } else {
+      summaryTiles.push(statCard("Best cost / word", "—", "Needs paired cost + word data"));
+    }
+    if (bestEntries.wordsPerDollar) {
+      summaryTiles.push(statCard(
+        "Most words / $",
+        formatNumber(bestEntries.wordsPerDollar.wordsPerDollar, 0),
+        bestEntries.wordsPerDollar.group.label,
+      ));
+    } else {
+      summaryTiles.push(statCard("Most words / $", "—", "Needs paired cost + word data"));
+    }
+    if (bestEntries.minDuration) {
+      summaryTiles.push(statCard(
+        "Fastest run (best)",
+        formatDuration(bestEntries.minDuration.minDuration),
+        bestEntries.minDuration.group.label,
+      ));
+    } else {
+      summaryTiles.push(statCard("Fastest run (best)", "—", "Needs ≥ 3 timed runs per agent"));
+    }
+
+    const sort = state.ui.statsLeaderboardSort;
+    const activeKey = LEADERBOARD_KEYS.has(sort.sortBy) ? sort.sortBy : "costPerWord";
+    const activeDir = sort.direction === "asc" ? "asc" : "desc";
+    const sorted = [...entries].sort((a, b) => compareLeaderboardEntries(a, b, activeKey, activeDir));
+    const valuedCount = sorted.filter((entry) => {
+      const v = entry[activeKey];
+      return v !== null && v !== undefined && Number.isFinite(v);
+    }).length;
+    const eligibleForTopHighlight = grouped.length >= 3 && valuedCount >= 3;
+
+    const renderHeaderCell = (column) => {
+      const cls = column.numeric ? "num" : null;
+      const isActive = activeKey === column.key;
+      const ariaSort = isActive ? (activeDir === "asc" ? "ascending" : "descending") : "none";
+      return h("th", { class: cls, "aria-sort": ariaSort }, h("button", {
+        class: "table-sort-btn",
+        type: "button",
+        onclick: () => toggleLeaderboardSort(column.key),
+      }, column.label + leaderboardSortMarker(column.key)));
+    };
+
+    const rowsBody = sorted.map((entry, idx) => {
+      const valuedRank = entry[activeKey] !== null && entry[activeKey] !== undefined && Number.isFinite(entry[activeKey]);
+      const rankBadgeIndex = valuedRank ? idx + 1 : null;
+      const rankBadgeClass = ["leaderboard-rank"];
+      if (eligibleForTopHighlight && rankBadgeIndex && rankBadgeIndex <= 3) {
+        rankBadgeClass.push("rank-" + rankBadgeIndex);
+      } else if (!valuedRank) {
+        rankBadgeClass.push("rank-blank");
+      }
+      const rankCell = h("td", null, h("span", { class: rankBadgeClass.join(" ") },
+        rankBadgeIndex ? "#" + rankBadgeIndex : "—"));
+
+      const agentCell = h("td", null, h("div", { class: "leaderboard-agent" }, [
+        h("div", { class: "leaderboard-agent-name" }, entry.group.agentName || "unknown"),
+        h("div", { class: "leaderboard-agent-runtime" }, entry.group.agentRuntime || "unknown"),
+      ]));
+
+      const runsCell = h("td", { class: "num" }, String(entry.runs));
+
+      const totalCostNote = entry.group.runs && entry.group.costCount < entry.group.runs
+        ? entry.group.costCount + " of " + entry.group.runs + " runs reported cost"
+        : null;
+      const totalCostCell = h("td", {
+        class: "num",
+        title: totalCostNote || undefined,
+      }, entry.totalCost !== null ? formatCurrency(entry.totalCost) : "—");
+
+      const costPerWordCell = entry.costPerWord !== null
+        ? h("td", { class: "num" }, formatMicroCost(entry.costPerWord))
+        : h("td", { class: "num" }, [
+            h("span", { class: "leaderboard-dim" }, "—"),
+            h("span", { class: "vw-status-chip vw-status-warning leaderboard-chip" }, "no cost data"),
+          ]);
+
+      const wordsPerDollarCell = entry.wordsPerDollar !== null
+        ? h("td", { class: "num" }, formatNumber(entry.wordsPerDollar, 0))
+        : h("td", { class: "num" }, [
+            h("span", { class: "leaderboard-dim" }, "—"),
+            h("span", { class: "vw-status-chip vw-status-warning leaderboard-chip" }, "no cost data"),
+          ]);
+
+      let fastestCell;
+      if (entry.fastestEligible && entry.minDuration !== null) {
+        const tooltip = "min " + formatDuration(entry.minDuration)
+          + " · median " + formatDuration(entry.medianDuration)
+          + " · n=" + entry.group.durations.length;
+        fastestCell = h("td", { class: "num", title: tooltip }, formatDuration(entry.minDuration));
+      } else {
+        fastestCell = h("td", { class: "num" }, [
+          h("span", { class: "leaderboard-dim" }, "—"),
+          h("span", { class: "vw-status-chip vw-status-warning leaderboard-chip" }, "n=" + entry.group.durations.length),
+        ]);
+      }
+
+      return h("tr", null, [
+        rankCell,
+        agentCell,
+        runsCell,
+        totalCostCell,
+        costPerWordCell,
+        wordsPerDollarCell,
+        fastestCell,
+      ]);
+    });
+
+    return h("div", { class: "leaderboard" }, [
+      h("div", { class: "leaderboard-summary stats-grid" }, summaryTiles),
+      h("div", { class: "table-wrap leaderboard-table-wrap" }, h("table", { class: "data-table leaderboard-table" }, [
+        h("thead", null, h("tr", null, [
+          h("th", { class: "leaderboard-rank-head" }, "Rank"),
+          h("th", null, "Agent"),
+          ...LEADERBOARD_COLUMNS.map(renderHeaderCell),
+        ])),
+        h("tbody", null, rowsBody),
+      ])),
     ]);
   }
 
@@ -3434,6 +4122,13 @@
           statCard("Words / run", formatNumber(averages.words, 0), "Changelog body only"),
           statCard("Cost / word", formatCurrency(averages.costPerWord), "Runs with both cost and word data"),
         ]),
+      ]),
+      h("section", { class: "stats-section" }, [
+        h("div", { class: "section-head" }, [
+          h("h2", null, "Agent Provider Leaderboard"),
+          h("p", null, "Ranks each agent + runtime by efficiency and best wall-clock. Cost-per-word and words-per-dollar use only runs that report both cost and word count; fastest run requires at least three timed runs."),
+        ]),
+        renderAgentLeaderboard(rows),
       ]),
       h("section", { class: "stats-section" }, [
         h("div", { class: "section-head" }, [
@@ -4313,7 +5008,144 @@
     });
   }
 
+  const DETAIL_CHART_FIELDS = [
+    { key: "intelligence", label: "Intelligence", color: "var(--vw-iridescent-1)" },
+    { key: "coding", label: "Coding", color: "var(--vw-iridescent-2)" },
+    { key: "agents", label: "Agents", color: "var(--vw-iridescent-3)" },
+    { key: "speed", label: "Speed", color: "var(--vw-iridescent-4)" },
+    { key: "cost", label: "Cost", color: "var(--vw-iridescent-5)" },
+  ];
+
+  function buildMultiSeriesData(history, fields) {
+    const sorted = [...history].sort((a, b) => String(a.as_of).localeCompare(String(b.as_of)));
+    const xs = [];
+    const seriesArrays = fields.map(() => []);
+    for (const row of sorted) {
+      const ts = Date.parse(row.as_of + "T00:00:00Z");
+      if (!Number.isFinite(ts)) continue;
+      xs.push(Math.floor(ts / 1000));
+      fields.forEach((field, i) => {
+        const raw = row[field.key];
+        const value = raw === null || raw === undefined || raw === "" ? null : Number(raw);
+        seriesArrays[i].push(Number.isFinite(value) ? value : null);
+      });
+    }
+    return { xs, seriesArrays };
+  }
+
+  function renderMultiSeriesChart(mountId, history, fields, options) {
+    const mount = document.getElementById(mountId);
+    if (!mount || typeof uPlot === "undefined") return;
+    const prior = state.detailUplots[mountId];
+    if (prior) {
+      try { prior.destroy(); } catch (_) { /* noop */ }
+      state.detailUplots[mountId] = null;
+    }
+    mount.innerHTML = "";
+    const { xs, seriesArrays } = buildMultiSeriesData(history, fields);
+    if (!xs.length) {
+      const empty = document.createElement("div");
+      empty.className = "detail-chart-empty";
+      empty.textContent = "Not enough history yet";
+      mount.appendChild(empty);
+      return;
+    }
+    const width = Math.max(mount.clientWidth || 0, 260);
+    const height = (options && options.height) || 180;
+    const series = [
+      {},
+      ...fields.map((field) => ({
+        label: field.label,
+        stroke: resolveCSSVar(field.color),
+        width: 1.5,
+        points: { show: true, size: 4, stroke: resolveCSSVar(field.color) },
+        value: (_u, v) => (v == null ? "—" : Number(v).toFixed(1)),
+      })),
+    ];
+    const dayPadSec = 86400 * 3;
+    const xRange = xs.length <= 1 ? [xs[0] - dayPadSec, xs[0] + dayPadSec] : null;
+    const opts = {
+      width,
+      height,
+      padding: [10, 10, 4, 4],
+      legend: { show: false },
+      cursor: { drag: { x: false, y: false }, points: { size: 5 } },
+      scales: {
+        x: xRange ? { time: true, range: () => xRange } : { time: true },
+        y: { range: () => [0, 10] },
+      },
+      axes: [
+        {
+          stroke: resolveCSSVar("var(--vw-text-faint)"),
+          grid: { stroke: "rgba(255,255,255,0.06)" },
+          ticks: { stroke: "rgba(255,255,255,0.12)" },
+          values: (_u, splits) => splits.map((s) => formatShortDate(new Date(s * 1000).toISOString().slice(0, 10))),
+          font: "10px var(--vw-font-body)",
+        },
+        {
+          stroke: resolveCSSVar("var(--vw-text-faint)"),
+          grid: { stroke: "rgba(255,255,255,0.06)" },
+          ticks: { stroke: "rgba(255,255,255,0.12)" },
+          size: 32,
+          values: (_u, splits) => splits.map((s) => Number(s).toFixed(0)),
+          font: "10px var(--vw-font-body)",
+        },
+      ],
+      series,
+    };
+    state.detailUplots[mountId] = new uPlot(opts, [xs, ...seriesArrays], mount);
+  }
+
+  function destroyDetailUplot(mountId) {
+    const instance = state.detailUplots[mountId];
+    if (instance) {
+      try { instance.destroy(); } catch (_) { /* noop */ }
+    }
+    state.detailUplots[mountId] = null;
+    const modelKey = mountId.replace(/^detail-chart-/, "");
+    if (state.detailChartFrames[modelKey]) {
+      window.cancelAnimationFrame(state.detailChartFrames[modelKey]);
+      state.detailChartFrames[modelKey] = null;
+    }
+  }
+
+  function destroyAllDetailUplots() {
+    for (const key of Object.keys(state.detailChartFrames)) {
+      const frame = state.detailChartFrames[key];
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+        state.detailChartFrames[key] = null;
+      }
+    }
+    Object.keys(state.detailUplots).forEach(destroyDetailUplot);
+  }
+
+  function scheduleDetailChartDraw(modelId) {
+    const mountId = "detail-chart-" + modelId;
+    const history = modelHistory(modelId);
+    if (!history || history.length < 2) {
+      destroyDetailUplot(mountId);
+      const mount = document.getElementById(mountId);
+      if (mount) {
+        mount.innerHTML = "";
+        const empty = document.createElement("div");
+        empty.className = "detail-chart-empty";
+        empty.textContent = "Not enough history yet";
+        mount.appendChild(empty);
+      }
+      return;
+    }
+    const prevFrame = state.detailChartFrames[modelId];
+    if (prevFrame) window.cancelAnimationFrame(prevFrame);
+    state.detailChartFrames[modelId] = window.requestAnimationFrame(() => {
+      renderMultiSeriesChart(mountId, history, DETAIL_CHART_FIELDS, { height: 180 });
+    });
+  }
+
   function scheduleChartDraw() {
+    if (state.area !== "models") {
+      destroyAllDetailUplots();
+    }
     if (state.view !== "stats") {
       destroyAllUplots();
       return;
@@ -4346,6 +5178,228 @@
         axis: (value) => formatCompactNumber(value),
       });
     });
+  }
+
+  async function fetchChangelogMarkdown(entry) {
+    const cached = state.changelogBodies[entry.date];
+    if (cached && cached.status === "ready") return cached.body;
+    try {
+      const res = await fetch(normalizeAssetPath(entry.path), { cache: "no-store" });
+      if (!res.ok) return null;
+      return stripFrontmatter(await res.text());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function changelogMentionsModel(entry, modelName) {
+    const lcName = modelName.toLowerCase();
+    const newModels = parseJsonArray(entry.new_models_json);
+    for (const m of newModels) {
+      const name = typeof m === "string" ? m : m && m.name;
+      if (name && String(name).toLowerCase() === lcName) return true;
+    }
+    let parsed = null;
+    try { parsed = JSON.parse(entry.changed_json || "null"); } catch (_) { parsed = null; }
+    if (parsed && Array.isArray(parsed.score_updates)) {
+      for (const u of parsed.score_updates) {
+        if (u && String(u.name || "").toLowerCase() === lcName) return true;
+      }
+    }
+    if (parsed && Array.isArray(parsed.status_changes)) {
+      for (const s of parsed.status_changes) {
+        if (s && String(s.name || "").toLowerCase() === lcName) return true;
+      }
+    }
+    return false;
+  }
+
+  function extractModelMentions(markdown, modelName) {
+    if (!markdown) return [];
+    const lines = markdown.split(/\r?\n/);
+    const lcName = modelName.toLowerCase();
+    const blocks = [];
+    let current = [];
+    let inHeadingForModel = false;
+    const flush = () => {
+      if (!current.length) return;
+      const text = current.join("\n").trim();
+      if (text) blocks.push(text);
+      current = [];
+    };
+    for (const line of lines) {
+      const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
+      if (headingMatch) {
+        flush();
+        const headingText = headingMatch[2].toLowerCase();
+        inHeadingForModel = headingText.includes(lcName);
+        continue;
+      }
+      if (line.trim() === "") {
+        if (current.length) {
+          const text = current.join("\n").trim();
+          const matches = inHeadingForModel || text.toLowerCase().includes(lcName);
+          if (matches && text) blocks.push(text);
+          current = [];
+        }
+        continue;
+      }
+      current.push(line);
+    }
+    if (current.length) {
+      const text = current.join("\n").trim();
+      const matches = inHeadingForModel || text.toLowerCase().includes(lcName);
+      if (matches && text) blocks.push(text);
+    }
+    return blocks;
+  }
+
+  function yamlScalar(value) {
+    const text = String(value === null || value === undefined ? "" : value);
+    if (!text) return "\"\"";
+    const YAML_RESERVED = /^(null|true|false|yes|no|on|off|~|[+-]?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?|[+-]?\.\d+(?:[eE][+-]?\d+)?|0x[0-9a-fA-F]+|\.nan|[+-]?\.inf)$/i;
+    if (
+      /[:#\[\]{}>|&*!%@`\n\r\t"'\\]/.test(text) ||
+      /^[\s-?]/.test(text) ||
+      /\s$/.test(text) ||
+      YAML_RESERVED.test(text)
+    ) {
+      return "\"" + text.replace(/\\/g, "\\\\").replace(/"/g, "\\\"").replace(/\n/g, " ").replace(/\r/g, "").replace(/\t/g, " ") + "\"";
+    }
+    return text;
+  }
+
+  function buildModelReportFrontmatter(model) {
+    const generated = new Date().toISOString();
+    const lines = [
+      "---",
+      "model: " + yamlScalar(model.name),
+      "vendor: " + yamlScalar(model.vendor),
+      "status: " + yamlScalar(model.status || "active"),
+      "generated: " + yamlScalar(generated),
+      "generator: " + yamlScalar("LLM-Dash"),
+      "---",
+      "",
+    ];
+    return lines.join("\n");
+  }
+
+  function tierLabel(score) {
+    return tier(score).label;
+  }
+
+  function buildLatestScoresTable(model) {
+    const overall = getOverall(model);
+    const rows = [
+      ["Intelligence", model.intelligence],
+      ["Coding", model.coding],
+      ["Agents", model.agents],
+      ["Speed", model.speed],
+      ["Cost", model.cost],
+    ];
+    const lines = [
+      "| Metric | Score | Tier |",
+      "|---|---|---|",
+    ];
+    for (const [label, score] of rows) {
+      const value = score === null || score === undefined ? "—" : Number(score).toFixed(1);
+      lines.push("| " + label + " | " + value + " | " + tierLabel(score) + " |");
+    }
+    const overallText = overall === null || overall === undefined ? "—" : overall.toFixed(1);
+    lines.push("| **Overall** | **" + overallText + "** | **" + tierLabel(overall) + "** |");
+    return lines.join("\n");
+  }
+
+  function buildHistoryTable(history) {
+    if (!history || !history.length) return "_No history rows yet._";
+    const lines = [
+      "| Date | Intelligence | Coding | Agents | Speed | Cost | Overall |",
+      "|---|---|---|---|---|---|---|",
+    ];
+    for (const row of history) {
+      const overall = avgOverallRow(row);
+      const cells = [
+        row.as_of,
+        row.intelligence === null || row.intelligence === undefined ? "—" : Number(row.intelligence).toFixed(1),
+        row.coding === null || row.coding === undefined ? "—" : Number(row.coding).toFixed(1),
+        row.agents === null || row.agents === undefined ? "—" : Number(row.agents).toFixed(1),
+        row.speed === null || row.speed === undefined ? "—" : Number(row.speed).toFixed(1),
+        row.cost === null || row.cost === undefined ? "—" : Number(row.cost).toFixed(1),
+        overall === null ? "—" : overall.toFixed(1),
+      ];
+      lines.push("| " + cells.join(" | ") + " |");
+    }
+    return lines.join("\n");
+  }
+
+  async function buildModelReport(model) {
+    const history = modelHistory(model.id) || [];
+    const latestRow = history.length ? history[history.length - 1] : null;
+    const latestDate = latestRow ? latestRow.as_of : "—";
+    const firstDate = history.length ? history[0].as_of : "—";
+    const sections = [];
+    sections.push(buildModelReportFrontmatter(model));
+    sections.push("# " + model.name + " — Score Report\n");
+    const headLines = [];
+    if (model.vendor) headLines.push("**Vendor:** " + model.vendor);
+    headLines.push("**First seen:** " + firstDate);
+    headLines.push("**Latest:** " + latestDate);
+    headLines.push("**Status:** " + (model.status || "active"));
+    if (model.params) headLines.push("**Parameters:** " + model.params);
+    if (model.pricing) headLines.push("**Pricing:** " + model.pricing + "/M tok");
+    sections.push(headLines.join("\n") + "\n");
+    sections.push("## Latest Scores (" + (latestRow ? latestRow.as_of : "—") + ")\n");
+    sections.push(buildLatestScoresTable(model) + "\n");
+    sections.push("## Score History\n");
+    sections.push(buildHistoryTable(history) + "\n");
+
+    const candidates = state.changelogs.filter((entry) => changelogMentionsModel(entry, model.name));
+    const mentionLimit = 8;
+    const mentionBlocks = [];
+    let truncated = false;
+    for (const entry of candidates) {
+      if (mentionBlocks.length >= mentionLimit) {
+        truncated = true;
+        break;
+      }
+      const body = await fetchChangelogMarkdown(entry);
+      if (!body) continue;
+      const blocks = extractModelMentions(body, model.name);
+      if (!blocks.length) continue;
+      mentionBlocks.push({ date: entry.date, block: blocks[0] });
+    }
+    if (mentionBlocks.length) {
+      sections.push("## Notes & Citations\n");
+      sections.push("> Pulled from changelog entries that mention this model.\n");
+      for (const m of mentionBlocks) {
+        sections.push("### " + m.date + "\n");
+        sections.push(m.block + "\n");
+      }
+      if (truncated) {
+        sections.push("> ...older mentions truncated\n");
+      }
+    }
+    sections.push("---\n");
+    sections.push("_Exported from LLM-Dash on " + new Date().toISOString() + "_\n");
+    return sections.join("\n");
+  }
+
+  async function downloadModelReport(model) {
+    try {
+      const markdown = await buildModelReport(model);
+      const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      const slug = String(model.name || "model").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+      anchor.download = (slug || "model") + "-report.md";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (error) {
+      console.error("Model report export failed:", error);
+    }
   }
 
   function csvCell(value) {
@@ -4482,6 +5536,245 @@
     if (app) app.removeAttribute("data-booting");
   }
 
+  const KEYBOARD_SHORTCUT_HELP = [
+    { keys: ["/"], label: "Focus search" },
+    { keys: ["j"], label: "Focus next row (Models table)" },
+    { keys: ["k"], label: "Focus previous row (Models table)" },
+    { keys: ["Enter"], label: "Toggle selected row's panel" },
+    { keys: ["e"], label: "Export current single-model report" },
+    { keys: ["r"], label: "Refresh data" },
+    { keys: ["?"], label: "Open this shortcuts modal" },
+    { keys: ["Esc"], label: "Close drawer / overlay" },
+  ];
+
+  function shortcutsAllowed() {
+    if (state.wizard.open) return false;
+    if (state.bootstrap.state === "initializing") return false;
+    return true;
+  }
+
+  function isEditingTarget(target) {
+    if (!target) return false;
+    const tag = target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+    if (target.isContentEditable) return true;
+    return false;
+  }
+
+  function focusSearchInput() {
+    if (state.area !== "models") return;
+    if (state.ui.modelFiltersCollapsed) {
+      state.ui.modelFiltersCollapsed = false;
+      persistUIState();
+      render();
+    }
+    window.setTimeout(() => {
+      const input = document.getElementById("model-search");
+      if (!input) return;
+      input.focus();
+      try { input.select(); } catch (_) { /* noop */ }
+    }, 0);
+  }
+
+  function moveTableFocus(direction) {
+    if (!state.models.length) return;
+    if (state.area !== "models" || state.view !== "table") return;
+    if (state.focusedRowIndex < 0 && direction < 0) return;
+    const next = clamp(state.focusedRowIndex + direction, 0, state.models.length - 1);
+    state.focusedRowIndex = next;
+    const id = state.models[next] && state.models[next].id;
+    if (!id) return;
+    const row = document.getElementById("model-row-" + id);
+    if (!row) return;
+    row.focus();
+    if (typeof row.scrollIntoView === "function") {
+      row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }
+
+  function exportSelectedModelReport() {
+    if (state.area !== "models") return;
+    if (state.selectedModelIds.length !== 1) return;
+    const model = state.models.find((m) => m.id === state.selectedModelIds[0]);
+    if (!model) return;
+    downloadModelReport(model);
+  }
+
+  function triggerRefresh() {
+    if (state.runUpdate.active || state.runUpdate._starting) return;
+    if (state.wizard.open) return;
+    if (state.manualRefreshModal && state.manualRefreshModal.open) return;
+    if (state.bootstrap.state === "initializing") return;
+    handleRefresh();
+  }
+
+  function openHelpModal() {
+    if (state.runUpdate.active) return;
+    if (state.bootstrap.state === "initializing") return;
+    if (state.manualRefreshModal && state.manualRefreshModal.open) return;
+    state.helpModal.open = true;
+    state.helpModal.returnFocus = captureFocus();
+    render();
+    window.requestAnimationFrame(() => {
+      const closeBtn = document.querySelector(".help-modal .help-modal-close");
+      if (closeBtn && typeof closeBtn.focus === "function") {
+        try { closeBtn.focus({ preventScroll: true }); } catch (_) { closeBtn.focus(); }
+      }
+    });
+  }
+
+  function closeHelpModal() {
+    if (!state.helpModal.open) return;
+    const focusToRestore = state.helpModal.returnFocus;
+    state.helpModal.open = false;
+    state.helpModal.returnFocus = null;
+    render();
+    if (focusToRestore) restoreFocus(focusToRestore);
+  }
+
+  function renderHelpModal() {
+    if (!state.helpModal.open) return null;
+    return h("div", {
+      class: "vw-modal-backdrop help-modal-backdrop",
+      role: "presentation",
+      onclick: (e) => { if (e.target === e.currentTarget) closeHelpModal(); },
+    }, h("div", {
+      class: "vw-modal help-modal",
+      role: "dialog",
+      "aria-modal": "true",
+      "aria-labelledby": "help-modal-title",
+    }, [
+      h("div", { class: "vw-modal-header" }, [
+        h("h2", { id: "help-modal-title" }, "Keyboard shortcuts"),
+        h("button", {
+          class: "action-btn subtle icon-btn help-modal-close",
+          type: "button",
+          "aria-label": "Close shortcuts",
+          onclick: closeHelpModal,
+        }, icon("x")),
+      ]),
+      h("div", { class: "vw-modal-body" }, h("ul", { class: "help-shortcuts" }, KEYBOARD_SHORTCUT_HELP.map((entry) =>
+        h("li", null, [
+          h("span", { class: "help-keys" }, entry.keys.map((key) => h("kbd", null, key))),
+          h("span", { class: "help-label" }, entry.label),
+        ])
+      ))),
+    ]));
+  }
+
+  function ensureToastContainer() {
+    let container = document.querySelector(".vw-toast-container");
+    if (container) return container;
+    container = document.createElement("div");
+    container.className = "vw-toast-container";
+    container.setAttribute("role", "status");
+    container.setAttribute("aria-live", "polite");
+    document.body.appendChild(container);
+    return container;
+  }
+
+  function showToast(opts) {
+    const container = ensureToastContainer();
+    const tone = opts && opts.tone ? opts.tone : "info";
+    const toast = document.createElement("div");
+    toast.className = "vw-toast vw-toast-" + tone;
+    if (tone === "error" || tone === "warning") {
+      toast.setAttribute("role", "alert");
+      toast.setAttribute("aria-live", "assertive");
+    }
+    let timer = null;
+    let actionTaken = false;
+    const dismiss = (viaAction) => {
+      if (viaAction) actionTaken = true;
+      if (timer) { clearTimeout(timer); timer = null; }
+      toast.classList.add("dismissing");
+      window.setTimeout(() => {
+        if (toast.parentElement) toast.parentElement.removeChild(toast);
+        if (typeof opts.onDismiss === "function") opts.onDismiss(actionTaken);
+      }, 200);
+    };
+    const message = document.createElement("span");
+    message.className = "vw-toast-message";
+    message.textContent = opts && opts.message ? opts.message : "";
+    toast.appendChild(message);
+    if (opts && opts.actionLabel) {
+      const action = document.createElement("button");
+      action.type = "button";
+      action.className = "vw-toast-action";
+      action.textContent = opts.actionLabel;
+      action.addEventListener("click", () => {
+        dismiss(true);
+        if (typeof opts.onAction === "function") {
+          try { opts.onAction(); } catch (e) { console.error(e); }
+        }
+      });
+      toast.appendChild(action);
+    }
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "vw-toast-dismiss";
+    close.setAttribute("aria-label", "Dismiss");
+    close.textContent = "×";
+    close.addEventListener("click", () => dismiss(false));
+    toast.appendChild(close);
+    container.appendChild(toast);
+    if (opts && opts.autoDismissMs && opts.autoDismissMs > 0) {
+      timer = window.setTimeout(() => dismiss(false), opts.autoDismissMs);
+    }
+    return { dismiss: () => dismiss(false) };
+  }
+
+  function showNewDataToast(serverLastUpdated) {
+    if (!serverLastUpdated) return;
+    if (state.uiToastDismissed === serverLastUpdated) return;
+    if (state.uiToastShownFor === serverLastUpdated) return;
+    if (state.uiToastHandle && typeof state.uiToastHandle.dismiss === "function") {
+      try { state.uiToastHandle.dismiss(); } catch (_) { /* noop */ }
+    }
+    state.uiToastShownFor = serverLastUpdated;
+    const handle = showToast({
+      message: "New data available",
+      actionLabel: "Reload",
+      tone: "success",
+      onAction: async () => {
+        try {
+          await reloadDB();
+          updateFreshness();
+          render();
+        } catch (error) {
+          console.error("toast reload failed", error);
+        } finally {
+          state.uiToastHandle = null;
+          state.uiToastShownFor = null;
+        }
+      },
+      onDismiss: (actionTaken) => {
+        if (!actionTaken) state.uiToastDismissed = serverLastUpdated;
+        if (state.uiToastShownFor === serverLastUpdated) state.uiToastShownFor = null;
+        if (state.uiToastHandle && state.uiToastHandle.__lastUpdated === serverLastUpdated) state.uiToastHandle = null;
+      },
+    });
+    handle.__lastUpdated = serverLastUpdated;
+    state.uiToastHandle = handle;
+  }
+
+  async function checkForNewData() {
+    if (state.runUpdate.active || state.runUpdate._starting) return;
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+    try {
+      const res = await fetch("/api/meta", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      const next = data && data.last_updated;
+      if (!next) return;
+      if (state.lastUpdated && next !== state.lastUpdated) {
+        showNewDataToast(next);
+      }
+    } catch (_) {
+      /* offline; silently retry next tick */
+    }
+  }
+
   function renderWizardPage() {
     const app = document.getElementById("app");
     const overlayRoot = document.getElementById("overlay-root");
@@ -4614,6 +5907,8 @@
     });
     const refreshButton = document.getElementById("refresh-trigger");
     if (refreshButton) refreshButton.addEventListener("click", handleRefresh);
+    const helpButton = document.getElementById("help-trigger");
+    if (helpButton) helpButton.addEventListener("click", openHelpModal);
     const sidebarToggle = document.getElementById("sidebar-toggle");
     if (sidebarToggle) sidebarToggle.addEventListener("click", () => {
       state.ui.sidebarOpen = !state.ui.sidebarOpen;
@@ -4626,19 +5921,78 @@
     });
     window.addEventListener("resize", scheduleChartDraw);
     window.addEventListener("keydown", (event) => {
-      if (event.key !== "Escape") return;
-      if (state.ui.sidebarOpen) {
-        state.ui.sidebarOpen = false;
-        syncShellNav();
+      if (event.defaultPrevented) return;
+
+      // Escape: existing behavior preserved verbatim, including in inputs.
+      if (event.key === "Escape") {
+        if (state.helpModal.open) {
+          closeHelpModal();
+          return;
+        }
+        if (state.ui.sidebarOpen) {
+          state.ui.sidebarOpen = false;
+          syncShellNav();
+          return;
+        }
+        if (state.wizard.open) return;
+        if (isRunUpdateBusy()) return;
+        if (state.runUpdate.active && state.runUpdate.state !== "running") {
+          closeRunUpdateOverlay();
+          return;
+        }
+        if (state.manualRefreshModal.open) closeManualRefreshModal();
         return;
       }
-      if (state.wizard.open) return;
-      if (isRunUpdateBusy()) return;
-      if (state.runUpdate.active && state.runUpdate.state !== "running") {
-        closeRunUpdateOverlay();
-        return;
+
+      // Custom shortcuts: gated against editing surfaces, modifiers, and
+      // any in-progress modal/wizard/bootstrap.
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (isEditingTarget(document.activeElement)) return;
+      if (!shortcutsAllowed()) return;
+      if (state.manualRefreshModal && state.manualRefreshModal.open) return;
+      if (state.runUpdate.active) return;
+      if (state.helpModal.open) return;
+
+      const key = String(event.key || "").toLowerCase();
+      const drawerOpen = !!state.ui.sidebarOpen;
+      switch (key) {
+        case "/":
+          event.preventDefault();
+          focusSearchInput();
+          return;
+        case "j":
+          if (drawerOpen) return;
+          if (state.area === "models" && state.view === "table") {
+            event.preventDefault();
+            moveTableFocus(1);
+          }
+          return;
+        case "k":
+          if (drawerOpen) return;
+          if (state.area === "models" && state.view === "table") {
+            event.preventDefault();
+            moveTableFocus(-1);
+          }
+          return;
+        case "e":
+          if (drawerOpen) return;
+          if (state.area === "models" && state.selectedModelIds.length === 1) {
+            event.preventDefault();
+            exportSelectedModelReport();
+          }
+          return;
+        case "r":
+          event.preventDefault();
+          triggerRefresh();
+          return;
+        case "?":
+          event.preventDefault();
+          openHelpModal();
+          return;
       }
-      if (state.manualRefreshModal.open) closeManualRefreshModal();
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") checkForNewData();
     });
     applyRoute(parseHashRoute(location.hash), { updateHash: true, replace: true });
     window.addEventListener("popstate", () => {
@@ -4671,6 +6025,7 @@
         await openWizard(0);
       }
       window.setInterval(updateFreshness, 60000);
+      state.metaPollFrame = window.setInterval(checkForNewData, 15000);
     } catch (error) {
       console.error("LLM-Dash boot failed:", error);
       if (error && error.code === "bootstrap-failed") {

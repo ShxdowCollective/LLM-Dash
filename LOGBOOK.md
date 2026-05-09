@@ -4,6 +4,441 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 067 — 2026-05-08
+
+**Agent:** Claude Opus 4.7 (driftvein, follow-up sweep)
+**Cycle:** Phase 9.x post-loop review — out-of-scope follow-ups
+**Task:** Address the three items flagged at the bottom of Entry 066:
+JSONC-tolerant config loader, overlay-root z-index vs. mobile chrome, and
+error-toast ARIA politeness.
+
+---
+
+Two parallel `feature-dev:code-explorer` subagents to scope the fixes:
+the config-loader chain (file → parse-fail → wizard auto-open) and the
+overlay/drawer/header stacking-context geometry. Both came back with
+file:line refs and a recommended fix shape; main-agent did the patches.
+
+**Patched (scripts/config.py):**
+- `_read_json` now tries strict `json.loads` first, then falls back to a
+  hand-rolled `_strip_jsonc` pass that removes `//` line comments,
+  `/* */` block comments, and trailing commas before retrying. String
+  contents are preserved (the regex matches whole quoted strings as a
+  single alternative and returns them unchanged), so a key like
+  `"https://example.com/api"` or `"sk-//notacomment"` survives intact.
+- Closes the bug noted in entries 063 and 065: a `~/.shxdow/config/
+  shxdow.llmdash.json` written with comments by another Voidware tool
+  raised `ConfigError` → HTTP 400 → `fetchProvider()` swallowed it
+  silently → `state.provider.has_provider` stayed `false` → `boot()`
+  popped the setup wizard on every load.
+- No new dependency. The fallback only runs when strict JSON fails, so
+  clean config files take the fast path.
+
+**Patched (web/style.css):**
+- `#overlay-root` z-index bumped from `20` to `100`. Mobile chrome lives
+  outside the overlay-root stacking context — `.app-sidebar` at `90` and
+  `.mobile-shell-header` at `80` — so opening any modal (run-update,
+  manual-refresh, help) on a small viewport while the drawer was visible
+  used to paint the modal under the drawer/header. The single value
+  change clears both. Added an inline comment at the bump site so the
+  next contributor doesn't undo it.
+
+**Patched (web/app.js):**
+- `showToast`: when `tone === "error"` or `"warning"`, the per-toast div
+  now sets `role="alert"` and `aria-live="assertive"` to override the
+  container's polite default. Success/info toasts continue to use the
+  container's `role="status" aria-live="polite"`. This way reload
+  failures and the like surface immediately to assistive tech instead of
+  waiting for the user to finish their current action.
+
+**Verification:**
+- `node --check web/app.js` — passed
+- `python3 -m py_compile scripts/config.py server.py` — passed
+- `git diff --check` — no whitespace issues
+- JSONC parser unit smoke (6 cases): clean JSON round-trips; line
+  comments stripped; block comments stripped; trailing commas allowed in
+  arrays and objects; strings containing `//`, `/*`, and escaped quotes
+  preserved verbatim. All 6 pass.
+- End-to-end loader smoke: wrote a JSONC `shxdow.llmdash.json` with line
+  comments, block comments, and a trailing comma to a temp
+  `LLM_DASH_SHXDOW_ROOT`; `load_provider_config()` returned the expected
+  `ProviderConfig` with `base_url`, `default_model`, and
+  `request_headers` populated; `public_provider_state()` returned
+  successfully (no raise).
+
+**Files touched:** scripts/config.py, web/style.css, web/app.js.
+
+**Open follow-ups (still latent):**
+- The `fetchProvider` silent-catch at `web/app.js:1086-1092` masks any
+  500-class server error as "no provider configured." That's a separate
+  defensive-error-handling cleanup — the JSONC fix removes the most
+  likely trigger but the silent catch is still imprecise. Worth a
+  targeted `state.provider.lastError` surface in a future cycle.
+- No automated test coverage for the config loader. The repo has no
+  `tests/` dir today; adding one for this loader (and the credential
+  precedence chain) is a real backlog item.
+
+**?** None.
+
+**Checkpoint:** TBD (working tree clean, awaiting user commit).
+
+---
+
+## Entry 066 — 2026-05-08
+
+**Agent:** Claude Opus 4.7 (driftvein, review pass)
+**Cycle:** Phase 9.x post-loop review
+**Task:** Review the shxdowloop Phase 9.1/9.2/9.3 work with subagents,
+implement valid findings, final Codex pass.
+
+---
+
+Three parallel `feature-dev:code-reviewer` subagents on the loop's working
+tree (`7be5d26~1..HEAD`): JS correctness on `web/app.js`, CSS/voidware-fit on
+`style.css`+`index.html`, and server+plan adherence on `server.py`/docs/TODO.
+
+**Triage:** filtered out three false positives — the `destroyAllDetailUplots`
+double-cancel claim (the two loops are sequential synchronous code, no rAF
+can fire between them), a speculative `last_updated` string-format mismatch,
+and a popstate edge the reviewer itself withdrew. Cosmetic items (route
+placement, vendored CSS duplication, voidware token nitpicks) deferred.
+
+**Patched (web/app.js):**
+- `moveTableFocus`: added `if (state.focusedRowIndex < 0 && direction < 0) return;`
+  so pressing `k` first stays put instead of jumping to row 0.
+- `reloadDB`: now resets `state.uiToastShownFor` and `state.uiToastDismissed`
+  so a DB reload (e.g. after `--reset`) cannot permanently suppress the
+  new-data toast for a previously-dismissed timestamp.
+- `yamlScalar`: tightened with a YAML-reserved regex (null/true/false/yes/no/
+  on/off/~, signed integers/floats with optional exponent, leading-dot
+  fractions, hex, .nan, ±.inf), case-insensitive. Added tab to the special
+  class and `?` to the leading-character class. Validated with a spot-check
+  matrix — `GPT-5`, `null-model`, `1.5x` stay bare; `null`, `True`, `+1`,
+  `1.`, `.5`, `0xFF` get quoted.
+- `deriveLeaderboardMetrics`: now reads `group.minDuration` (uncapped)
+  instead of recomputing from `group.durations` (capped at 200). Agents with
+  >200 timed runs no longer show an inflated minimum.
+- Help modal focus management: `state.helpModal.returnFocus = captureFocus()`
+  on open; rAF-defer focuses the close button on mount; `closeHelpModal`
+  calls `restoreFocus(focusToRestore)`. `state.helpModal` initialized with a
+  `returnFocus: null` slot.
+- Keydown guard tightened from `state.runUpdate.state === "running"` to
+  `state.runUpdate.active`, so `j/k/e/r/?` cannot fire while the run-update
+  overlay is in the succeeded/failed reading state. Overlay
+  Reload/Close/Retry buttons use direct `onclick` handlers, unaffected.
+- Leaderboard `renderHeaderCell`: emits `aria-sort="ascending|descending|
+  none"` on each `<th>` based on the active sort key + direction.
+
+**Patched (server.py):** `/api/meta` now sets `Cache-Control: no-store` via
+an injected `Response` (imported from fastapi). Closes the gap where the
+client polled with `cache: "no-store"` but the server emitted no cache
+hints — could let intermediate proxies serve stale data.
+
+**Patched (docs/ARCHITECTURE.md):** State Management snippet expanded with
+`area`/`subview`, `scoreHistory`, `ui`, `selectedModelIds`, `focusedRowIndex`,
+`changelogCompare` (`{from,to,active}`), `uiToastShownFor`/`uiToastDismissed`,
+and `detailUplots`. Field names verified against the actual `state` init
+block at `web/app.js:140`–`170`.
+
+**Patched (TODO.md):** Phase 9.1/9.2/9.3 sections rotated from the active
+Phase 9 heading into Completed History as a single condensed entry per
+milestone, matching how every prior phase was handled and what the three
+9.x plans explicitly required on close.
+
+**Codex final review (codex:codex-rescue):** confirmed 7/10 patches,
+flagged 3 follow-ups: yamlScalar missing case-insensitivity and edge
+numeric forms (`+1`, `1.`); ARCHITECTURE.md state snippet had two field
+mismatches (`selectedModel` → `selectedModelIds`, `changelogCompare.tab` →
+`changelogCompare.active`); help-modal focus restore was already correctly
+passing the snapshot to `restoreFocus()`, just asked me to verify (it does).
+All three folded back in. Re-verified with `node --check`, `py_compile`, and
+the regex spot-check.
+
+**Verification:**
+- `node --check web/app.js` — passed
+- `python3 -m py_compile server.py` — passed
+- `git diff --check` — no whitespace issues
+- yamlScalar regex spot-check matrix (24 inputs) — output matches intent
+- Diff stat: 4 files, +62 -65 (TODO net shrinks; rest are surgical)
+
+**Files touched:** web/app.js, server.py, docs/ARCHITECTURE.md, TODO.md.
+
+**Open follow-ups (out of scope, flagged for next cycle):**
+- Help-modal/run-update overlay z-index: both live inside `#overlay-root`
+  (z-index 20). On mobile, the sidebar drawer (z-90) and header (z-80) live
+  outside that root and would paint over any modal that opens during a
+  drawer slide. The existing wizard/manual-refresh overlays share the same
+  constraint and have not actually broken in practice, so this is a class
+  of latent risk rather than a regression introduced here.
+- Toast container uses `role="status" aria-live="polite"` for all tones;
+  error toasts in particular should switch to `role="alert"` /
+  `aria-live="assertive"` for assistive tech.
+- Pre-existing `~/.shxdow/config/shxdow.llmdash.json` JSON-with-comments
+  parse failure noted in entries 063/065 — still a real bug, still out of
+  scope.
+
+**?** None.
+
+**Checkpoint:** TBD (working tree clean, awaiting user commit).
+
+---
+
+## Entry 065 — 2026-05-08
+
+**Agent:** Claude Opus 4.7 (shxdowloop-9x, shxdowloop main agent)
+**Cycle:** Phase 9.x — shxdowloop, Stage 3 of 3
+**Task:** Implement Phase 9.2 — Power-user UX (keyboard shortcuts,
+`/api/meta`, 15s auto-poll + new-data toast).
+
+---
+
+Final stage of `shxdowloop/2026-05-08/phase-9-remaining-todos`. Closes the
+Phase 9.x backlog.
+
+**Implementation (server.py, web/app.js, web/style.css, web/index.html):**
+- New `GET /api/meta` route in `server.py` returning
+  `{"last_updated": ...}`. Declared **before** the `/` static mount so the
+  catch-all doesn't shadow it. Body reuses the existing `_last_updated()`
+  helper.
+- Top-level keydown handler rewritten to keep the existing Escape behavior
+  intact, then add layered guards (no modifiers, no editing target, no
+  wizard, no bootstrap, no manual-refresh modal, no run-update overlay,
+  no help modal). Behind the guards: `/` focus search (expands the filter
+  panel if collapsed), `j/k` row nav with `state.focusedRowIndex` (reset
+  on filter/sort via `refreshModels`), `e` export the single selected
+  model's report (reuses Stage 2 builder), `r` refresh (calls
+  `triggerRefresh` which re-applies the same guards as the sidebar
+  Refresh button), and `?` opens the help modal. `j/k/e` are gated when
+  the mobile drawer is open.
+- `?` button added to the sidebar footer (`web/index.html`); button click
+  is guarded against opening behind the run-update overlay.
+- Toast primitive on the previously-unused `.vw-toast-*` voidware classes.
+  `showToast({ message, tone, actionLabel, onAction, onDismiss })` returns
+  a handle with `dismiss()`. `showNewDataToast(serverLastUpdated)` is the
+  consumer: dedupes on `state.uiToastShownFor`, suppresses re-arming for
+  a payload the user already dismissed via `state.uiToastDismissed`,
+  supersedes any prior toast on a newer payload. The action handler calls
+  `reloadDB()` + `loadStaticState()` + `updateFreshness()` + `render()`
+  in place — no page reload.
+- 15-second `checkForNewData()` interval is wired in `boot()` and skips
+  ticks while a run-update is active or the tab is hidden. A
+  `visibilitychange` listener triggers an immediate check when the tab
+  becomes visible.
+
+**Reviewer pass (`feature-dev:code-reviewer`) — fixed before checkpoint:**
+- **Critical**: `onDismiss` previously fired on the action-click path,
+  poisoning `uiToastDismissed` so a failed `reloadDB()` would silently
+  prevent further toast re-arming for the same payload. Fixed by
+  threading an `actionTaken` flag through `showToast.dismiss(viaAction)`
+  and `onDismiss(actionTaken)`; the new-data toast only marks dismissed
+  when the user did NOT take the action.
+- **Important**: Help modal's `.help-modal-backdrop { z-index: 60 }` is
+  below the run-update overlay, and the `?` sidebar button had no guard
+  for active runs. Could open an invisible inaccessible modal. Fixed by
+  guarding `openHelpModal()` against `state.runUpdate.active`,
+  `state.bootstrap.state === "initializing"`, and an open
+  `state.manualRefreshModal`.
+- **Important**: Plan called for `j/k/e` to be inert while the mobile
+  drawer is open. Added `state.ui.sidebarOpen` short-circuit inside each
+  case; `/` and `r` still fire (closing the drawer + focusing search is
+  useful, refresh is global).
+- **Help text**: `?` was a working shortcut but missing from the modal's
+  list. Added `{ keys: ["?"], label: "Open this shortcuts modal" }`.
+
+**Verification:**
+- `node --check web/app.js` passes.
+- `python3 -m py_compile server.py` passes.
+- `curl http://127.0.0.1:8765/api/meta` returns the expected JSON.
+- `agent-browser` headed at 1440x900: clicking `?` opens the help modal
+  (8 entries); pressing Esc closes it; pressing `/` focuses the search
+  input; `j/k` walk the visible Models rows by id; `r` triggers a refresh
+  through the same path as the sidebar button; bumping `meta.last_updated`
+  in the SQLite file produces a "New data available" toast within ~15s
+  with a working Reload action that swaps state in place; dismissing the
+  toast prevents re-arming for the same payload but a *newer* payload
+  re-arms correctly. Screenshots in `artifacts/phase-9-2-power-user-ux/`.
+
+**Files touched:** server.py (1 route), web/app.js (~330 lines added),
+web/style.css (~140 lines added), web/index.html (`?` button), plus
+TODO.md, docs/ARCHITECTURE.md, this LOGBOOK, and the loop process plan.
+
+**Open follow-up:** the user's `~/.shxdow/config/shxdow.llmdash.json` has
+JSON line comments which the server can't parse, so the wizard
+auto-opens for them too. Out of scope here — flag as a separate cleanup.
+
+**Checkpoint:** TBD (committing this stage now).
+
+---
+
+## Entry 064 — 2026-05-08
+
+**Agent:** Claude Opus 4.7 (shxdowloop-9x, shxdowloop main agent)
+**Cycle:** Phase 9.x — shxdowloop, Stage 2 of 3
+**Task:** Implement Phase 9.1 — Data exploration (sparklines, DetailPanel
+trend chart, Changelog Compare tab, Markdown report export).
+
+---
+
+Stage 2 of the `shxdowloop/2026-05-08/phase-9-remaining-todos` branch. Largest
+of the three stages — touches state, the Models table, the DetailPanel, the
+Changelog area, and adds a routing extension for share-links.
+
+**Implementation (web/app.js, web/style.css):**
+- `state.scoreHistory: Map<modelId, Array<row>>` populated in
+  `loadStaticState()` from a single `model_scores` query (~46 rows in seed,
+  <150 KB at full scale).
+- New helpers `avgOverallRow`, `modelHistory`, `modelOverallSeries`,
+  `sparkDelta`. `sortKey` extended with `"trend"` so the existing sort-bar
+  picks up a Trend button alongside Overall/Value.
+- `renderSparkline()` builds inline SVG via `innerHTML` on a wrapper span
+  (the existing `h()` hyperscript is HTML-namespace only — verified via
+  `document.createElement` in `h`). Sparkline color comes from
+  `--vw-iridescent-3/5/7` based on last-vs-prev delta. Empty-state em-dash
+  preserves column width.
+- New `Trend` column in `renderTable()`, hidden under `@media (max-width:
+  760px)`. 46 sparklines mount; populated ones render successfully (only
+  `model_id=1` has 2+ history points in seed).
+- Multi-series uPlot for the DetailPanel: new helper
+  `renderMultiSeriesChart()` (the existing `renderUplotChart()` is
+  single-series). Mount id pattern `detail-chart-${modelId}`. Stored in
+  `state.detailUplots` so the Stats `scheduleChartDraw()` doesn't wipe them.
+  Lifecycle wired via `renderSingleModelCard` (schedule on every render),
+  `toggleModelSelection` (destroy on deselect), and `scheduleChartDraw`
+  (destroy + cancel pending rAFs when leaving Models area).
+- `parseHashRoute` and `hashForRoute` extended to support `?key=value`
+  segments. Legacy `#table` / `#changelog` etc. still resolve. Compare tab
+  state is round-trippable via `#changelog?tab=compare&from=&to=`.
+- Compare tab inside `renderChangelog()`: `Read | Compare` segmented at the
+  panel head; from/to date pickers populated from `state.changelogs`;
+  three-section diff (`New models`, `Score changes`, `Status changes`)
+  computed by `diffChangelogs(fromDate, toDate)`. Score `from` value is
+  resolved via `lookupPriorScore` (latest `model_scores` row strictly before
+  the changelog date for that model+field).
+- Markdown export: `buildModelReport(model)` returns a string with YAML
+  frontmatter, latest scores table, full history table, and up to 8
+  citation blocks pulled from changelogs that mention the model.
+  `extractModelMentions` is a line-by-line scanner with heading-context.
+  `downloadModelReport` does a Blob + anchor click; filename is
+  `${slug}-report.md`.
+
+**Reviewer pass (`feature-dev:code-reviewer`) — fixed before checkpoint:**
+- **Critical**: `destroyAllDetailUplots` did not cancel pending rAFs, so a
+  view switch could let a queued frame fire after destruction and leak a
+  rogue uPlot. Now cancels every `state.detailChartFrames[*]` first, then
+  destroys instances. `destroyDetailUplot` also cancels its model's frame.
+- **Important**: `lookupPriorScore` did `row[field]` without validating
+  `field` against `METRIC_KEYS`, so a typo'd field in `changed_json` would
+  silently pin `from: null` forever. Now early-returns `null` for unknown
+  fields.
+- **Important**: Markdown export truncation footer (`...older mentions
+  truncated`) fired whenever `candidates.length > mentionBlocks.length`,
+  even when the reduction came from blockless changelog bodies, not from
+  hitting the cap. Added an explicit `truncated` flag set only when the
+  cap actually breaks the loop.
+- **Important**: YAML frontmatter quoted nothing, so a model name or
+  vendor containing `:` would emit invalid YAML. Added `yamlScalar(value)`
+  that double-quotes any string with YAML-special characters and escapes
+  `\` and `"` inside.
+
+The reviewer also flagged a known `render()`-storm issue (sparkline +
+detail chart re-render on every filter keystroke) that the original 9.1
+plan acknowledges as out-of-scope for this phase.
+
+**Verification:**
+- `node --check web/app.js` passes.
+- `python3 -m py_compile server.py` passes.
+- `agent-browser` headed at 1440x900: Models table renders Trend column,
+  populated sparklines stroke green/blue/pink by delta, DetailPanel
+  multi-series uPlot draws against synthetic 5-date history, Compare tab
+  renders New models / Score changes / Status changes blocks for the
+  Apr 27 → May 1 window, Markdown export downloads with valid YAML
+  frontmatter (timestamp colon correctly quoted).
+- Narrow viewport (480x900): all 46 trend cells `display: none`.
+- Synthetic-data smoke for sparklines + detail chart used 40 inserted
+  history rows across 8 models. DB restored from `/tmp/dash.sqlite.bak`
+  before checkpoint.
+
+**Files touched:** web/app.js (~700 lines added), web/style.css (~250
+lines added), docs/ARCHITECTURE.md, TODO.md, plus this LOGBOOK and the
+loop process plan.
+
+**Artifacts:** `artifacts/phase-9-1-data-exploration/` — wide-models.png,
+wide-models-trend-right.png, wide-detail-chart.png, wide-compare.png,
+narrow-models.png.
+
+**Checkpoint:** TBD (committing this stage now).
+
+---
+
+## Entry 063 — 2026-05-08
+
+**Agent:** Claude Opus 4.7 (shxdowloop-9x, shxdowloop main agent)
+**Cycle:** Phase 9.x — shxdowloop, Stage 1 of 3
+**Task:** Implement Phase 9.3 — Agent Provider Leaderboard on the Stats page.
+
+---
+
+Stage 1 of the `shxdowloop/2026-05-08/phase-9-remaining-todos` branch. Phase 9.3
+landed first because it's independent of 9.1/9.2 and the smallest of the three.
+
+**Implementation (web/app.js, web/style.css):**
+- Extended `groupMetricsByAgent` with `durations` (capped at 200), paired
+  cost+word sums (`totalCostForWordCalc` / `totalWordsForCostCalc`), and
+  per-agent identifiers. Only counts toward paired sums when both `cost_usd > 0`
+  and `word_count > 0` are present on the same row.
+- Added `median()` and `formatMicroCost()` helpers. `formatMicroCost` falls
+  through to `formatCurrency` above $0.01 and renders 4-sig-fig precision below
+  ($0.002917 etc.).
+- Added `deriveLeaderboardMetrics()` that returns `costPerWord`,
+  `wordsPerDollar`, `minDuration`, `medianDuration`, and `fastestEligible`.
+  `n ≥ 3` threshold gates fastest-run; below threshold the row gets a
+  `vw-status-warning` chip with `n=N`.
+- New `renderAgentLeaderboard()` mounts between Averages and Time Series.
+  Sortable by Runs, Total cost, Cost / word, Words / $, Fastest run (min).
+  Default sort: cost-per-word ascending. Sort persists via existing
+  `state.ui.statsLeaderboardSort` -> `UI_STATE_KEY` block.
+- Top-3 rank chips (rank-1..3) wired to `--vw-iridescent-1..3`. Highlight
+  only fires when ≥3 valued entries exist for the active sort key — avoids
+  rewarding a leaderboard of one or two.
+- Three summary tiles above the table: best cost/word, most words/$,
+  fastest run (best). Each falls back to "—" + a hint line when no group
+  qualifies.
+
+**Reviewer pass (`feature-dev:code-reviewer`):**
+- Caught: `vw-status-warning` class was referenced in the plan but never
+  defined in CSS and never applied in JS. Added the rule next to
+  `.vw-status-error` and applied it to all three insufficient-data chips.
+- Caught: `minDuration` was tracked independently from the 200-entry
+  `durations` cap, so above 200 runs the tooltip's `min` and `median` would
+  diverge. Now `deriveLeaderboardMetrics` computes min from the same capped
+  array as median.
+
+**Verification:**
+- `node --check web/app.js` passes.
+- `python3 -m py_compile server.py` passes.
+- `agent-browser` headed smoke at 1440x900 and 480x900: leaderboard renders
+  between Averages and Time Series, default sort cost-per-word asc, sort
+  click rotates direction and persists, narrow viewport falls back to
+  horizontal scroll on the table-wrap.
+- Synthetic-data smoke: inserted 3 claude-opus-4-7 + 3 gpt-5 rows with
+  positive cost_usd / word_count. Leaderboard correctly populated cost/word
+  ($0.006378, $0.002917), words/$ (157, 343), fastest run (2m 50s, 1m 40s),
+  rank chips #1..3 with iridescent palette. DB restored after capture.
+
+**Files touched:** web/app.js, web/style.css, docs/ARCHITECTURE.md, TODO.md.
+
+**Artifacts:** `artifacts/phase-9-3-leaderboard/` — wide-1440.png,
+narrow-480.png, wide-sorted-runs.png, wide-with-cost.png,
+wide-warning-chips.png.
+
+**Open questions for Stages 2 + 3:** The user's `~/.shxdow/config/shxdow.llmdash.json`
+has JSON line comments and fails to parse — wizard auto-opens for them too.
+Out of scope here, but noted as a real bug to flag separately.
+
+**Checkpoint:** TBD (committing this stage now).
+
+---
+
 ## Entry 062 — 2026-05-08
 
 **Agent:** Claude Opus 4.7 (driftwave, shxdow-flow planning pass)

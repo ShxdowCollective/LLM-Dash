@@ -161,10 +161,10 @@ changelogs 1──1 run_metrics (via changelog_date)
 
 | View | Purpose | Primary Data Source |
 |---|---|---|
-| **Table** | Sortable model leaderboard with score cells, tier badges, detail panel | `v_models_latest` |
+| **Table** | Sortable model leaderboard with score cells, tier badges, inline trend sparklines, detail panel with multi-series score-history chart and Markdown report export | `v_models_latest`, `model_scores` |
 | **Chart** | Horizontal bar comparison across models | `v_models_latest` |
-| **Changelog** | Date list + rendered Markdown body | `changelogs` table + `changelogs/*.md` |
-| **Stats** | Token/cost/duration analytics, per-agent breakdowns, time-series charts | `run_metrics` |
+| **Changelog** | Date list + rendered Markdown body, plus an internal **Compare** tab that diffs new models, score changes, and status changes between two dates (hash-shareable via `#changelog?tab=compare&from=...&to=...`) | `changelogs` table + `changelogs/*.md` + `model_scores` |
+| **Stats** | Token/cost/duration analytics, Agent Provider Leaderboard, per-agent breakdowns, time-series charts | `run_metrics` |
 | **Settings** | Provider, Models, Research, and Schedule subpages, plus a Manual Update card on the Provider subpage and a sidebar-footer Refresh trigger | `/api/provider`, `/api/exa`, `/api/llmstats`, `/api/schedule`, `/api/run-update` |
 
 ### State Management
@@ -176,15 +176,23 @@ that this is performant without diffing.
 ```js
 state = {
   view,              // table | chart | changelog | stats | data
+  area, subview,     // sidebar area + subpage routing
   models,            // from v_models_latest
   changelogs,        // from changelogs table
   metrics,           // from run_metrics
+  scoreHistory,      // Map<modelId, Array<row>> from model_scores (Phase 9.1)
   filter,            // vendors, text, tier, range sliders
   statsFilter,       // date range, agent filter
-  sortBy,            // column + direction
-  selectedModel,     // detail panel target
+  sortBy,            // column + direction (incl. "trend")
+  ui,                // persistent UI prefs (filters collapsed, leaderboard sort)
+  selectedModelIds,  // detail panel + comparison targets
+  focusedRowIndex,   // j/k row nav target (Phase 9.2)
   activeChangelogDate,
-  lastUpdated,       // from meta.last_updated
+  changelogCompare,  // { from, to, active } for the Compare tab (Phase 9.1)
+  lastUpdated,       // from meta.last_updated; polled via /api/meta
+  uiToastShownFor,   // dedupe key for the new-data toast (Phase 9.2)
+  uiToastDismissed,  // suppression key set on user dismiss
+  detailUplots,      // separate uPlot map so Stats scheduler doesn't wipe it
   provider,          // from GET /api/provider
 };
 ```
@@ -237,6 +245,7 @@ Three explicit mounts maintain the frontend's fetch contract:
 | `/api/exa` | DELETE | Remove Exa API key |
 | `/api/llmstats` | POST/DELETE | Save/remove optional LLM Stats API key |
 | `/api/llmstats/test-connection` | GET | Test LLM Stats bearer-auth catalog access |
+| `/api/meta` | GET | `{"last_updated": ...}` — used by the 15s client poll to surface a "new data available" toast |
 | `/api/schedule` | GET/POST/DELETE | Manage OS-level scheduled update jobs |
 | `/api/run-update` | POST | Kick off a background update via Agents SDK |
 | `/api/run-update/{id}` | GET | Poll update job status + log tail |
