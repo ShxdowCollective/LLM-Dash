@@ -701,6 +701,11 @@ def run_update_status(job_id: str) -> dict[str, Any]:
     return job
 
 
+@app.get("/api/meta")
+def get_meta() -> dict[str, Any]:
+    return {"last_updated": _last_updated()}
+
+
 app.mount("/data", StaticFiles(directory=DATA_DIR), name="data")
 app.mount("/changelogs", StaticFiles(directory=CHANGELOGS_DIR), name="changelogs")
 app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")

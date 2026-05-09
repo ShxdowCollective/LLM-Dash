@@ -237,6 +237,7 @@ Three explicit mounts maintain the frontend's fetch contract:
 | `/api/exa` | DELETE | Remove Exa API key |
 | `/api/llmstats` | POST/DELETE | Save/remove optional LLM Stats API key |
 | `/api/llmstats/test-connection` | GET | Test LLM Stats bearer-auth catalog access |
+| `/api/meta` | GET | `{"last_updated": ...}` — used by the 15s client poll to surface a "new data available" toast |
 | `/api/schedule` | GET/POST/DELETE | Manage OS-level scheduled update jobs |
 | `/api/run-update` | POST | Kick off a background update via Agents SDK |
 | `/api/run-update/{id}` | GET | Poll update job status + log tail |

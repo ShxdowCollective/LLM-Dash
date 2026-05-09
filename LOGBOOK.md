@@ -4,6 +4,93 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 065 — 2026-05-08
+
+**Agent:** Claude Opus 4.7 (shxdowloop-9x, shxdowloop main agent)
+**Cycle:** Phase 9.x — shxdowloop, Stage 3 of 3
+**Task:** Implement Phase 9.2 — Power-user UX (keyboard shortcuts,
+`/api/meta`, 15s auto-poll + new-data toast).
+
+---
+
+Final stage of `shxdowloop/2026-05-08/phase-9-remaining-todos`. Closes the
+Phase 9.x backlog.
+
+**Implementation (server.py, web/app.js, web/style.css, web/index.html):**
+- New `GET /api/meta` route in `server.py` returning
+  `{"last_updated": ...}`. Declared **before** the `/` static mount so the
+  catch-all doesn't shadow it. Body reuses the existing `_last_updated()`
+  helper.
+- Top-level keydown handler rewritten to keep the existing Escape behavior
+  intact, then add layered guards (no modifiers, no editing target, no
+  wizard, no bootstrap, no manual-refresh modal, no run-update overlay,
+  no help modal). Behind the guards: `/` focus search (expands the filter
+  panel if collapsed), `j/k` row nav with `state.focusedRowIndex` (reset
+  on filter/sort via `refreshModels`), `e` export the single selected
+  model's report (reuses Stage 2 builder), `r` refresh (calls
+  `triggerRefresh` which re-applies the same guards as the sidebar
+  Refresh button), and `?` opens the help modal. `j/k/e` are gated when
+  the mobile drawer is open.
+- `?` button added to the sidebar footer (`web/index.html`); button click
+  is guarded against opening behind the run-update overlay.
+- Toast primitive on the previously-unused `.vw-toast-*` voidware classes.
+  `showToast({ message, tone, actionLabel, onAction, onDismiss })` returns
+  a handle with `dismiss()`. `showNewDataToast(serverLastUpdated)` is the
+  consumer: dedupes on `state.uiToastShownFor`, suppresses re-arming for
+  a payload the user already dismissed via `state.uiToastDismissed`,
+  supersedes any prior toast on a newer payload. The action handler calls
+  `reloadDB()` + `loadStaticState()` + `updateFreshness()` + `render()`
+  in place — no page reload.
+- 15-second `checkForNewData()` interval is wired in `boot()` and skips
+  ticks while a run-update is active or the tab is hidden. A
+  `visibilitychange` listener triggers an immediate check when the tab
+  becomes visible.
+
+**Reviewer pass (`feature-dev:code-reviewer`) — fixed before checkpoint:**
+- **Critical**: `onDismiss` previously fired on the action-click path,
+  poisoning `uiToastDismissed` so a failed `reloadDB()` would silently
+  prevent further toast re-arming for the same payload. Fixed by
+  threading an `actionTaken` flag through `showToast.dismiss(viaAction)`
+  and `onDismiss(actionTaken)`; the new-data toast only marks dismissed
+  when the user did NOT take the action.
+- **Important**: Help modal's `.help-modal-backdrop { z-index: 60 }` is
+  below the run-update overlay, and the `?` sidebar button had no guard
+  for active runs. Could open an invisible inaccessible modal. Fixed by
+  guarding `openHelpModal()` against `state.runUpdate.active`,
+  `state.bootstrap.state === "initializing"`, and an open
+  `state.manualRefreshModal`.
+- **Important**: Plan called for `j/k/e` to be inert while the mobile
+  drawer is open. Added `state.ui.sidebarOpen` short-circuit inside each
+  case; `/` and `r` still fire (closing the drawer + focusing search is
+  useful, refresh is global).
+- **Help text**: `?` was a working shortcut but missing from the modal's
+  list. Added `{ keys: ["?"], label: "Open this shortcuts modal" }`.
+
+**Verification:**
+- `node --check web/app.js` passes.
+- `python3 -m py_compile server.py` passes.
+- `curl http://127.0.0.1:8765/api/meta` returns the expected JSON.
+- `agent-browser` headed at 1440x900: clicking `?` opens the help modal
+  (8 entries); pressing Esc closes it; pressing `/` focuses the search
+  input; `j/k` walk the visible Models rows by id; `r` triggers a refresh
+  through the same path as the sidebar button; bumping `meta.last_updated`
+  in the SQLite file produces a "New data available" toast within ~15s
+  with a working Reload action that swaps state in place; dismissing the
+  toast prevents re-arming for the same payload but a *newer* payload
+  re-arms correctly. Screenshots in `artifacts/phase-9-2-power-user-ux/`.
+
+**Files touched:** server.py (1 route), web/app.js (~330 lines added),
+web/style.css (~140 lines added), web/index.html (`?` button), plus
+TODO.md, docs/ARCHITECTURE.md, this LOGBOOK, and the loop process plan.
+
+**Open follow-up:** the user's `~/.shxdow/config/shxdow.llmdash.json` has
+JSON line comments which the server can't parse, so the wizard
+auto-opens for them too. Out of scope here — flag as a separate cleanup.
+
+**Checkpoint:** TBD (committing this stage now).
+
+---
+
 ## Entry 064 — 2026-05-08
 
 **Agent:** Claude Opus 4.7 (shxdowloop-9x, shxdowloop main agent)

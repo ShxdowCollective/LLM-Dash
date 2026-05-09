@@ -68,10 +68,11 @@ Plan: [docs/plans/2026-05-08-phase-9-1-data-exploration.md](docs/plans/2026-05-0
 
 Plan: [docs/plans/2026-05-08-phase-9-2-power-user-ux.md](docs/plans/2026-05-08-phase-9-2-power-user-ux.md)
 
-- [ ] Keyboard shortcuts: `/` search, `j/k` row nav, `e` export, `r` refresh
-  (single global keydown handler with input/modal/wizard guards; no library).
-- [ ] `GET /api/meta` endpoint (declared before the `/` static mount).
-- [ ] Auto-poll `meta.last_updated` every ~15s and show a "new data
+- [x] Keyboard shortcuts: `/` search, `j/k` row nav, `e` export, `r` refresh,
+  `?` help (single global keydown handler with input/modal/wizard/drawer
+  guards; no library).
+- [x] `GET /api/meta` endpoint (declared before the `/` static mount).
+- [x] Auto-poll `meta.last_updated` every ~15s and show a "new data
   available" toast that swaps the active state via `reloadDB()` — no page
   reload. Reuses unused `vw-toast-*` voidware classes.
 

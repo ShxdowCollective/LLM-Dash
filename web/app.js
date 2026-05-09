@@ -161,6 +161,11 @@
     activeChangelogTab: "read",
     changelogCompare: { from: null, to: null, active: false },
     focusedRowIndex: -1,
+    helpModal: { open: false },
+    uiToastShownFor: null,
+    uiToastDismissed: null,
+    uiToastHandle: null,
+    metaPollFrame: 0,
     filter: {
       vendors: new Set(),
       text: "",
@@ -1942,6 +1947,7 @@
       rows = rows.filter((row) => tier(getOverall(row)).label === state.filter.tier);
     }
     state.models = sortedModels(rows);
+    state.focusedRowIndex = -1;
     const visibleIds = new Set(state.models.map((row) => row.id));
     const before = state.selectedModelIds.length;
     state.selectedModelIds = state.selectedModelIds.filter((id) => visibleIds.has(id));
@@ -3231,6 +3237,10 @@
     if (state.bootstrap.state === "initializing") nodes.push(renderBootstrapOverlay());
     else if (state.runUpdate.active) nodes.push(renderRunUpdateOverlay());
     else if (state.manualRefreshModal.open) nodes.push(renderManualRefreshModal());
+    if (state.helpModal.open) {
+      const helpNode = renderHelpModal();
+      if (helpNode) nodes.push(helpNode);
+    }
     slot.replaceChildren(...nodes);
     document.body.classList.toggle("has-overlay", nodes.length > 0);
   }
@@ -5521,6 +5531,231 @@
     if (app) app.removeAttribute("data-booting");
   }
 
+  const KEYBOARD_SHORTCUT_HELP = [
+    { keys: ["/"], label: "Focus search" },
+    { keys: ["j"], label: "Focus next row (Models table)" },
+    { keys: ["k"], label: "Focus previous row (Models table)" },
+    { keys: ["Enter"], label: "Toggle selected row's panel" },
+    { keys: ["e"], label: "Export current single-model report" },
+    { keys: ["r"], label: "Refresh data" },
+    { keys: ["?"], label: "Open this shortcuts modal" },
+    { keys: ["Esc"], label: "Close drawer / overlay" },
+  ];
+
+  function shortcutsAllowed() {
+    if (state.wizard.open) return false;
+    if (state.bootstrap.state === "initializing") return false;
+    return true;
+  }
+
+  function isEditingTarget(target) {
+    if (!target) return false;
+    const tag = target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+    if (target.isContentEditable) return true;
+    return false;
+  }
+
+  function focusSearchInput() {
+    if (state.area !== "models") return;
+    if (state.ui.modelFiltersCollapsed) {
+      state.ui.modelFiltersCollapsed = false;
+      persistUIState();
+      render();
+    }
+    window.setTimeout(() => {
+      const input = document.getElementById("model-search");
+      if (!input) return;
+      input.focus();
+      try { input.select(); } catch (_) { /* noop */ }
+    }, 0);
+  }
+
+  function moveTableFocus(direction) {
+    if (!state.models.length) return;
+    if (state.area !== "models" || state.view !== "table") return;
+    const next = clamp(state.focusedRowIndex + direction, 0, state.models.length - 1);
+    state.focusedRowIndex = next;
+    const id = state.models[next] && state.models[next].id;
+    if (!id) return;
+    const row = document.getElementById("model-row-" + id);
+    if (!row) return;
+    row.focus();
+    if (typeof row.scrollIntoView === "function") {
+      row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }
+
+  function exportSelectedModelReport() {
+    if (state.area !== "models") return;
+    if (state.selectedModelIds.length !== 1) return;
+    const model = state.models.find((m) => m.id === state.selectedModelIds[0]);
+    if (!model) return;
+    downloadModelReport(model);
+  }
+
+  function triggerRefresh() {
+    if (state.runUpdate.active || state.runUpdate._starting) return;
+    if (state.wizard.open) return;
+    if (state.manualRefreshModal && state.manualRefreshModal.open) return;
+    if (state.bootstrap.state === "initializing") return;
+    handleRefresh();
+  }
+
+  function openHelpModal() {
+    if (state.runUpdate.active) return;
+    if (state.bootstrap.state === "initializing") return;
+    if (state.manualRefreshModal && state.manualRefreshModal.open) return;
+    state.helpModal.open = true;
+    render();
+  }
+
+  function closeHelpModal() {
+    if (!state.helpModal.open) return;
+    state.helpModal.open = false;
+    render();
+  }
+
+  function renderHelpModal() {
+    if (!state.helpModal.open) return null;
+    return h("div", {
+      class: "vw-modal-backdrop help-modal-backdrop",
+      role: "presentation",
+      onclick: (e) => { if (e.target === e.currentTarget) closeHelpModal(); },
+    }, h("div", {
+      class: "vw-modal help-modal",
+      role: "dialog",
+      "aria-modal": "true",
+      "aria-labelledby": "help-modal-title",
+    }, [
+      h("div", { class: "vw-modal-header" }, [
+        h("h2", { id: "help-modal-title" }, "Keyboard shortcuts"),
+        h("button", {
+          class: "action-btn subtle icon-btn help-modal-close",
+          type: "button",
+          "aria-label": "Close shortcuts",
+          onclick: closeHelpModal,
+        }, icon("x")),
+      ]),
+      h("div", { class: "vw-modal-body" }, h("ul", { class: "help-shortcuts" }, KEYBOARD_SHORTCUT_HELP.map((entry) =>
+        h("li", null, [
+          h("span", { class: "help-keys" }, entry.keys.map((key) => h("kbd", null, key))),
+          h("span", { class: "help-label" }, entry.label),
+        ])
+      ))),
+    ]));
+  }
+
+  function ensureToastContainer() {
+    let container = document.querySelector(".vw-toast-container");
+    if (container) return container;
+    container = document.createElement("div");
+    container.className = "vw-toast-container";
+    container.setAttribute("role", "status");
+    container.setAttribute("aria-live", "polite");
+    document.body.appendChild(container);
+    return container;
+  }
+
+  function showToast(opts) {
+    const container = ensureToastContainer();
+    const tone = opts && opts.tone ? opts.tone : "info";
+    const toast = document.createElement("div");
+    toast.className = "vw-toast vw-toast-" + tone;
+    let timer = null;
+    let actionTaken = false;
+    const dismiss = (viaAction) => {
+      if (viaAction) actionTaken = true;
+      if (timer) { clearTimeout(timer); timer = null; }
+      toast.classList.add("dismissing");
+      window.setTimeout(() => {
+        if (toast.parentElement) toast.parentElement.removeChild(toast);
+        if (typeof opts.onDismiss === "function") opts.onDismiss(actionTaken);
+      }, 200);
+    };
+    const message = document.createElement("span");
+    message.className = "vw-toast-message";
+    message.textContent = opts && opts.message ? opts.message : "";
+    toast.appendChild(message);
+    if (opts && opts.actionLabel) {
+      const action = document.createElement("button");
+      action.type = "button";
+      action.className = "vw-toast-action";
+      action.textContent = opts.actionLabel;
+      action.addEventListener("click", () => {
+        dismiss(true);
+        if (typeof opts.onAction === "function") {
+          try { opts.onAction(); } catch (e) { console.error(e); }
+        }
+      });
+      toast.appendChild(action);
+    }
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "vw-toast-dismiss";
+    close.setAttribute("aria-label", "Dismiss");
+    close.textContent = "×";
+    close.addEventListener("click", () => dismiss(false));
+    toast.appendChild(close);
+    container.appendChild(toast);
+    if (opts && opts.autoDismissMs && opts.autoDismissMs > 0) {
+      timer = window.setTimeout(() => dismiss(false), opts.autoDismissMs);
+    }
+    return { dismiss: () => dismiss(false) };
+  }
+
+  function showNewDataToast(serverLastUpdated) {
+    if (!serverLastUpdated) return;
+    if (state.uiToastDismissed === serverLastUpdated) return;
+    if (state.uiToastShownFor === serverLastUpdated) return;
+    if (state.uiToastHandle && typeof state.uiToastHandle.dismiss === "function") {
+      try { state.uiToastHandle.dismiss(); } catch (_) { /* noop */ }
+    }
+    state.uiToastShownFor = serverLastUpdated;
+    const handle = showToast({
+      message: "New data available",
+      actionLabel: "Reload",
+      tone: "success",
+      onAction: async () => {
+        try {
+          await reloadDB();
+          loadStaticState();
+          updateFreshness();
+          render();
+        } catch (error) {
+          console.error("toast reload failed", error);
+        } finally {
+          state.uiToastHandle = null;
+          state.uiToastShownFor = null;
+        }
+      },
+      onDismiss: (actionTaken) => {
+        if (!actionTaken) state.uiToastDismissed = serverLastUpdated;
+        if (state.uiToastShownFor === serverLastUpdated) state.uiToastShownFor = null;
+        if (state.uiToastHandle && state.uiToastHandle.__lastUpdated === serverLastUpdated) state.uiToastHandle = null;
+      },
+    });
+    handle.__lastUpdated = serverLastUpdated;
+    state.uiToastHandle = handle;
+  }
+
+  async function checkForNewData() {
+    if (state.runUpdate.active || state.runUpdate._starting) return;
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+    try {
+      const res = await fetch("/api/meta", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      const next = data && data.last_updated;
+      if (!next) return;
+      if (state.lastUpdated && next !== state.lastUpdated) {
+        showNewDataToast(next);
+      }
+    } catch (_) {
+      /* offline; silently retry next tick */
+    }
+  }
+
   function renderWizardPage() {
     const app = document.getElementById("app");
     const overlayRoot = document.getElementById("overlay-root");
@@ -5653,6 +5888,8 @@
     });
     const refreshButton = document.getElementById("refresh-trigger");
     if (refreshButton) refreshButton.addEventListener("click", handleRefresh);
+    const helpButton = document.getElementById("help-trigger");
+    if (helpButton) helpButton.addEventListener("click", openHelpModal);
     const sidebarToggle = document.getElementById("sidebar-toggle");
     if (sidebarToggle) sidebarToggle.addEventListener("click", () => {
       state.ui.sidebarOpen = !state.ui.sidebarOpen;
@@ -5665,19 +5902,78 @@
     });
     window.addEventListener("resize", scheduleChartDraw);
     window.addEventListener("keydown", (event) => {
-      if (event.key !== "Escape") return;
-      if (state.ui.sidebarOpen) {
-        state.ui.sidebarOpen = false;
-        syncShellNav();
+      if (event.defaultPrevented) return;
+
+      // Escape: existing behavior preserved verbatim, including in inputs.
+      if (event.key === "Escape") {
+        if (state.helpModal.open) {
+          closeHelpModal();
+          return;
+        }
+        if (state.ui.sidebarOpen) {
+          state.ui.sidebarOpen = false;
+          syncShellNav();
+          return;
+        }
+        if (state.wizard.open) return;
+        if (isRunUpdateBusy()) return;
+        if (state.runUpdate.active && state.runUpdate.state !== "running") {
+          closeRunUpdateOverlay();
+          return;
+        }
+        if (state.manualRefreshModal.open) closeManualRefreshModal();
         return;
       }
-      if (state.wizard.open) return;
-      if (isRunUpdateBusy()) return;
-      if (state.runUpdate.active && state.runUpdate.state !== "running") {
-        closeRunUpdateOverlay();
-        return;
+
+      // Custom shortcuts: gated against editing surfaces, modifiers, and
+      // any in-progress modal/wizard/bootstrap.
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (isEditingTarget(document.activeElement)) return;
+      if (!shortcutsAllowed()) return;
+      if (state.manualRefreshModal && state.manualRefreshModal.open) return;
+      if (state.runUpdate.active && state.runUpdate.state === "running") return;
+      if (state.helpModal.open) return;
+
+      const key = String(event.key || "").toLowerCase();
+      const drawerOpen = !!state.ui.sidebarOpen;
+      switch (key) {
+        case "/":
+          event.preventDefault();
+          focusSearchInput();
+          return;
+        case "j":
+          if (drawerOpen) return;
+          if (state.area === "models" && state.view === "table") {
+            event.preventDefault();
+            moveTableFocus(1);
+          }
+          return;
+        case "k":
+          if (drawerOpen) return;
+          if (state.area === "models" && state.view === "table") {
+            event.preventDefault();
+            moveTableFocus(-1);
+          }
+          return;
+        case "e":
+          if (drawerOpen) return;
+          if (state.area === "models" && state.selectedModelIds.length === 1) {
+            event.preventDefault();
+            exportSelectedModelReport();
+          }
+          return;
+        case "r":
+          event.preventDefault();
+          triggerRefresh();
+          return;
+        case "?":
+          event.preventDefault();
+          openHelpModal();
+          return;
       }
-      if (state.manualRefreshModal.open) closeManualRefreshModal();
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") checkForNewData();
     });
     applyRoute(parseHashRoute(location.hash), { updateHash: true, replace: true });
     window.addEventListener("popstate", () => {
@@ -5710,6 +6006,7 @@
         await openWizard(0);
       }
       window.setInterval(updateFreshness, 60000);
+      state.metaPollFrame = window.setInterval(checkForNewData, 15000);
     } catch (error) {
       console.error("LLM-Dash boot failed:", error);
       if (error && error.code === "bootstrap-failed") {

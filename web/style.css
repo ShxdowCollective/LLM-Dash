@@ -1983,6 +1983,138 @@ table.data-table thead th.num,
   }
 }
 
+.vw-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.vw-toast-message {
+  flex: 1;
+  text-align: left;
+}
+
+.vw-toast-action {
+  appearance: none;
+  border: none;
+  background: var(--vw-accent);
+  color: var(--vw-bg);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-family: var(--vw-font-mono);
+  font-size: 11px;
+  font-weight: var(--vw-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.vw-toast-action:hover {
+  filter: brightness(1.05);
+}
+
+.vw-toast-dismiss {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--vw-text-muted);
+  padding: 0 4px;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.vw-toast-dismiss:hover {
+  color: var(--vw-text);
+}
+
+.help-btn {
+  width: 36px;
+  flex: 0 0 36px;
+  padding: 0;
+  font-family: var(--vw-font-mono);
+  font-weight: var(--vw-weight-bold);
+}
+
+.sidebar-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sidebar-footer .refresh-btn {
+  flex: 1 1 auto;
+}
+
+.sidebar-footer .freshness-chip {
+  flex: 1 0 100%;
+}
+
+.help-modal-backdrop {
+  z-index: 60;
+}
+
+.help-modal {
+  width: min(440px, 100%);
+}
+
+.help-modal .vw-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.help-modal-close {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.help-shortcuts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  font-family: var(--vw-font-mono);
+  font-size: 13px;
+}
+
+.help-shortcuts li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.help-keys {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.help-keys kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--vw-surface-2);
+  color: var(--vw-text);
+  font-family: var(--vw-font-mono);
+  font-size: 12px;
+  font-weight: var(--vw-weight-semibold);
+  box-shadow: 0 0 0 1px var(--vw-border-mid), inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+}
+
+.help-label {
+  flex: 1;
+  color: var(--vw-text-muted);
+}
+
 .chart-card {
   display: grid;
   gap: 14px;
