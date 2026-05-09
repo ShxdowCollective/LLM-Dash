@@ -141,6 +141,7 @@
         schedule: false,
         manual: true,
       },
+      statsLeaderboardSort: { sortBy: "costPerWord", direction: "asc" },
     },
     selectedModelIds: [],
     models: [],
@@ -597,6 +598,14 @@
     if (stored.settingsCollapsed && typeof stored.settingsCollapsed === "object") {
       Object.assign(state.ui.settingsCollapsed, stored.settingsCollapsed);
     }
+    if (stored.statsLeaderboardSort && typeof stored.statsLeaderboardSort === "object") {
+      const allowedKeys = new Set(["runs", "totalCost", "costPerWord", "wordsPerDollar", "minDuration"]);
+      const allowedDir = new Set(["asc", "desc"]);
+      const next = { ...state.ui.statsLeaderboardSort };
+      if (allowedKeys.has(stored.statsLeaderboardSort.sortBy)) next.sortBy = stored.statsLeaderboardSort.sortBy;
+      if (allowedDir.has(stored.statsLeaderboardSort.direction)) next.direction = stored.statsLeaderboardSort.direction;
+      state.ui.statsLeaderboardSort = next;
+    }
   }
 
   function consumeResetLaunchFlag() {
@@ -777,6 +786,14 @@
     const number = Number(value);
     if (!Number.isFinite(number)) return "—";
     return MONEY.format(number);
+  }
+
+  function formatMicroCost(value) {
+    if (value === null || value === undefined || value === "") return "—";
+    const number = Number(value);
+    if (!Number.isFinite(number) || number === 0) return "—";
+    if (number >= 0.01) return MONEY.format(number);
+    return "$" + number.toPrecision(4);
   }
 
   function formatDuration(value) {
@@ -1938,6 +1955,16 @@
     return denominator ? numerator / denominator : null;
   }
 
+  function median(values) {
+    if (!values || !values.length) return null;
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    if (sorted.length % 2) return sorted[mid];
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+
+  const DURATIONS_PER_GROUP_CAP = 200;
+
   function groupMetricsByAgent(rows) {
     const groups = new Map();
     for (const row of rows) {
@@ -1946,28 +1973,46 @@
         groups.set(key, {
           key,
           label: formatAgentLabel(row),
+          agentName: row.agent_name || "",
+          agentRuntime: row.agent_runtime || "",
           runs: 0,
           totalCost: 0,
           costCount: 0,
           totalDuration: 0,
           durationCount: 0,
+          minDuration: Infinity,
+          durations: [],
           totalInput: 0,
           inputCount: 0,
           totalOutput: 0,
           outputCount: 0,
           totalWords: 0,
           wordCountCount: 0,
+          totalCostForWordCalc: 0,
+          totalWordsForCostCalc: 0,
+          pairedRunCount: 0,
         });
       }
       const group = groups.get(key);
       group.runs += 1;
-      if (row.cost_usd !== null && row.cost_usd !== undefined && row.cost_usd !== "") {
-        group.totalCost += Number(row.cost_usd);
+      const costRaw = row.cost_usd;
+      const durationRaw = row.duration_sec;
+      const wordsRaw = row.word_count;
+      const hasCost = costRaw !== null && costRaw !== undefined && costRaw !== "";
+      const hasDuration = durationRaw !== null && durationRaw !== undefined && durationRaw !== "";
+      const hasWords = wordsRaw !== null && wordsRaw !== undefined && wordsRaw !== "";
+      if (hasCost) {
+        group.totalCost += Number(costRaw);
         group.costCount += 1;
       }
-      if (row.duration_sec !== null && row.duration_sec !== undefined && row.duration_sec !== "") {
-        group.totalDuration += Number(row.duration_sec);
-        group.durationCount += 1;
+      if (hasDuration) {
+        const d = Number(durationRaw);
+        if (Number.isFinite(d) && d > 0) {
+          group.totalDuration += d;
+          group.durationCount += 1;
+          if (d < group.minDuration) group.minDuration = d;
+          if (group.durations.length < DURATIONS_PER_GROUP_CAP) group.durations.push(d);
+        }
       }
       if (row.tokens_input !== null && row.tokens_input !== undefined && row.tokens_input !== "") {
         group.totalInput += Number(row.tokens_input);
@@ -1977,12 +2022,50 @@
         group.totalOutput += Number(row.tokens_output);
         group.outputCount += 1;
       }
-      if (row.word_count !== null && row.word_count !== undefined && row.word_count !== "") {
-        group.totalWords += Number(row.word_count);
+      if (hasWords) {
+        group.totalWords += Number(wordsRaw);
         group.wordCountCount += 1;
       }
+      if (hasCost && hasWords) {
+        const c = Number(costRaw);
+        const w = Number(wordsRaw);
+        if (Number.isFinite(c) && Number.isFinite(w) && c > 0 && w > 0) {
+          group.totalCostForWordCalc += c;
+          group.totalWordsForCostCalc += w;
+          group.pairedRunCount += 1;
+        }
+      }
+    }
+    for (const group of groups.values()) {
+      if (!Number.isFinite(group.minDuration)) group.minDuration = null;
     }
     return [...groups.values()].sort((a, b) => b.runs - a.runs || b.totalCost - a.totalCost || a.label.localeCompare(b.label));
+  }
+
+  const FASTEST_RUN_MIN_SAMPLES = 3;
+
+  function deriveLeaderboardMetrics(group) {
+    const costPerWord = group.totalCostForWordCalc > 0 && group.totalWordsForCostCalc > 0
+      ? group.totalCostForWordCalc / group.totalWordsForCostCalc
+      : null;
+    const wordsPerDollar = group.totalCostForWordCalc > 0 && group.totalWordsForCostCalc > 0
+      ? group.totalWordsForCostCalc / group.totalCostForWordCalc
+      : null;
+    const fastestEligible = group.durations.length >= FASTEST_RUN_MIN_SAMPLES;
+    let minDuration = null;
+    if (fastestEligible) {
+      minDuration = group.durations[0];
+      for (let i = 1; i < group.durations.length; i++) {
+        if (group.durations[i] < minDuration) minDuration = group.durations[i];
+      }
+    }
+    return {
+      costPerWord,
+      wordsPerDollar,
+      minDuration,
+      medianDuration: fastestEligible ? median(group.durations) : null,
+      fastestEligible,
+    };
   }
 
   function toggleStatsSort(key) {
@@ -3303,6 +3386,207 @@
     ]);
   }
 
+  const LEADERBOARD_COLUMNS = [
+    { key: "runs", label: "Runs", sortable: true, defaultDir: "desc", numeric: true },
+    { key: "totalCost", label: "Total cost", sortable: true, defaultDir: "desc", numeric: true },
+    { key: "costPerWord", label: "Cost / word", sortable: true, defaultDir: "asc", numeric: true },
+    { key: "wordsPerDollar", label: "Words / $", sortable: true, defaultDir: "desc", numeric: true },
+    { key: "minDuration", label: "Fastest run (min)", sortable: true, defaultDir: "asc", numeric: true },
+  ];
+  const LEADERBOARD_KEYS = new Set(LEADERBOARD_COLUMNS.map((column) => column.key));
+
+  function leaderboardSortMarker(key) {
+    const sort = state.ui.statsLeaderboardSort;
+    if (!sort || sort.sortBy !== key) return "";
+    return sort.direction === "asc" ? " ↑" : " ↓";
+  }
+
+  function toggleLeaderboardSort(key) {
+    if (!LEADERBOARD_KEYS.has(key)) return;
+    const sort = state.ui.statsLeaderboardSort;
+    if (sort.sortBy === key) {
+      sort.direction = sort.direction === "asc" ? "desc" : "asc";
+    } else {
+      const column = LEADERBOARD_COLUMNS.find((c) => c.key === key);
+      sort.sortBy = key;
+      sort.direction = column?.defaultDir || "desc";
+    }
+    persistUIState();
+    render();
+  }
+
+  function compareLeaderboardEntries(a, b, key, dir) {
+    const left = a[key];
+    const right = b[key];
+    const leftMissing = left === null || left === undefined || !Number.isFinite(left);
+    const rightMissing = right === null || right === undefined || !Number.isFinite(right);
+    if (leftMissing && rightMissing) return a.group.label.localeCompare(b.group.label);
+    if (leftMissing) return 1;
+    if (rightMissing) return -1;
+    const sign = dir === "asc" ? 1 : -1;
+    if (left === right) return a.group.label.localeCompare(b.group.label);
+    return left < right ? -1 * sign : 1 * sign;
+  }
+
+  function renderAgentLeaderboard(rows) {
+    const grouped = groupMetricsByAgent(rows);
+    if (!grouped.length) {
+      return h("div", { class: "leaderboard-empty stats-card vw-metric" }, [
+        h("div", { class: "stats-value vw-metric-value" }, "—"),
+        h("div", { class: "stats-label vw-metric-label" }, "No agents match the current filter"),
+      ]);
+    }
+    const entries = grouped.map((group) => {
+      const derived = deriveLeaderboardMetrics(group);
+      return {
+        group,
+        runs: group.runs,
+        totalCost: group.costCount > 0 ? group.totalCost : null,
+        costPerWord: derived.costPerWord,
+        wordsPerDollar: derived.wordsPerDollar,
+        minDuration: derived.minDuration,
+        medianDuration: derived.medianDuration,
+        fastestEligible: derived.fastestEligible,
+      };
+    });
+
+    const bestEntries = {};
+    for (const column of LEADERBOARD_COLUMNS) {
+      const dir = column.defaultDir;
+      const ranked = [...entries].sort((a, b) => compareLeaderboardEntries(a, b, column.key, dir));
+      const top = ranked.find((e) => {
+        const v = e[column.key];
+        return v !== null && v !== undefined && Number.isFinite(v);
+      });
+      bestEntries[column.key] = top || null;
+    }
+
+    const summaryTiles = [];
+    if (bestEntries.costPerWord) {
+      summaryTiles.push(statCard(
+        "Best cost / word",
+        formatMicroCost(bestEntries.costPerWord.costPerWord),
+        bestEntries.costPerWord.group.label,
+      ));
+    } else {
+      summaryTiles.push(statCard("Best cost / word", "—", "Needs paired cost + word data"));
+    }
+    if (bestEntries.wordsPerDollar) {
+      summaryTiles.push(statCard(
+        "Most words / $",
+        formatNumber(bestEntries.wordsPerDollar.wordsPerDollar, 0),
+        bestEntries.wordsPerDollar.group.label,
+      ));
+    } else {
+      summaryTiles.push(statCard("Most words / $", "—", "Needs paired cost + word data"));
+    }
+    if (bestEntries.minDuration) {
+      summaryTiles.push(statCard(
+        "Fastest run (best)",
+        formatDuration(bestEntries.minDuration.minDuration),
+        bestEntries.minDuration.group.label,
+      ));
+    } else {
+      summaryTiles.push(statCard("Fastest run (best)", "—", "Needs ≥ 3 timed runs per agent"));
+    }
+
+    const sort = state.ui.statsLeaderboardSort;
+    const activeKey = LEADERBOARD_KEYS.has(sort.sortBy) ? sort.sortBy : "costPerWord";
+    const activeDir = sort.direction === "asc" ? "asc" : "desc";
+    const sorted = [...entries].sort((a, b) => compareLeaderboardEntries(a, b, activeKey, activeDir));
+    const valuedCount = sorted.filter((entry) => {
+      const v = entry[activeKey];
+      return v !== null && v !== undefined && Number.isFinite(v);
+    }).length;
+    const eligibleForTopHighlight = grouped.length >= 3 && valuedCount >= 3;
+
+    const renderHeaderCell = (column) => {
+      const cls = column.numeric ? "num" : null;
+      return h("th", { class: cls }, h("button", {
+        class: "table-sort-btn",
+        type: "button",
+        onclick: () => toggleLeaderboardSort(column.key),
+      }, column.label + leaderboardSortMarker(column.key)));
+    };
+
+    const rowsBody = sorted.map((entry, idx) => {
+      const valuedRank = entry[activeKey] !== null && entry[activeKey] !== undefined && Number.isFinite(entry[activeKey]);
+      const rankBadgeIndex = valuedRank ? idx + 1 : null;
+      const rankBadgeClass = ["leaderboard-rank"];
+      if (eligibleForTopHighlight && rankBadgeIndex && rankBadgeIndex <= 3) {
+        rankBadgeClass.push("rank-" + rankBadgeIndex);
+      } else if (!valuedRank) {
+        rankBadgeClass.push("rank-blank");
+      }
+      const rankCell = h("td", null, h("span", { class: rankBadgeClass.join(" ") },
+        rankBadgeIndex ? "#" + rankBadgeIndex : "—"));
+
+      const agentCell = h("td", null, h("div", { class: "leaderboard-agent" }, [
+        h("div", { class: "leaderboard-agent-name" }, entry.group.agentName || "unknown"),
+        h("div", { class: "leaderboard-agent-runtime" }, entry.group.agentRuntime || "unknown"),
+      ]));
+
+      const runsCell = h("td", { class: "num" }, String(entry.runs));
+
+      const totalCostNote = entry.group.runs && entry.group.costCount < entry.group.runs
+        ? entry.group.costCount + " of " + entry.group.runs + " runs reported cost"
+        : null;
+      const totalCostCell = h("td", {
+        class: "num",
+        title: totalCostNote || undefined,
+      }, entry.totalCost !== null ? formatCurrency(entry.totalCost) : "—");
+
+      const costPerWordCell = entry.costPerWord !== null
+        ? h("td", { class: "num" }, formatMicroCost(entry.costPerWord))
+        : h("td", { class: "num" }, [
+            h("span", { class: "leaderboard-dim" }, "—"),
+            h("span", { class: "vw-status-chip vw-status-warning leaderboard-chip" }, "no cost data"),
+          ]);
+
+      const wordsPerDollarCell = entry.wordsPerDollar !== null
+        ? h("td", { class: "num" }, formatNumber(entry.wordsPerDollar, 0))
+        : h("td", { class: "num" }, [
+            h("span", { class: "leaderboard-dim" }, "—"),
+            h("span", { class: "vw-status-chip vw-status-warning leaderboard-chip" }, "no cost data"),
+          ]);
+
+      let fastestCell;
+      if (entry.fastestEligible && entry.minDuration !== null) {
+        const tooltip = "min " + formatDuration(entry.minDuration)
+          + " · median " + formatDuration(entry.medianDuration)
+          + " · n=" + entry.group.durations.length;
+        fastestCell = h("td", { class: "num", title: tooltip }, formatDuration(entry.minDuration));
+      } else {
+        fastestCell = h("td", { class: "num" }, [
+          h("span", { class: "leaderboard-dim" }, "—"),
+          h("span", { class: "vw-status-chip vw-status-warning leaderboard-chip" }, "n=" + entry.group.durations.length),
+        ]);
+      }
+
+      return h("tr", null, [
+        rankCell,
+        agentCell,
+        runsCell,
+        totalCostCell,
+        costPerWordCell,
+        wordsPerDollarCell,
+        fastestCell,
+      ]);
+    });
+
+    return h("div", { class: "leaderboard" }, [
+      h("div", { class: "leaderboard-summary stats-grid" }, summaryTiles),
+      h("div", { class: "table-wrap leaderboard-table-wrap" }, h("table", { class: "data-table leaderboard-table" }, [
+        h("thead", null, h("tr", null, [
+          h("th", { class: "leaderboard-rank-head" }, "Rank"),
+          h("th", null, "Agent"),
+          ...LEADERBOARD_COLUMNS.map(renderHeaderCell),
+        ])),
+        h("tbody", null, rowsBody),
+      ])),
+    ]);
+  }
+
   function renderAgentBreakdown(rows) {
     const grouped = groupMetricsByAgent(rows);
     return h("div", { class: "table-wrap" }, h("table", { class: "data-table" }, [
@@ -3434,6 +3718,13 @@
           statCard("Words / run", formatNumber(averages.words, 0), "Changelog body only"),
           statCard("Cost / word", formatCurrency(averages.costPerWord), "Runs with both cost and word data"),
         ]),
+      ]),
+      h("section", { class: "stats-section" }, [
+        h("div", { class: "section-head" }, [
+          h("h2", null, "Agent Provider Leaderboard"),
+          h("p", null, "Ranks each agent + runtime by efficiency and best wall-clock. Cost-per-word and words-per-dollar use only runs that report both cost and word count; fastest run requires at least three timed runs."),
+        ]),
+        renderAgentLeaderboard(rows),
       ]),
       h("section", { class: "stats-section" }, [
         h("div", { class: "section-head" }, [

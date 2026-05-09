@@ -1599,6 +1599,108 @@ table.data-table thead th.num,
   font-size: 12px;
 }
 
+.leaderboard {
+  display: grid;
+  gap: var(--vw-space-md);
+}
+
+.leaderboard-summary {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.leaderboard-summary .stats-card .stats-note {
+  color: var(--vw-text-faint);
+  font-family: var(--vw-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.leaderboard-table-wrap {
+  /* inherits .table-wrap scroll affordances */
+}
+
+.leaderboard-table thead th {
+  white-space: nowrap;
+}
+
+.leaderboard-table .leaderboard-rank-head {
+  width: 64px;
+}
+
+.leaderboard-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-family: var(--vw-font-mono);
+  font-size: 11px;
+  font-weight: var(--vw-weight-semibold);
+  color: var(--vw-text-muted);
+  background: var(--vw-surface-2);
+  box-shadow: 0 0 0 1px var(--vw-border);
+}
+
+.leaderboard-rank.rank-1 {
+  color: var(--vw-bg);
+  background: var(--vw-iridescent-1);
+  box-shadow: 0 0 0 1px var(--vw-iridescent-1), 0 0 14px rgba(242, 173, 91, 0.35);
+}
+
+.leaderboard-rank.rank-2 {
+  color: var(--vw-bg);
+  background: var(--vw-iridescent-2);
+  box-shadow: 0 0 0 1px var(--vw-iridescent-2);
+}
+
+.leaderboard-rank.rank-3 {
+  color: var(--vw-bg);
+  background: var(--vw-iridescent-3);
+  box-shadow: 0 0 0 1px var(--vw-iridescent-3);
+}
+
+.leaderboard-rank.rank-blank {
+  color: var(--vw-text-faint);
+  background: transparent;
+  box-shadow: 0 0 0 1px var(--vw-border);
+}
+
+.leaderboard-agent {
+  display: grid;
+  gap: 2px;
+}
+
+.leaderboard-agent-name {
+  color: var(--vw-text);
+  font-family: var(--vw-font-mono);
+  font-size: 13px;
+  font-weight: var(--vw-weight-semibold);
+}
+
+.leaderboard-agent-runtime {
+  color: var(--vw-text-faint);
+  font-family: var(--vw-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.leaderboard-table .leaderboard-chip {
+  margin-left: 6px;
+  padding: 2px 8px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.leaderboard-dim {
+  color: var(--vw-text-faint);
+  margin-right: 2px;
+}
+
+.leaderboard-empty {
+  text-align: center;
+}
+
 .chart-card {
   display: grid;
   gap: 14px;
@@ -2620,6 +2722,12 @@ table.data-table thead th.num,
   color: var(--vw-error);
   background: var(--vw-error-bg);
   box-shadow: 0 0 0 1px var(--vw-error-border);
+}
+
+.vw-status-warning {
+  color: var(--vw-warning);
+  background: var(--vw-warning-bg);
+  box-shadow: 0 0 0 1px var(--vw-warning-border);
 }
 
 .vw-status-generating {

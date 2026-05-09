@@ -164,7 +164,7 @@ changelogs 1──1 run_metrics (via changelog_date)
 | **Table** | Sortable model leaderboard with score cells, tier badges, detail panel | `v_models_latest` |
 | **Chart** | Horizontal bar comparison across models | `v_models_latest` |
 | **Changelog** | Date list + rendered Markdown body | `changelogs` table + `changelogs/*.md` |
-| **Stats** | Token/cost/duration analytics, per-agent breakdowns, time-series charts | `run_metrics` |
+| **Stats** | Token/cost/duration analytics, Agent Provider Leaderboard, per-agent breakdowns, time-series charts | `run_metrics` |
 | **Settings** | Provider, Models, Research, and Schedule subpages, plus a Manual Update card on the Provider subpage and a sidebar-footer Refresh trigger | `/api/provider`, `/api/exa`, `/api/llmstats`, `/api/schedule`, `/api/run-update` |
 
 ### State Management

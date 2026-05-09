@@ -4,6 +4,75 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 063 — 2026-05-08
+
+**Agent:** Claude Opus 4.7 (shxdowloop-9x, shxdowloop main agent)
+**Cycle:** Phase 9.x — shxdowloop, Stage 1 of 3
+**Task:** Implement Phase 9.3 — Agent Provider Leaderboard on the Stats page.
+
+---
+
+Stage 1 of the `shxdowloop/2026-05-08/phase-9-remaining-todos` branch. Phase 9.3
+landed first because it's independent of 9.1/9.2 and the smallest of the three.
+
+**Implementation (web/app.js, web/style.css):**
+- Extended `groupMetricsByAgent` with `durations` (capped at 200), paired
+  cost+word sums (`totalCostForWordCalc` / `totalWordsForCostCalc`), and
+  per-agent identifiers. Only counts toward paired sums when both `cost_usd > 0`
+  and `word_count > 0` are present on the same row.
+- Added `median()` and `formatMicroCost()` helpers. `formatMicroCost` falls
+  through to `formatCurrency` above $0.01 and renders 4-sig-fig precision below
+  ($0.002917 etc.).
+- Added `deriveLeaderboardMetrics()` that returns `costPerWord`,
+  `wordsPerDollar`, `minDuration`, `medianDuration`, and `fastestEligible`.
+  `n ≥ 3` threshold gates fastest-run; below threshold the row gets a
+  `vw-status-warning` chip with `n=N`.
+- New `renderAgentLeaderboard()` mounts between Averages and Time Series.
+  Sortable by Runs, Total cost, Cost / word, Words / $, Fastest run (min).
+  Default sort: cost-per-word ascending. Sort persists via existing
+  `state.ui.statsLeaderboardSort` -> `UI_STATE_KEY` block.
+- Top-3 rank chips (rank-1..3) wired to `--vw-iridescent-1..3`. Highlight
+  only fires when ≥3 valued entries exist for the active sort key — avoids
+  rewarding a leaderboard of one or two.
+- Three summary tiles above the table: best cost/word, most words/$,
+  fastest run (best). Each falls back to "—" + a hint line when no group
+  qualifies.
+
+**Reviewer pass (`feature-dev:code-reviewer`):**
+- Caught: `vw-status-warning` class was referenced in the plan but never
+  defined in CSS and never applied in JS. Added the rule next to
+  `.vw-status-error` and applied it to all three insufficient-data chips.
+- Caught: `minDuration` was tracked independently from the 200-entry
+  `durations` cap, so above 200 runs the tooltip's `min` and `median` would
+  diverge. Now `deriveLeaderboardMetrics` computes min from the same capped
+  array as median.
+
+**Verification:**
+- `node --check web/app.js` passes.
+- `python3 -m py_compile server.py` passes.
+- `agent-browser` headed smoke at 1440x900 and 480x900: leaderboard renders
+  between Averages and Time Series, default sort cost-per-word asc, sort
+  click rotates direction and persists, narrow viewport falls back to
+  horizontal scroll on the table-wrap.
+- Synthetic-data smoke: inserted 3 claude-opus-4-7 + 3 gpt-5 rows with
+  positive cost_usd / word_count. Leaderboard correctly populated cost/word
+  ($0.006378, $0.002917), words/$ (157, 343), fastest run (2m 50s, 1m 40s),
+  rank chips #1..3 with iridescent palette. DB restored after capture.
+
+**Files touched:** web/app.js, web/style.css, docs/ARCHITECTURE.md, TODO.md.
+
+**Artifacts:** `artifacts/phase-9-3-leaderboard/` — wide-1440.png,
+narrow-480.png, wide-sorted-runs.png, wide-with-cost.png,
+wide-warning-chips.png.
+
+**Open questions for Stages 2 + 3:** The user's `~/.shxdow/config/shxdow.llmdash.json`
+has JSON line comments and fails to parse — wizard auto-opens for them too.
+Out of scope here, but noted as a real bug to flag separately.
+
+**Checkpoint:** TBD (committing this stage now).
+
+---
+
 ## Entry 062 — 2026-05-08
 
 **Agent:** Claude Opus 4.7 (driftwave, shxdow-flow planning pass)

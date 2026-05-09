@@ -79,7 +79,7 @@ Plan: [docs/plans/2026-05-08-phase-9-2-power-user-ux.md](docs/plans/2026-05-08-p
 
 Plan: [docs/plans/2026-05-08-phase-9-3-stats-leaderboard.md](docs/plans/2026-05-08-phase-9-3-stats-leaderboard.md)
 
-- [ ] Agent Provider leaderboard section on the Stats page: cost-per-word,
+- [x] Agent Provider leaderboard section on the Stats page: cost-per-word,
   words-per-dollar, and `min(duration_sec)` (fastest run) grouped by
   `(agent_name, agent_runtime)`. Conservative `n ≥ 3` discipline threshold
   for fastest-run; NULL-safe cost math; `formatMicroCost` helper for
