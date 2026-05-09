@@ -55,13 +55,13 @@ independent.
 
 Plan: [docs/plans/2026-05-08-phase-9-1-data-exploration.md](docs/plans/2026-05-08-phase-9-1-data-exploration.md)
 
-- [ ] Sparklines of each model's score trajectory in the Table view (inline
+- [x] Sparklines of each model's score trajectory in the Table view (inline
   SVG, hand-rolled, no new dependency).
-- [ ] Per-model score trend chart inside the DetailPanel (multi-series uPlot,
+- [x] Per-model score trend chart inside the DetailPanel (multi-series uPlot,
   separate `state.detailUplots` map so the Stats scheduler doesn't wipe it).
-- [ ] Diff view between any two changelog dates (internal tab inside
+- [x] Diff view between any two changelog dates (internal tab inside
   `renderChangelog()`, hash-state shareable).
-- [ ] Markdown-exportable single-model report (frontmatter + score history +
+- [x] Markdown-exportable single-model report (frontmatter + score history +
   citations pulled from changelog notes).
 
 ### Phase 9.2 — Power-user UX

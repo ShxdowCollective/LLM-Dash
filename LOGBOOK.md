@@ -4,6 +4,106 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 064 — 2026-05-08
+
+**Agent:** Claude Opus 4.7 (shxdowloop-9x, shxdowloop main agent)
+**Cycle:** Phase 9.x — shxdowloop, Stage 2 of 3
+**Task:** Implement Phase 9.1 — Data exploration (sparklines, DetailPanel
+trend chart, Changelog Compare tab, Markdown report export).
+
+---
+
+Stage 2 of the `shxdowloop/2026-05-08/phase-9-remaining-todos` branch. Largest
+of the three stages — touches state, the Models table, the DetailPanel, the
+Changelog area, and adds a routing extension for share-links.
+
+**Implementation (web/app.js, web/style.css):**
+- `state.scoreHistory: Map<modelId, Array<row>>` populated in
+  `loadStaticState()` from a single `model_scores` query (~46 rows in seed,
+  <150 KB at full scale).
+- New helpers `avgOverallRow`, `modelHistory`, `modelOverallSeries`,
+  `sparkDelta`. `sortKey` extended with `"trend"` so the existing sort-bar
+  picks up a Trend button alongside Overall/Value.
+- `renderSparkline()` builds inline SVG via `innerHTML` on a wrapper span
+  (the existing `h()` hyperscript is HTML-namespace only — verified via
+  `document.createElement` in `h`). Sparkline color comes from
+  `--vw-iridescent-3/5/7` based on last-vs-prev delta. Empty-state em-dash
+  preserves column width.
+- New `Trend` column in `renderTable()`, hidden under `@media (max-width:
+  760px)`. 46 sparklines mount; populated ones render successfully (only
+  `model_id=1` has 2+ history points in seed).
+- Multi-series uPlot for the DetailPanel: new helper
+  `renderMultiSeriesChart()` (the existing `renderUplotChart()` is
+  single-series). Mount id pattern `detail-chart-${modelId}`. Stored in
+  `state.detailUplots` so the Stats `scheduleChartDraw()` doesn't wipe them.
+  Lifecycle wired via `renderSingleModelCard` (schedule on every render),
+  `toggleModelSelection` (destroy on deselect), and `scheduleChartDraw`
+  (destroy + cancel pending rAFs when leaving Models area).
+- `parseHashRoute` and `hashForRoute` extended to support `?key=value`
+  segments. Legacy `#table` / `#changelog` etc. still resolve. Compare tab
+  state is round-trippable via `#changelog?tab=compare&from=&to=`.
+- Compare tab inside `renderChangelog()`: `Read | Compare` segmented at the
+  panel head; from/to date pickers populated from `state.changelogs`;
+  three-section diff (`New models`, `Score changes`, `Status changes`)
+  computed by `diffChangelogs(fromDate, toDate)`. Score `from` value is
+  resolved via `lookupPriorScore` (latest `model_scores` row strictly before
+  the changelog date for that model+field).
+- Markdown export: `buildModelReport(model)` returns a string with YAML
+  frontmatter, latest scores table, full history table, and up to 8
+  citation blocks pulled from changelogs that mention the model.
+  `extractModelMentions` is a line-by-line scanner with heading-context.
+  `downloadModelReport` does a Blob + anchor click; filename is
+  `${slug}-report.md`.
+
+**Reviewer pass (`feature-dev:code-reviewer`) — fixed before checkpoint:**
+- **Critical**: `destroyAllDetailUplots` did not cancel pending rAFs, so a
+  view switch could let a queued frame fire after destruction and leak a
+  rogue uPlot. Now cancels every `state.detailChartFrames[*]` first, then
+  destroys instances. `destroyDetailUplot` also cancels its model's frame.
+- **Important**: `lookupPriorScore` did `row[field]` without validating
+  `field` against `METRIC_KEYS`, so a typo'd field in `changed_json` would
+  silently pin `from: null` forever. Now early-returns `null` for unknown
+  fields.
+- **Important**: Markdown export truncation footer (`...older mentions
+  truncated`) fired whenever `candidates.length > mentionBlocks.length`,
+  even when the reduction came from blockless changelog bodies, not from
+  hitting the cap. Added an explicit `truncated` flag set only when the
+  cap actually breaks the loop.
+- **Important**: YAML frontmatter quoted nothing, so a model name or
+  vendor containing `:` would emit invalid YAML. Added `yamlScalar(value)`
+  that double-quotes any string with YAML-special characters and escapes
+  `\` and `"` inside.
+
+The reviewer also flagged a known `render()`-storm issue (sparkline +
+detail chart re-render on every filter keystroke) that the original 9.1
+plan acknowledges as out-of-scope for this phase.
+
+**Verification:**
+- `node --check web/app.js` passes.
+- `python3 -m py_compile server.py` passes.
+- `agent-browser` headed at 1440x900: Models table renders Trend column,
+  populated sparklines stroke green/blue/pink by delta, DetailPanel
+  multi-series uPlot draws against synthetic 5-date history, Compare tab
+  renders New models / Score changes / Status changes blocks for the
+  Apr 27 → May 1 window, Markdown export downloads with valid YAML
+  frontmatter (timestamp colon correctly quoted).
+- Narrow viewport (480x900): all 46 trend cells `display: none`.
+- Synthetic-data smoke for sparklines + detail chart used 40 inserted
+  history rows across 8 models. DB restored from `/tmp/dash.sqlite.bak`
+  before checkpoint.
+
+**Files touched:** web/app.js (~700 lines added), web/style.css (~250
+lines added), docs/ARCHITECTURE.md, TODO.md, plus this LOGBOOK and the
+loop process plan.
+
+**Artifacts:** `artifacts/phase-9-1-data-exploration/` — wide-models.png,
+wide-models-trend-right.png, wide-detail-chart.png, wide-compare.png,
+narrow-models.png.
+
+**Checkpoint:** TBD (committing this stage now).
+
+---
+
 ## Entry 063 — 2026-05-08
 
 **Agent:** Claude Opus 4.7 (shxdowloop-9x, shxdowloop main agent)

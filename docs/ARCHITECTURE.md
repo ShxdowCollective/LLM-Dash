@@ -161,9 +161,9 @@ changelogs 1──1 run_metrics (via changelog_date)
 
 | View | Purpose | Primary Data Source |
 |---|---|---|
-| **Table** | Sortable model leaderboard with score cells, tier badges, detail panel | `v_models_latest` |
+| **Table** | Sortable model leaderboard with score cells, tier badges, inline trend sparklines, detail panel with multi-series score-history chart and Markdown report export | `v_models_latest`, `model_scores` |
 | **Chart** | Horizontal bar comparison across models | `v_models_latest` |
-| **Changelog** | Date list + rendered Markdown body | `changelogs` table + `changelogs/*.md` |
+| **Changelog** | Date list + rendered Markdown body, plus an internal **Compare** tab that diffs new models, score changes, and status changes between two dates (hash-shareable via `#changelog?tab=compare&from=...&to=...`) | `changelogs` table + `changelogs/*.md` + `model_scores` |
 | **Stats** | Token/cost/duration analytics, Agent Provider Leaderboard, per-agent breakdowns, time-series charts | `run_metrics` |
 | **Settings** | Provider, Models, Research, and Schedule subpages, plus a Manual Update card on the Provider subpage and a sidebar-footer Refresh trigger | `/api/provider`, `/api/exa`, `/api/llmstats`, `/api/schedule`, `/api/run-update` |
 
