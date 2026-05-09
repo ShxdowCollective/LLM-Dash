@@ -5719,7 +5719,6 @@
       onAction: async () => {
         try {
           await reloadDB();
-          loadStaticState();
           updateFreshness();
           render();
         } catch (error) {
