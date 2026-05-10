@@ -306,6 +306,23 @@ entries into `docs/logbooks/`.
 
 ---
 
+## Testing
+
+Run the default Python suite from the repo root:
+
+```bash
+python3 -m unittest discover -v
+```
+
+For syntax-level validation across the no-build frontend/backend split:
+
+```bash
+python3 -m py_compile server.py scripts/*.py tests/*.py
+node --check web/app.js
+```
+
+---
+
 ## Common Tasks
 
 ### Reset the database

@@ -4,6 +4,52 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 071 — 2026-05-10
+
+**Agent:** GPT-5 Codex (lumenvein, shxdow-flow)
+**Cycle:** Phase 9.4 auth test coverage
+**Task:** Add focused Voidware auth/provider tests
+
+---
+
+Added a stdlib `unittest` suite for the Phase 9.4 auth contracts:
+Voidware provider discovery filtering/redaction, selected-provider metadata
+persistence, broker grant renewal cache state, and v3 encrypted auth-file
+compatibility through broker secret reads.
+
+Patched two connected issues while validating:
+- `scripts/config.py` now short-circuits credential reads by precedence, so a
+  selected Voidware provider does not trigger extra broker fallback reads after
+  its secret resolves.
+- Provider discovery now scrubs `safeCustom` metadata again before returning it
+  to the API, keeping sensitive-looking keys out even if upstream metadata is
+  malformed.
+
+Verification:
+- `python3 -m unittest discover -v`
+- `python3 -m py_compile server.py scripts/config.py scripts/voidware_auth.py scripts/export_metrics_csv.py scripts/init_db.py scripts/launch_server.py scripts/migrate_score_checks.py scripts/reset_local_state.py scripts/run_update.py scripts/schedule_job.py tests/test_voidware_auth.py`
+- `node --check web/app.js`
+- `git diff --check`
+
+---
+
+## Entry 070 — 2026-05-09
+
+**Agent:** GPT-5 Codex (irisbyte, docs)
+**Cycle:** TODO condensation
+**Task:** Condense the active roadmap
+
+---
+
+Trimmed `TODO.md` back to active work only: Phase 9.4 now carries the remaining
+setup-wizard screenshot pass, the backlog keeps the focused Voidware auth test
+follow-up, and completed phases are collapsed into compact one-line history.
+
+Verification:
+- Docs-only change; ran diff/whitespace review.
+
+---
+
 ## Entry 069 — 2026-05-09
 
 **Agent:** GPT-5 Codex (nyxline, shxdow-flow)

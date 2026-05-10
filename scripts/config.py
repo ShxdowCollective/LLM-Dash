@@ -192,14 +192,23 @@ def _read_secret(
     selected_name: str | None = None,
 ) -> str:
     key_names = (key_name,) if isinstance(key_name, str) else key_name
-    candidates = [_env_first(envs)]
+    env_secret = _env_first(envs)
+    if env_secret:
+        return env_secret
     if selected_name:
-        candidates.append(_read_broker_secret(selected_name))
+        selected_secret = _read_broker_secret(selected_name)
+        if selected_secret:
+            return selected_secret
     if broker_name:
-        candidates.append(_read_broker_secret(broker_name))
-    candidates.extend(_read_broker_secret(name) for name in key_names)
-    candidates.extend(_legacy_secret(name) for name in key_names)
-    for secret in candidates:
+        broker_secret = _read_broker_secret(broker_name)
+        if broker_secret:
+            return broker_secret
+    for name in key_names:
+        secret = _read_broker_secret(name)
+        if secret:
+            return secret
+    for name in key_names:
+        secret = _legacy_secret(name)
         if secret:
             return secret
     return ""
@@ -415,6 +424,8 @@ def _provider_candidate(candidate: dict[str, Any]) -> dict[str, Any] | None:
         return None
     models_url = str(candidate.get("modelsURL") or candidate.get("models_url") or "").strip().rstrip("/")
     chat_url = str(candidate.get("chatURL") or candidate.get("chat_url") or "").strip().rstrip("/")
+    safe_custom = candidate.get("safeCustom") if isinstance(candidate.get("safeCustom"), dict) else {}
+    safe_custom = _safe_provider_credential_meta({"safeCustom": safe_custom}).get("safeCustom", {})
     return {
         "name": name,
         "label": str(candidate.get("label") or name),
@@ -430,7 +441,7 @@ def _provider_candidate(candidate: dict[str, Any]) -> dict[str, Any] | None:
         "models_url": models_url,
         "chat_url": chat_url,
         "endpoint_mode": _infer_candidate_endpoint_mode(base_url),
-        "safe_custom": candidate.get("safeCustom") if isinstance(candidate.get("safeCustom"), dict) else {},
+        "safe_custom": safe_custom,
     }
 
 
