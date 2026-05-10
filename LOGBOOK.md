@@ -4,6 +4,39 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 073 — 2026-05-10
+
+**Agent:** GPT-5 Codex (violetwire, browser-e2e)
+**Cycle:** Phase 9.4 app surface screenshot correction
+**Task:** Add missing dashboard and Settings screenshots
+
+---
+
+Corrected the screenshot pass scope after the wizard-only run missed the
+actual app surfaces. Reused isolated nonstandard ports with LLM-Dash on
+`127.0.0.1:49273` and a fake OpenAI-compatible provider on
+`127.0.0.1:49274`, with temp Voidware/shxdow roots and no real secrets.
+
+Added full-page app screenshots under `e2e/screenshots/` for:
+- `dashboard-01-models-table.png`
+- `dashboard-02-models-chart.png`
+- `dashboard-03-changelog.png`
+- `dashboard-04-stats.png`
+- `settings-01-provider.png`
+- `settings-02-provider-manual-expanded.png`
+- `settings-03-models.png`
+- `settings-04-research.png`
+- `settings-05-research-llmstats-expanded.png`
+- `settings-06-schedule.png`
+
+Verification:
+- `agent-browser errors`
+- `agent-browser console`
+- screenshot artifact dimension/size check for `dashboard-*.png` and
+  `settings-*.png`
+
+---
+
 ## Entry 072 — 2026-05-10
 
 **Agent:** GPT-5 Codex (violetwire, browser-e2e)

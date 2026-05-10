@@ -14,7 +14,7 @@ Plan: [docs/plans/2026-05-09-phase-9-4-voidware-provider-reuse.md](docs/plans/20
 Done: redacted provider discovery, wizard/settings credential selection,
 metadata-only persistence, broker-mediated secret reads, 120-day grant tracking,
 encrypted Voidware v3 auth compatibility, focused backend tests for those
-contracts, and the setup wizard e2e screenshot pass.
+contracts, and the setup wizard/dashboard/settings e2e screenshot pass.
 
 No active development items.
 
@@ -39,4 +39,4 @@ No active development items.
 - Phase 9.1 — Data exploration: sparklines, detail trends, compare links, reports.
 - Phase 9.2 — Power-user shortcuts and visibility-aware data refresh.
 - Phase 9.3 — Agent Provider leaderboard on Stats.
-- Phase 9.4 — Voidware provider reuse and setup wizard e2e screenshots.
+- Phase 9.4 — Voidware provider reuse and full app e2e screenshots.
