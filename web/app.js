@@ -2888,7 +2888,7 @@
         h("button", {
           class: "vw-btn vw-btn-secondary",
           type: "button",
-          disabled: state.wizard.connectionTestState === "testing" || !state.wizard.baseUrl || (!state.provider.has_provider && !state.wizard.apiKey),
+          disabled: state.wizard.connectionTestState === "testing" || !state.wizard.baseUrl || (!state.provider.has_provider && !state.wizard.apiKey && !state.wizard.selectedCredentialName),
           onclick: testWizardConnection,
         }, state.wizard.connectionTestState === "testing" ? "Testing…" : "Test Connection"),
         state.wizard.connectionTestState !== "idle"

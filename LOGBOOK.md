@@ -4,6 +4,38 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 072 — 2026-05-10
+
+**Agent:** GPT-5 Codex (violetwire, browser-e2e)
+**Cycle:** Phase 9.4 setup wizard screenshot pass
+**Task:** Re-run setup wizard e2e screenshots after provider reuse
+
+---
+
+Re-ran the setup wizard screenshot pass on isolated nonstandard local ports:
+LLM-Dash on `127.0.0.1:49173` and a fake OpenAI-compatible provider on
+`127.0.0.1:49174`, with temp Voidware/shxdow config roots so no real secrets
+or user config were touched.
+
+Captured full-page screenshots for every wizard surface under
+`e2e/screenshots/`: provider preset, reusable Voidware credential selection,
+selected-credential connection success, custom key setup, advanced provider
+options, model selection, model tests, Exa, LLM Stats, schedule off/daily/
+weekly/monthly, and review/finish. The taller credential and advanced captures
+cover the scrollable states.
+
+Patched a small provider-reuse bug found during the pass: first-run reusable
+Voidware credentials now enable **Test Connection** without requiring a typed
+API key.
+
+Verification:
+- `node --check web/app.js`
+- `agent-browser errors`
+- `agent-browser console`
+- screenshot artifact dimension/size check for `e2e/screenshots/setup-wizard-*.png`
+
+---
+
 ## Entry 071 — 2026-05-10
 
 **Agent:** GPT-5 Codex (lumenvein, shxdow-flow)
