@@ -14,7 +14,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org)
 [![sql.js](https://img.shields.io/badge/sql.js-WASM-4B32C3)](https://sql.js.org)
-[![voidware](https://img.shields.io/badge/voidware-v0.8.3-7c5cc4)](https://github.com/shxdow)
+[![voidware](https://img.shields.io/badge/voidware-v0.8.4-7c5cc4)](https://github.com/shxdow)
 [![License: MIT](https://img.shields.io/badge/license-MIT-a6f17b)](LICENSE)
 [![OpenAI Agents SDK](https://img.shields.io/badge/OpenAI_Agents-SDK-412991?logo=openai&logoColor=white)](https://github.com/openai/openai-agents-python)
 <a href="https://buymeacoffee.com/shxdowenby">
@@ -169,7 +169,7 @@ LLM-Dash/
 │
 ├── web/                   # Static frontend (vanilla HTML/CSS/JS)
 │   ├── index.html
-│   ├── style.css          # App-specific Voidware 0.8.3 overrides
+│   ├── style.css          # App-specific Voidware 0.8.4 overrides
 │   ├── app.js             # sql.js bootstrap, state, rendering
 │   └── vendor/            # Vendored libs (sql-wasm, marked, uPlot)
 │
@@ -182,8 +182,8 @@ LLM-Dash/
 │
 ├── scripts/
 │   ├── schema.sql                # SQLite DDL
-│   ├── config.py                 # Provider config + credential pipeline (env → broker → keyring → auth-file)
-│   ├── voidware_auth.py          # Voidware broker client (primary credential layer)
+│   ├── config.py                 # Provider config + credential pipeline (env → Voidware provider/broker → keyring)
+│   ├── voidware_auth.py          # Voidware discovery + broker client
 │   ├── init_db.py                # First-run DB seeder
 │   ├── migrate_score_checks.py   # 0–10 score CHECK constraint migration (schema_version 2)
 │   ├── run_update.py             # Agents SDK update executor

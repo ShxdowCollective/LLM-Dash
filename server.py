@@ -28,6 +28,7 @@ from scripts.config import (
     load_exa_api_key,
     load_llmstats_api_key,
     load_provider_bundle,
+    discover_provider_credentials,
     normalize_base_url,
     normalize_endpoint_mode,
     public_provider_state,
@@ -70,6 +71,8 @@ _jobs: dict[str, dict[str, Any]] = {}
 class ProviderPayload(BaseModel):
     base_url: str
     api_key: str | None = None
+    provider_credential_name: str | None = None
+    provider_credential_meta: dict[str, Any] | None = None
     models_override_url: str = ""
     default_model: str = ""
     backup_model: str = ""
@@ -191,6 +194,9 @@ def _normalize_models(payload: Any) -> list[dict[str, str]]:
 def _bundle_from_payload(payload: ProviderPayload) -> ProviderBundle:
     mode = normalize_endpoint_mode(payload.endpoint_mode)
     stored = load_provider_bundle()
+    api_key = (payload.api_key or "").strip()
+    if not api_key and payload.provider_credential_name:
+        api_key = str(voidware_auth.read_secret_with_grant(payload.provider_credential_name).get("secret") or "")
     return ProviderBundle(
         config=ProviderConfig(
             base_url=normalize_base_url(payload.base_url, allow_v1=mode == "root"),
@@ -206,7 +212,7 @@ def _bundle_from_payload(payload: ProviderPayload) -> ProviderBundle:
             endpoint_mode=mode,
             request_headers=payload.request_headers,
         ),
-        secrets=ProviderSecrets(api_key=(payload.api_key or "").strip() or stored.secrets.api_key),
+        secrets=ProviderSecrets(api_key=api_key or stored.secrets.api_key),
     )
 
 
@@ -446,6 +452,16 @@ def get_provider_presets() -> dict[str, Any]:
     return _provider_presets()
 
 
+@app.get("/api/provider/credentials")
+def get_provider_credentials() -> dict[str, Any]:
+    try:
+        return discover_provider_credentials()
+    except voidware_auth.VoidwareAuthError as exc:
+        raise _http_error(exc)
+    except ConfigError as exc:
+        raise _http_error(exc)
+
+
 @app.post("/api/provider")
 def post_provider(payload: ProviderPayload) -> dict[str, Any]:
     try:
@@ -457,6 +473,8 @@ def post_provider(payload: ProviderPayload) -> dict[str, Any]:
             backup_model=payload.backup_model,
             endpoint_mode=payload.endpoint_mode,
             request_headers=payload.request_headers if payload.request_headers is not None else load_provider_bundle().config.request_headers,
+            provider_credential_name=payload.provider_credential_name,
+            provider_credential_meta=payload.provider_credential_meta,
         )
         return public_provider_state()
     except ConfigError as exc:
@@ -481,7 +499,7 @@ async def test_provider_connection_payload(payload: ProviderPayload) -> dict[str
     except ConfigError as exc:
         raise _http_error(exc)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc).replace(key, "***"))
+        raise HTTPException(status_code=502, detail=_redact_known_secrets(str(exc)))
     return {"ok": status_code == 200, "status_code": status_code, "models_count": len(_normalize_models(body))}
 
 
@@ -492,7 +510,7 @@ async def provider_models() -> dict[str, Any]:
     except ConfigError as exc:
         raise _http_error(exc)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc).replace(key, "***"))
+        raise HTTPException(status_code=502, detail=_redact_known_secrets(str(exc)))
     if status_code != 200:
         raise HTTPException(status_code=502, detail=f"Provider models endpoint returned {status_code}.")
     return {"models": _normalize_models(payload)}
@@ -540,7 +558,7 @@ async def test_provider_model(payload: TestModelPayload) -> dict[str, Any]:
     except ConfigError as exc:
         raise _http_error(exc)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(status_code=502, detail=_redact_known_secrets(str(exc)))
 
 
 @app.post("/api/exa")
@@ -607,7 +625,7 @@ async def test_llmstats_connection() -> dict[str, Any]:
             models_count = len(items) if isinstance(items, list) else 0
         return {"ok": response.status_code == 200, "status_code": response.status_code, "models_count": models_count}
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc).replace(key, "***"))
+        raise HTTPException(status_code=502, detail=_redact_known_secrets(str(exc)))
 
 
 @app.delete("/api/provider/key")

@@ -311,6 +311,16 @@ body::before {
   font-size: 12px;
 }
 
+.settings-auth-renewal {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.settings-auth-renewal .vw-display-row-value {
+  gap: 8px;
+}
+
 body::after {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 18%),
@@ -2415,6 +2425,25 @@ table.data-table thead th.num,
   min-width: auto;
 }
 
+.settings-provider-credential,
+.wizard-credential-card {
+  --vw-page-accent: var(--vw-iridescent-5);
+  display: grid;
+  gap: 10px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--vw-surface-1) 94%, var(--vw-page-accent) 6%),
+      var(--vw-surface-1)
+    );
+}
+
+.settings-provider-credential .vw-display-row-value,
+.wizard-credential-card .vw-display-row-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .settings-field-status {
   margin: 0;
   color: var(--vw-text-muted);
@@ -3652,7 +3681,7 @@ table.data-table thead th.num,
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: 900px) {
   .llm-app {
     display: block;
     padding-top: 64px;

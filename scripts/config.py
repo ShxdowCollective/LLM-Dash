@@ -55,6 +55,9 @@ class ProviderConfig:
     backup_model: str = ""
     endpoint_mode: str = ENDPOINT_MODE_APPEND_V1
     request_headers: dict[str, str] | None = None
+    provider_credential_name: str = ""
+    provider_credential_meta: dict[str, Any] | None = None
+    provider_credential_grant: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -160,21 +163,6 @@ def _load_config_file() -> dict[str, Any]:
     return data
 
 
-def _load_auth_file() -> dict[str, Any]:
-    data = _read_json(auth_path())
-    credentials = data.get("credentials")
-    return credentials if isinstance(credentials, dict) else {}
-
-
-def _credential_from_auth_file(name: str) -> str:
-    item = _load_auth_file().get(name)
-    if isinstance(item, dict):
-        return str(item.get("secret") or "")
-    if isinstance(item, str):
-        return item
-    return ""
-
-
 def _keyring_get(name: str) -> str:
     try:
         import keyring
@@ -186,52 +174,8 @@ def _keyring_get(name: str) -> str:
         return ""
 
 
-def _keyring_set_verified(name: str, secret: str) -> bool:
-    try:
-        import keyring
-    except Exception:
-        return False
-    try:
-        keyring.set_password(KEYRING_SERVICE, name, secret)
-        return keyring.get_password(KEYRING_SERVICE, name) == secret
-    except Exception:
-        return False
-
-
-def _delete_keyring_secret(name: str) -> bool:
-    try:
-        import keyring
-    except Exception:
-        return False
-    try:
-        keyring.delete_password(KEYRING_SERVICE, name)
-        return True
-    except Exception:
-        return False
-
-
-def _delete_auth_file_secret(name: str) -> None:
-    data = _read_json(auth_path()) or {"version": 2, "credentials": {}}
-    credentials = data.get("credentials", {})
-    if name in credentials:
-        del credentials[name]
-    data["credentials"] = credentials
-    _atomic_write_json(auth_path(), data)
-
-
-def _save_auth_file_secret(name: str, secret: str, meta: dict[str, Any] | None = None) -> None:
-    data = _read_json(auth_path()) or {"version": 2, "credentials": {}}
-    data["version"] = 2
-    credentials = data.setdefault("credentials", {})
-    item: dict[str, Any] = {"name": name, "secret": secret}
-    if meta:
-        item["meta"] = meta
-    credentials[name] = item
-    _atomic_write_json(auth_path(), data)
-
-
 def _legacy_secret(name: str) -> str:
-    return _keyring_get(name) or _credential_from_auth_file(name)
+    return _keyring_get(name)
 
 
 def _read_broker_secret(name: str) -> str:
@@ -241,11 +185,19 @@ def _read_broker_secret(name: str) -> str:
         return ""
 
 
-def _read_secret(envs: tuple[str, ...], key_name: str | tuple[str, ...], broker_name: str | None = None) -> str:
+def _read_secret(
+    envs: tuple[str, ...],
+    key_name: str | tuple[str, ...],
+    broker_name: str | None = None,
+    selected_name: str | None = None,
+) -> str:
     key_names = (key_name,) if isinstance(key_name, str) else key_name
     candidates = [_env_first(envs)]
+    if selected_name:
+        candidates.append(_read_broker_secret(selected_name))
     if broker_name:
         candidates.append(_read_broker_secret(broker_name))
+    candidates.extend(_read_broker_secret(name) for name in key_names)
     candidates.extend(_legacy_secret(name) for name in key_names)
     for secret in candidates:
         if secret:
@@ -253,19 +205,45 @@ def _read_secret(envs: tuple[str, ...], key_name: str | tuple[str, ...], broker_
     return ""
 
 
-def _credential_source(envs: tuple[str, ...], key_name: str | tuple[str, ...], broker_name: str | None = None) -> dict[str, Any]:
+def _credential_source(
+    envs: tuple[str, ...],
+    key_name: str | tuple[str, ...],
+    broker_name: str | None = None,
+    selected_name: str | None = None,
+    selected_grant: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     key_names = (key_name,) if isinstance(key_name, str) else key_name
     if _env_first(envs):
         return {"configured": True, "source": "env", "legacy_migration_available": False}
-    if broker_name and _read_broker_secret(broker_name):
-        return {"configured": True, "source": "voidware-broker", "legacy_migration_available": any(_legacy_secret(name) for name in key_names)}
+    discovered_names = set()
+    try:
+        discovered_names = {
+            str(item.get("name"))
+            for item in voidware_auth.discover_provider_credentials(reusable_only=False)
+            if item.get("name") and item.get("hasSecret", item.get("has_secret", False))
+        }
+    except Exception:
+        discovered_names = set()
+    if selected_name:
+        return {
+            "configured": selected_name in discovered_names or bool(selected_grant),
+            "source": "voidware-provider",
+            "name": selected_name,
+            "grant": selected_grant or {},
+            "legacy_migration_available": any(_legacy_secret(name) for name in key_names),
+        }
+    for name in [*( [broker_name] if broker_name else [] ), *key_names]:
+        if name and name in discovered_names:
+            return {
+                "configured": True,
+                "source": "voidware-broker",
+                "name": name,
+                "legacy_migration_available": any(_legacy_secret(item) for item in key_names),
+            }
     legacy_source = ""
     for name in key_names:
         if _keyring_get(name):
             legacy_source = "keyring-legacy"
-            break
-        if _credential_from_auth_file(name):
-            legacy_source = "auth-file-legacy"
             break
     return {
         "configured": bool(legacy_source),
@@ -375,6 +353,101 @@ def redact_headers(headers: dict[str, str] | None) -> dict[str, str]:
     }
 
 
+def _safe_provider_credential_meta(raw: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        return {}
+    allowed = {
+        "name",
+        "label",
+        "source",
+        "sources",
+        "has_secret",
+        "hasSecret",
+        "keyring_backed",
+        "keyringBacked",
+        "reusability",
+        "provider_family",
+        "providerFamily",
+        "protocol",
+        "api_format",
+        "apiFormat",
+        "base_url",
+        "baseURL",
+        "models_url",
+        "modelsURL",
+        "chat_url",
+        "chatURL",
+        "safe_custom",
+        "safeCustom",
+    }
+    cleaned: dict[str, Any] = {}
+    for key, value in raw.items():
+        if key not in allowed:
+            continue
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            cleaned[key] = value
+        elif isinstance(value, list):
+            cleaned[key] = [str(item) for item in value if isinstance(item, (str, int, float, bool))]
+        elif isinstance(value, dict) and key in {"safe_custom", "safeCustom"}:
+            cleaned[key] = {
+                str(k): v
+                for k, v in value.items()
+                if isinstance(k, str) and isinstance(v, (str, int, float, bool)) and not is_sensitive_header(k)
+            }
+    return cleaned
+
+
+def _infer_candidate_endpoint_mode(base_url: str) -> str:
+    parsed = urlparse(str(base_url or "").strip())
+    path = parsed.path.rstrip("/")
+    if path.endswith("/v1") or path.endswith("/openai") or path.endswith("/gateway"):
+        return ENDPOINT_MODE_ROOT
+    return ENDPOINT_MODE_APPEND_V1
+
+
+def _provider_candidate(candidate: dict[str, Any]) -> dict[str, Any] | None:
+    name = str(candidate.get("name") or "").strip()
+    base_url = str(candidate.get("baseURL") or candidate.get("base_url") or "").strip().rstrip("/")
+    if not name or not base_url or not candidate.get("hasSecret", candidate.get("has_secret", False)):
+        return None
+    parsed = urlparse(base_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+    models_url = str(candidate.get("modelsURL") or candidate.get("models_url") or "").strip().rstrip("/")
+    chat_url = str(candidate.get("chatURL") or candidate.get("chat_url") or "").strip().rstrip("/")
+    return {
+        "name": name,
+        "label": str(candidate.get("label") or name),
+        "source": str(candidate.get("source") or ""),
+        "sources": [str(item) for item in candidate.get("sources", []) if isinstance(item, (str, int, float, bool))],
+        "has_secret": True,
+        "keyring_backed": bool(candidate.get("keyringBacked", candidate.get("keyring_backed", False))),
+        "reusability": str(candidate.get("reusability") or ""),
+        "provider_family": str(candidate.get("providerFamily") or candidate.get("provider_family") or ""),
+        "protocol": str(candidate.get("protocol") or "http"),
+        "api_format": str(candidate.get("apiFormat") or candidate.get("api_format") or ""),
+        "base_url": base_url,
+        "models_url": models_url,
+        "chat_url": chat_url,
+        "endpoint_mode": _infer_candidate_endpoint_mode(base_url),
+        "safe_custom": candidate.get("safeCustom") if isinstance(candidate.get("safeCustom"), dict) else {},
+    }
+
+
+def discover_provider_credentials() -> dict[str, Any]:
+    raw = voidware_auth.discover_provider_credentials(reusable_only=True)
+    candidates = []
+    seen: set[str] = set()
+    for item in raw:
+        candidate = _provider_candidate(item)
+        if not candidate or candidate["name"] in seen:
+            continue
+        seen.add(candidate["name"])
+        candidates.append(candidate)
+    candidates.sort(key=lambda item: (item.get("label") or item["name"]).lower())
+    return {"credentials": candidates}
+
+
 def build_auth_headers(bundle: ProviderBundle) -> dict[str, str]:
     headers = dict(bundle.config.request_headers or {})
     if not any(is_sensitive_header(name) for name in headers):
@@ -383,23 +456,34 @@ def build_auth_headers(bundle: ProviderBundle) -> dict[str, str]:
 
 
 def public_provider_state() -> dict[str, Any]:
-    bundle = load_provider_bundle()
-    provider_auth = _credential_source(PROVIDER_API_KEY_ENVS, PROVIDER_KEY_NAMES, voidware_auth.PROVIDER_SECRET_NAME)
+    config = load_provider_config()
+    provider_auth = _credential_source(
+        PROVIDER_API_KEY_ENVS,
+        PROVIDER_KEY_NAMES,
+        voidware_auth.PROVIDER_SECRET_NAME,
+        config.provider_credential_name,
+        config.provider_credential_grant,
+    )
     exa_auth = _credential_source(EXA_API_KEY_ENVS, EXA_KEY_NAME, voidware_auth.EXA_SECRET_NAME)
     llmstats_auth = _credential_source(LLMSTATS_API_KEY_ENVS, LLMSTATS_KEY_NAME, voidware_auth.LLMSTATS_SECRET_NAME)
+    has_provider = bool(config.base_url and config.default_model and provider_auth.get("configured"))
+    bundle = ProviderBundle(config=config, secrets=ProviderSecrets(api_key=""))
     return {
-        "has_provider": bundle.has_provider,
-        "base_url": bundle.config.base_url,
-        "models_override_url": bundle.config.models_override_url,
+        "has_provider": has_provider,
+        "base_url": config.base_url,
+        "models_override_url": config.models_override_url,
         "chat_endpoint": bundle.chat_endpoint,
         "models_endpoint": bundle.models_endpoint,
-        "default_model": bundle.config.default_model,
-        "backup_model": bundle.config.backup_model,
-        "endpoint_mode": bundle.config.endpoint_mode,
-        "exa_configured": bool(load_exa_api_key()),
-        "llmstats_configured": bool(load_llmstats_api_key()),
+        "default_model": config.default_model,
+        "backup_model": config.backup_model,
+        "endpoint_mode": config.endpoint_mode,
+        "provider_credential_name": config.provider_credential_name,
+        "provider_credential_meta": config.provider_credential_meta or {},
+        "provider_credential_grant": config.provider_credential_grant or {},
+        "exa_configured": bool(exa_auth.get("configured")),
+        "llmstats_configured": bool(llmstats_auth.get("configured")),
         "auth": {
-            "precedence": ["env", "voidware-broker", "keyring-legacy", "auth-file-legacy"],
+            "precedence": ["env", "voidware-provider", "voidware-broker", "keyring-legacy"],
             "broker": voidware_auth.broker_status(),
             "provider": provider_auth,
             "exa": exa_auth,
@@ -420,6 +504,9 @@ def load_provider_config() -> ProviderConfig:
     backup_model = _env_first(BACKUP_MODEL_ENVS) or str(provider.get("backup_model") or "")
     endpoint_mode = normalize_endpoint_mode(os.environ.get(ENDPOINT_MODE_ENV) or provider.get("endpoint_mode"))
     request_headers = provider.get("request_headers") or {}
+    provider_credential_name = str(provider.get("provider_credential_name") or "").strip()
+    provider_credential_meta = _safe_provider_credential_meta(provider.get("provider_credential_meta"))
+    provider_credential_grant = provider.get("provider_credential_grant")
     if os.environ.get(REQUEST_HEADERS_ENV):
         request_headers = os.environ[REQUEST_HEADERS_ENV]
 
@@ -436,13 +523,22 @@ def load_provider_config() -> ProviderConfig:
         backup_model=backup_model.strip(),
         endpoint_mode=endpoint_mode,
         request_headers=_normalize_header_map(request_headers),
+        provider_credential_name=provider_credential_name,
+        provider_credential_meta=provider_credential_meta,
+        provider_credential_grant=provider_credential_grant if isinstance(provider_credential_grant, dict) else {},
     )
 
 
 def load_provider_bundle() -> ProviderBundle:
+    config = load_provider_config()
     return ProviderBundle(
-        config=load_provider_config(),
-        secrets=ProviderSecrets(api_key=_read_secret(PROVIDER_API_KEY_ENVS, PROVIDER_KEY_NAMES, voidware_auth.PROVIDER_SECRET_NAME)),
+        config=config,
+        secrets=ProviderSecrets(api_key=_read_secret(
+            PROVIDER_API_KEY_ENVS,
+            PROVIDER_KEY_NAMES,
+            voidware_auth.PROVIDER_SECRET_NAME,
+            config.provider_credential_name,
+        )),
     )
 
 
@@ -455,8 +551,27 @@ def save_provider(
     backup_model: str = "",
     endpoint_mode: str = ENDPOINT_MODE_APPEND_V1,
     request_headers: dict[str, str] | None = None,
+    provider_credential_name: str | None = None,
+    provider_credential_meta: dict[str, Any] | None = None,
 ) -> ProviderBundle:
+    current = load_provider_config()
     mode = normalize_endpoint_mode(endpoint_mode)
+    selected_name = current.provider_credential_name if provider_credential_name is None else str(provider_credential_name or "").strip()
+    selected_meta = current.provider_credential_meta or {}
+    selected_grant = current.provider_credential_grant or {}
+    if api_key:
+        selected_name = ""
+        selected_meta = {}
+        selected_grant = {}
+    elif selected_name:
+        try:
+            secret_info = voidware_auth.read_secret_with_grant(selected_name)
+        except voidware_auth.VoidwareAuthError as exc:
+            raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
+        if not secret_info.get("secret"):
+            raise ConfigError("Selected Voidware credential did not return a secret.")
+        selected_meta = _safe_provider_credential_meta({"name": selected_name, **(provider_credential_meta or selected_meta)})
+        selected_grant = secret_info.get("grant") if isinstance(secret_info.get("grant"), dict) else {}
     normalized = ProviderConfig(
         base_url=normalize_base_url(base_url, allow_v1=mode == ENDPOINT_MODE_ROOT),
         models_override_url=normalize_base_url(
@@ -470,6 +585,9 @@ def save_provider(
         backup_model=str(backup_model or "").strip(),
         endpoint_mode=mode,
         request_headers=_normalize_header_map(request_headers or {}),
+        provider_credential_name=selected_name,
+        provider_credential_meta=selected_meta,
+        provider_credential_grant=selected_grant,
     )
     if api_key:
         save_provider_api_key(api_key)
@@ -484,6 +602,9 @@ def save_provider(
         "backup_model": normalized.backup_model,
         "endpoint_mode": normalized.endpoint_mode,
         "request_headers": normalized.request_headers or {},
+        "provider_credential_name": normalized.provider_credential_name,
+        "provider_credential_meta": normalized.provider_credential_meta or {},
+        "provider_credential_grant": normalized.provider_credential_grant or {},
     }
     _atomic_write_json(config_path(), data)
     return load_provider_bundle()

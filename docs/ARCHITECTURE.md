@@ -71,9 +71,9 @@ in-progress update. Killing the agent doesn't affect the dashboard.
 | Local server | FastAPI + uvicorn | Needed for API routes; bare `http.server` can't do `/api/*` |
 | Agent execution | OpenAI Agents SDK | BYOK-compatible; runs against any OpenAI-compatible endpoint |
 | Research | Exa (preferred) | Structured search + content fetch with citation control |
-| Credential storage | Env → Voidware broker → legacy keyring/auth file | Secrets stay outside repo/API responses; broker grants request the max supported TTL |
+| Credential storage | Env → Voidware provider credential → Voidware broker → legacy keyring | Secrets stay outside repo/API responses; selected provider credentials use broker grants with renewal metadata |
 | Scheduling | OS-native jobs | systemd timer (Linux/WSL), launchd (macOS), Task Scheduler (Windows) |
-| Design system | Voidware v0.8.3 | Sidebar app shell, dark-native surfaces, and iridescent accent system |
+| Design system | Voidware v0.8.4 | Sidebar app shell, dark-native surfaces, and iridescent accent system |
 
 ---
 
@@ -300,27 +300,31 @@ Re-running an update for the same date upserts rather than duplicates:
 ### Precedence (read order)
 
 1. Environment variables
-2. Voidware auth broker
-3. Legacy OS keychain (via `keyring` package)
-4. Legacy `~/.shxdow/auth.json`
+2. Selected reusable Voidware provider credential
+3. Voidware auth broker
+4. Legacy OS keychain (via `keyring` package)
 
 ### What's stored where
 
 | Data | Location | Rationale |
 |---|---|---|
-| Provider, Exa, and LLM Stats API keys | Environment or Voidware broker; legacy keyring/auth-file reads remain migration fallbacks | Secrets never in repo or API responses |
-| Provider base URL, models, headers | `shxdow.llmdash.json` | Non-secret config |
+| Provider, Exa, and LLM Stats API keys | Environment, selected Voidware provider credential, or Voidware broker; legacy keyring reads remain migration fallbacks | Secrets never in repo or API responses |
+| Provider credential name, base URL, models, headers, grant renewal metadata | `shxdow.llmdash.json` | Non-secret config and renewal prompts |
+| Selected provider grant token | OS keyring service `llm-dash-voidware-grants` | Opaque broker grant reuse without writing tokens to config |
 | Exa API key | Same as provider API key | Same credential pipeline |
 | LLM Stats API key | Same as provider API key | Optional enrichment credential |
 
 API keys are **never** returned in API responses, logged, or written to any
-on-disk trace outside the credential store. Broker requests use stdin for secret
-writes and request the longest supported grant lifetime (`120d`) so routine
-dashboard use does not churn approvals.
+on-disk trace outside the credential store. Provider discovery returns redacted
+Voidware metadata only. Selected credentials are read through the broker with
+the longest supported grant lifetime (`120d`), and the returned renewal window
+metadata drives the 90-day renewal prompt. The opaque grant token is cached in
+the OS keyring only and is cleared/re-requested on Voidware renewal,
+expiration, invalidation, denial, or durable-secret-unavailable responses.
 
 ---
 
-## Design System — Voidware v0.8.3
+## Design System — Voidware v0.8.4
 
 The UI follows the Voidware design specification:
 
@@ -362,5 +366,5 @@ the job entirely.
 | Agent framework | OpenAI Agents SDK | Direct API calls, LangChain | BYOK-compatible, vendor-neutral |
 | Update contract | SKILL.md (agent reads it) | Python `update.py` script | Agent-agnostic; any LLM can follow it |
 | Scheduling | OS-native jobs | Claude Code `/schedule`, cron | Reliable, survives reboots, no dependency on Claude |
-| Credential store | env → Voidware broker → keyring → JSON fallback | env-only, dotenv | Layered precedence: process env first, then a brokered short-lived grant, with keyring/auth-file kept as legacy migration fallbacks |
+| Credential store | env → selected Voidware provider → Voidware broker → keyring | env-only, dotenv | Layered precedence: process env first, then reusable brokered provider grants, with keyring kept as a legacy migration fallback |
 | Chart library | uPlot | Chart.js, plain `<canvas>` | Tiny (52 KB), proper time axes, zero deps |

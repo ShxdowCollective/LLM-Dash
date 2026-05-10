@@ -1,10 +1,10 @@
 # Vendored Voidware CSS
 
 - Package: `@shxdowcollective/voidware`
-- Version: `0.8.3`
+- Version: `0.8.4`
 - Source path: `/home/phxntom/Repos/voidware/src/css`
-- Source commit: `84ab12b`
-- Copied: `2026-05-07`
+- Source commit: `15a850a`
+- Copied: `2026-05-09`
 - License: `UNLICENSED`; vendored for this local LLM-Dash app from the user's local Voidware source tree.
 
 ## Files

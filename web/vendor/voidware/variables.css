@@ -55,6 +55,7 @@
   --vw-error-border: rgba(255, 80, 80, 0.25);
   --vw-warning: #f1d47b;
   --vw-warning-bg: rgba(241, 212, 123, 0.08);
+  --vw-warning-border: rgba(241, 212, 123, 0.25);
   --vw-success: #a6f17b;
   --vw-success-bg: rgba(166, 241, 123, 0.08);
   --vw-success-border: rgba(166, 241, 123, 0.25);

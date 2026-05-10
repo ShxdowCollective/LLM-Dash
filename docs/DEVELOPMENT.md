@@ -48,7 +48,7 @@ To return a local install to first-run state, use `./run.sh --reset` or
 | UI state | `localStorage` (cleared via `?reset=1` on next load) |
 
 **Not removed:** `changelogs/*.md` (append-only audit history),
-Voidware broker grants/secrets, legacy `~/.shxdow/auth.json`,
+Voidware broker grants/secrets, reusable provider credentials,
 keyring/keystore secrets, `web/` static assets, Python virtual environment.
 
 ### Environment Variables
@@ -74,8 +74,8 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 | File | Responsibility |
 |---|---|
 | `server.py` | FastAPI app: static mounts, API routes, bootstrap, job management |
-| `scripts/config.py` | Provider config + credential pipeline (env → Voidware broker → keyring → legacy auth-file) |
-| `scripts/voidware_auth.py` | Voidware broker client used as the primary credential layer for provider, Exa, and LLM Stats API keys |
+| `scripts/config.py` | Provider config + credential pipeline (env → selected Voidware provider → Voidware broker → legacy keyring) |
+| `scripts/voidware_auth.py` | Voidware provider discovery and broker client used as the primary credential layer for provider, Exa, and LLM Stats API keys |
 | `scripts/init_db.py` | First-run DB creation from `schema.sql` + 34-model seed |
 | `scripts/run_update.py` | Agent Provider update executor (OpenAI Agents SDK) |
 | `scripts/export_metrics_csv.py` | Regenerates `data/run_metrics.csv` from SQLite |
@@ -89,7 +89,7 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 | File | Responsibility |
 |---|---|
 | `web/index.html` | App shell, font imports, mount points |
-| `web/style.css` | App-specific Voidware 0.8.3 overrides and component styles |
+| `web/style.css` | App-specific Voidware 0.8.4 overrides and component styles |
 | `web/app.js` | sql.js bootstrap, route state, area renderers, wizard, overlays |
 | `web/provider-presets.json` | Static catalog of provider presets for the setup wizard |
 | `web/vendor/` | Vendored libraries (sql-wasm, marked.js, uPlot) — committed, not installed |
@@ -139,7 +139,7 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 
 ### CSS
 
-- Voidware v0.8.3 CSS is vendored under `web/vendor/voidware/`; keep
+- Voidware v0.8.4 CSS is vendored under `web/vendor/voidware/`; keep
   provenance current in `web/vendor/voidware/VERSION.md`
 - Shadow-as-border: `box-shadow: 0 0 0 1px var(--vw-border)` instead of `border`
 - Focus: `outline` with `outline-offset`, not box-shadow

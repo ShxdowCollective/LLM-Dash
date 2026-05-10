@@ -4,6 +4,62 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 069 — 2026-05-09
+
+**Agent:** GPT-5 Codex (nyxline, shxdow-flow)
+**Cycle:** Phase 9.4 — Voidware 0.8.4 provider reuse
+**Task:** Unblock reusable Voidware provider credentials in setup/settings
+
+---
+
+Implemented the Voidware `0.8.4` provider-reuse path now that the shipped CLI
+exposes reusable provider discovery and broker grant metadata.
+
+**Patched:**
+- `scripts/voidware_auth.py`: added reusable provider discovery, broker secret
+  reads that return grant renewal metadata, a keyring-only client grant cache
+  for 120-day reuse, and broker status fields for durable grants/secrets plus
+  approval surface.
+- `scripts/config.py`: removed plaintext `auth.json` secret fallback, added
+  selected provider credential name/meta/grant config, metadata-only public
+  provider status, redacted reusable credential discovery, and provider secret
+  resolution through the broker.
+- `server.py`: added `GET /api/provider/credentials`, accepted selected
+  provider credential payloads, and tightened provider/LLM Stats error redaction
+  so exception paths do not reference undefined secret variables.
+- `web/app.js` and `web/style.css`: added reusable credential selectors in the
+  setup wizard and Settings Provider page, redacted credential cards, base URL
+  and endpoint-mode prefill, renewal-status display, and a 900px responsive
+  shell breakpoint so tablet width uses the drawer/header layout instead of a
+  clipped sidebar.
+- Vendored Voidware provenance moved to `0.8.4` at local commit `15a850a`, with
+  the new `--vw-warning-border` token synced.
+- Updated `TODO.md`, `README.md`, `docs/ARCHITECTURE.md`,
+  `docs/DEVELOPMENT.md`, and the implementation plan.
+
+**Verification:**
+- `python3 /home/phxntom/.codex/skills/voidware-spec/scripts/check_voidware_spec.py /home/phxntom/Repos/voidware` — match at `0.8.4`
+- `python3 -m py_compile scripts/voidware_auth.py scripts/config.py server.py`
+- `node --check web/app.js`
+- `/api/provider/credentials` smoke returned only redacted metadata for
+  `KILOCODE_API_KEY` and `OPENCODE_API_KEY`; no secret values.
+- Headed browser proof captured selected credential settings at
+  `1280x800` and `768x600` under `e2e/screenshots/` (gitignored).
+- `agent-browser errors` / `agent-browser console` — no page errors reported
+  during the settings proof.
+- Keyring grant-cache smoke cleared a malformed `llm-dash-voidware-grants`
+  entry and confirmed `shxdow.llmdash.json` does not receive grant tokens.
+
+**Open follow-ups:**
+- The first-run setup wizard screenshot pass remains open in `TODO.md`; the
+  Settings Provider path now proves the reusable credential selector, prefill,
+  and tablet layout.
+- The local broker status during verification was `broker_unavailable`, so the
+  selected-credential save path was implemented and wired but not exercised
+  through a live approval surface.
+
+---
+
 ## Entry 068 — 2026-05-09
 
 **Agent:** GPT-5 Codex (sable, investigator/docs)

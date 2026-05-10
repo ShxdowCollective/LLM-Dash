@@ -17,4 +17,5 @@ data/run_metrics.csv
 
 # Dev artifacts
 artifacts/
+e2e/screenshots/
 references/

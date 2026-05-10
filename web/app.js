@@ -197,6 +197,9 @@
       default_model: "",
       backup_model: "",
       endpoint_mode: "append_v1",
+      provider_credential_name: "",
+      provider_credential_meta: {},
+      provider_credential_grant: {},
       exa_configured: false,
       llmstats_configured: false,
       _fetching: false,
@@ -206,6 +209,12 @@
       loading: false,
       providers: [],
       endpoint_modes: {},
+    },
+    providerCredentials: {
+      loaded: false,
+      loading: false,
+      error: "",
+      credentials: [],
     },
     schedule: {
       loaded: false,
@@ -228,6 +237,8 @@
       mode: "setup",
       presetId: "",
       preset: null,
+      selectedCredentialName: "",
+      selectedCredential: null,
       baseUrl: "",
       apiKey: "",
       modelsOverrideUrl: "",
@@ -289,6 +300,7 @@
       draftBaseUrl: null,
       draftEndpointMode: null,
       draftApiKey: "",
+      draftProviderCredentialName: null,
       draftDefaultModel: null,
       draftBackupModel: null,
       providerSaving: false,
@@ -1107,6 +1119,23 @@
     }
   }
 
+  async function fetchProviderCredentials() {
+    if (state.providerCredentials.loaded || state.providerCredentials.loading) return;
+    state.providerCredentials.loading = true;
+    state.providerCredentials.error = "";
+    try {
+      const payload = await fetchJson("/api/provider/credentials");
+      state.providerCredentials.credentials = Array.isArray(payload.credentials) ? payload.credentials : [];
+      state.providerCredentials.loaded = true;
+    } catch (error) {
+      state.providerCredentials.loaded = true;
+      state.providerCredentials.error = String((error && error.message) || error);
+    } finally {
+      state.providerCredentials.loading = false;
+      render();
+    }
+  }
+
   async function fetchSchedule() {
     if (state.schedule.loading) return;
     state.schedule.loading = true;
@@ -1122,6 +1151,10 @@
 
   function providerById(id) {
     return state.providerPresets.providers.find((preset) => preset.id === id) || null;
+  }
+
+  function providerCredentialByName(name) {
+    return state.providerCredentials.credentials.find((item) => item.name === name) || null;
   }
 
   function stripTrailingSlash(value) {
@@ -1149,6 +1182,50 @@
           ? modelsOverride
           : (endpointMode === "root" ? modelsOverride : modelsOverride + "/v1") + "/models"
         : root + "/models",
+    };
+  }
+
+  function candidateEndpointMode(candidate) {
+    return candidate && candidate.endpoint_mode ? candidate.endpoint_mode : "append_v1";
+  }
+
+  function applyCredentialToWizard(name, shouldRender) {
+    const candidate = providerCredentialByName(name);
+    state.wizard.selectedCredentialName = candidate ? candidate.name : "";
+    state.wizard.selectedCredential = candidate;
+    if (candidate) {
+      state.wizard.baseUrl = candidate.base_url || "";
+      state.wizard.modelsOverrideUrl = candidate.models_url || "";
+      state.wizard.endpointMode = candidateEndpointMode(candidate);
+      state.wizard.apiKey = "";
+      state.wizard.presetId = "";
+      state.wizard.preset = null;
+      state.wizard.connectionTestState = "idle";
+      state.wizard.connectionTestError = "";
+      state.wizard.connectionTestSkipped = false;
+      state.wizard.availableModels = [];
+      state.wizard.modelsError = "";
+    }
+    if (shouldRender !== false) render();
+  }
+
+  function credentialMetaPayload(candidate) {
+    if (!candidate) return null;
+    return {
+      name: candidate.name,
+      label: candidate.label,
+      source: candidate.source,
+      sources: candidate.sources || [],
+      has_secret: Boolean(candidate.has_secret),
+      keyring_backed: Boolean(candidate.keyring_backed),
+      reusability: candidate.reusability || "",
+      provider_family: candidate.provider_family || "",
+      protocol: candidate.protocol || "",
+      api_format: candidate.api_format || "",
+      base_url: candidate.base_url || "",
+      models_url: candidate.models_url || "",
+      chat_url: candidate.chat_url || "",
+      safe_custom: candidate.safe_custom || {},
     };
   }
 
@@ -1181,6 +1258,8 @@
     return {
       base_url: state.wizard.baseUrl.trim(),
       api_key: state.wizard.apiKey.trim() || null,
+      provider_credential_name: state.wizard.selectedCredentialName || null,
+      provider_credential_meta: credentialMetaPayload(state.wizard.selectedCredential),
       models_override_url: state.wizard.modelsOverrideUrl.trim(),
       endpoint_mode: state.wizard.endpointMode || "append_v1",
       request_headers: headers,
@@ -1214,6 +1293,8 @@
       mode: state.provider.has_provider ? "reconfigure" : "setup",
       presetId: "",
       preset: null,
+      selectedCredentialName: state.provider.provider_credential_name || "",
+      selectedCredential: providerCredentialByName(state.provider.provider_credential_name || ""),
       baseUrl: state.provider.base_url || "",
       apiKey: "",
       modelsOverrideUrl: state.provider.models_override_url || "",
@@ -1256,7 +1337,7 @@
     const requestId = state.wizard.openRequestId + 1;
     resetWizardFromCurrent(startStep || 0, { loading: true, requestId });
     render();
-    await Promise.all([fetchProviderPresets(), fetchSchedule()]);
+    await Promise.all([fetchProviderPresets(), fetchProviderCredentials(), fetchSchedule()]);
     if (!state.wizard.open || state.wizard.openRequestId !== requestId) return;
     resetWizardFromCurrent(startStep || 0, { loading: false, requestId });
     if (!state.wizard.baseUrl && state.providerPresets.providers.length) {
@@ -1280,6 +1361,8 @@
     state.wizard.presetId = presetId;
     state.wizard.preset = preset;
     if (preset) {
+      state.wizard.selectedCredentialName = "";
+      state.wizard.selectedCredential = null;
       state.wizard.baseUrl = preset.default_base_url || "";
       state.wizard.modelsOverrideUrl = preset.models_override_url || "";
       state.wizard.endpointMode = preset.endpoint_mode || "append_v1";
@@ -1320,8 +1403,8 @@
 
   async function saveProviderFromWizard(includeModels) {
     const payload = wizardPayload(includeModels);
-    if (!payload.base_url) throw new Error("BASE_URL is required.");
-    if (!state.provider.has_provider && !payload.api_key) throw new Error("API_KEY is required.");
+    if (!payload.base_url) throw new Error("Base URL is required.");
+    if (!state.provider.has_provider && !payload.api_key && !payload.provider_credential_name) throw new Error("Choose a Voidware credential or enter an API key.");
     if (includeModels && !payload.default_model) throw new Error("Default model is required.");
     const saved = await fetchJson("/api/provider", {
       method: "POST",
@@ -2688,7 +2771,21 @@
   function renderWizardProviderStep() {
     const preview = endpointPreview(state.wizard.baseUrl, state.wizard.endpointMode, state.wizard.modelsOverrideUrl);
     const presets = state.providerPresets.providers;
+    const credentials = state.providerCredentials.credentials || [];
     return h("div", { class: "wizard-step-body" }, [
+      credentials.length || state.providerCredentials.loading || state.providerCredentials.error
+        ? wizardField("Voidware Credential", h("select", {
+            class: "vw-select",
+            value: state.wizard.selectedCredentialName,
+            disabled: state.providerCredentials.loading,
+            onchange: (event) => applyCredentialToWizard(event.target.value),
+          }, [
+            h("option", { value: "" }, state.providerCredentials.loading ? "Loading credentials…" : "Enter a new key"),
+            ...credentials.map((candidate) => h("option", {
+              value: candidate.name,
+              selected: state.wizard.selectedCredentialName === candidate.name,
+            }, (candidate.label || candidate.name) + " · " + (candidate.base_url || "No URL"))),
+          ]), state.providerCredentials.error || (state.wizard.selectedCredential ? "Secret stays in Voidware; LLM-Dash stores only the credential name." : "")) : null,
       wizardField("Preset", h("select", {
         class: "vw-select",
         value: state.wizard.presetId,
@@ -2700,9 +2797,24 @@
           selected: state.wizard.presetId === preset.id,
         }, preset.label)),
       ])),
-      wizardField("BASE_URL", h("input", {
+      state.wizard.selectedCredential ? h("div", { class: "wizard-credential-card vw-card vw-card-compact" }, [
+        h("div", { class: "vw-summary-chip-row" }, [
+          h("span", { class: "vw-summary-chip" }, state.wizard.selectedCredential.source || "Voidware"),
+          state.wizard.selectedCredential.api_format ? h("span", { class: "vw-summary-chip" }, state.wizard.selectedCredential.api_format) : null,
+        ]),
+        h("div", { class: "vw-display-row" }, [
+          h("span", { class: "vw-display-row-label" }, "Credential"),
+          h("span", { class: "vw-display-row-value" }, state.wizard.selectedCredential.name),
+        ]),
+        h("div", { class: "vw-display-row" }, [
+          h("span", { class: "vw-display-row-label" }, "Base URL"),
+          h("span", { class: "vw-display-row-value" }, state.wizard.selectedCredential.base_url || "Unavailable"),
+        ]),
+      ]) : null,
+      wizardField("Base URL", h("input", {
         id: "wizard-base-url",
         class: "vw-input",
+        type: "url",
         value: state.wizard.baseUrl,
         placeholder: "https://api.openai.com",
         oninput: (event) => {
@@ -2712,14 +2824,19 @@
           render();
         },
       })),
-      wizardField("API_KEY", h("input", {
+      wizardField("API key", h("input", {
         id: "wizard-api-key",
         class: "vw-input",
         type: "password",
         value: state.wizard.apiKey,
-        placeholder: state.provider.has_provider ? "Leave blank to keep stored key" : "sk-…",
+        placeholder: state.wizard.selectedCredentialName ? "Using selected Voidware credential" : state.provider.has_provider ? "Leave blank to keep stored key" : "sk-…",
+        disabled: Boolean(state.wizard.selectedCredentialName),
         oninput: (event) => {
           state.wizard.apiKey = event.target.value;
+          if (state.wizard.apiKey) {
+            state.wizard.selectedCredentialName = "";
+            state.wizard.selectedCredential = null;
+          }
           state.wizard.connectionTestState = "idle";
           state.wizard.connectionTestSkipped = false;
           render();
@@ -2946,9 +3063,9 @@
       : state.wizard.scheduleCadence + " at " + state.wizard.scheduleTimeLocal + " (" + wizardScheduleUtcEcho() + ")";
     return h("div", { class: "wizard-step-body" }, [
       h("div", { class: "wizard-summary-grid" }, [
-        h("div", null, [h("span", null, "Provider"), h("strong", null, state.wizard.preset?.label || state.wizard.baseUrl || "Custom")]),
-        h("div", null, [h("span", null, "BASE_URL"), h("strong", null, state.wizard.baseUrl || "—")]),
-        h("div", null, [h("span", null, "API_KEY"), h("strong", null, state.wizard.apiKey ? redactSecret(state.wizard.apiKey) : "stored key")]),
+        h("div", null, [h("span", null, "Provider"), h("strong", null, state.wizard.selectedCredential?.label || state.wizard.preset?.label || state.wizard.baseUrl || "Custom")]),
+        h("div", null, [h("span", null, "Base URL"), h("strong", null, state.wizard.baseUrl || "-")]),
+        h("div", null, [h("span", null, "Credential"), h("strong", null, state.wizard.selectedCredentialName || (state.wizard.apiKey ? redactSecret(state.wizard.apiKey) : "stored key"))]),
         h("div", null, [h("span", null, "Default"), h("strong", null, state.wizard.defaultModel || "—")]),
         h("div", null, [h("span", null, "Backup"), h("strong", null, state.wizard.backupModel || "—")]),
         h("div", null, [h("span", null, "Exa"), h("strong", null, state.wizard.exaAlreadyConfigured ? "Configured" : state.wizard.exaSkipped ? "Skipped" : state.wizard.exaKey ? redactSecret(state.wizard.exaKey) : "Skipped")]),
@@ -2979,7 +3096,7 @@
     if (state.wizard.step === 0) {
       return Boolean(
         state.wizard.baseUrl &&
-        (state.provider.has_provider || state.wizard.apiKey) &&
+        (state.provider.has_provider || state.wizard.apiKey || state.wizard.selectedCredentialName) &&
         (state.wizard.connectionTestState === "success" || state.wizard.connectionTestSkipped)
       );
     }
@@ -4202,9 +4319,9 @@
   function authSourceLabel(source) {
     const labels = {
       env: "Environment",
+      "voidware-provider": "Voidware provider",
       "voidware-broker": "Voidware broker",
       "keyring-legacy": "Legacy keyring",
-      "auth-file-legacy": "Legacy auth file",
       missing: "Not configured",
     };
     return labels[source] || "Unavailable";
@@ -4218,8 +4335,30 @@
       cli_unavailable: "CLI unavailable",
       broker_timeout: "Broker timed out",
       broker_unavailable: "Broker unavailable",
+      renewal_needed: "Renewal needed",
     };
     return labels[code] || "Broker unavailable";
+  }
+
+  function formatGrantDate(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  function renderGrantRenewal(grant) {
+    if (!grant || !grant.expiresAt) return null;
+    const renewAfter = formatGrantDate(grant.renewAfter || grant.renewalWindowStartsAt);
+    const expires = formatGrantDate(grant.expiresAt);
+    const tone = grant.renewalRecommended ? "error" : "success";
+    return h("div", { class: "settings-auth-renewal vw-display-row" }, [
+      h("span", { class: "vw-display-row-label" }, "Provider grant"),
+      h("span", { class: "vw-display-row-value" }, [
+        settingsStatusChip(grant.renewalRecommended ? "Renew access" : "Access ready", tone),
+        h("span", null, (renewAfter ? "Renew after " + renewAfter + " · " : "") + "Expires " + expires),
+      ]),
+    ]);
   }
 
   function renderCredentialStatus(label, status) {
@@ -4233,6 +4372,7 @@
           ? h("span", { class: "vw-status-chip" }, "Migration available")
           : null,
       ]),
+      renderGrantRenewal(status && status.grant),
     ]);
   }
 
@@ -4304,6 +4444,19 @@
     s.scheduleDayOfMonth = state.schedule.day_of_month || 1;
   }
 
+  function applyCredentialToSettings(name) {
+    const candidate = providerCredentialByName(name);
+    const s = state.settings;
+    s.draftProviderCredentialName = candidate ? candidate.name : "";
+    if (candidate) {
+      s.draftBaseUrl = candidate.base_url || "";
+      s.draftEndpointMode = candidateEndpointMode(candidate);
+      s.draftApiKey = "";
+      s.connectionResult = null;
+    }
+    render();
+  }
+
   async function settingsSaveProvider(formEl) {
     const s = state.settings;
     s.providerSaving = true;
@@ -4313,6 +4466,8 @@
       const base_url = (s.draftBaseUrl !== null ? s.draftBaseUrl : state.provider.base_url || "").trim();
       const endpoint_mode = s.draftEndpointMode !== null ? s.draftEndpointMode : state.provider.endpoint_mode || "append_v1";
       const api_key = s.draftApiKey.trim();
+      const providerCredentialName = s.draftProviderCredentialName !== null ? s.draftProviderCredentialName : state.provider.provider_credential_name || "";
+      const providerCredential = providerCredentialByName(providerCredentialName) || (providerCredentialName === state.provider.provider_credential_name ? state.provider.provider_credential_meta : null);
       const default_model = (s.draftDefaultModel !== null ? s.draftDefaultModel : state.provider.default_model || "").trim();
       const backup_model = (s.draftBackupModel !== null ? s.draftBackupModel : state.provider.backup_model || "").trim();
       const models_override_url = state.provider.models_override_url || "";
@@ -4320,6 +4475,12 @@
       if (!default_model) throw new Error("Default model is required");
       const payload = { base_url, endpoint_mode, default_model, backup_model, models_override_url };
       if (api_key) payload.api_key = api_key;
+      else if (providerCredentialName) {
+        payload.provider_credential_name = providerCredentialName;
+        payload.provider_credential_meta = credentialMetaPayload(providerCredential);
+      } else if (s.draftProviderCredentialName !== null) {
+        payload.provider_credential_name = "";
+      }
       await fetchJson("/api/provider", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -4329,6 +4490,7 @@
       s.draftBaseUrl = null;
       s.draftEndpointMode = null;
       s.draftApiKey = "";
+      s.draftProviderCredentialName = null;
       s.draftDefaultModel = null;
       s.draftBackupModel = null;
       s.providerStatus = "Provider saved";
@@ -4353,9 +4515,11 @@
       const base_url = (s.draftBaseUrl !== null ? s.draftBaseUrl : state.provider.base_url || "").trim();
       const endpoint_mode = s.draftEndpointMode !== null ? s.draftEndpointMode : state.provider.endpoint_mode || "append_v1";
       const api_key = s.draftApiKey.trim();
+      const providerCredentialName = s.draftProviderCredentialName !== null ? s.draftProviderCredentialName : state.provider.provider_credential_name || "";
       const default_model = (s.draftDefaultModel !== null ? s.draftDefaultModel : state.provider.default_model || "").trim();
       const payload = { base_url, endpoint_mode, default_model };
       if (api_key) payload.api_key = api_key;
+      else if (providerCredentialName) payload.provider_credential_name = providerCredentialName;
       const result = await fetchJson("/api/provider/test-connection", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -4600,7 +4764,12 @@
   function renderSettingsProviderSection() {
     const s = state.settings;
     const presets = state.providerPresets.providers || [];
+    const credentials = state.providerCredentials.credentials || [];
     const currentPresetId = presets.find((p) => p.base_url === state.provider.base_url)?.id || "";
+    const selectedCredentialName = s.draftProviderCredentialName !== null ? s.draftProviderCredentialName : state.provider.provider_credential_name || "";
+    const selectedCredential = selectedCredentialName
+      ? providerCredentialByName(selectedCredentialName) || (selectedCredentialName === state.provider.provider_credential_name ? state.provider.provider_credential_meta : null)
+      : null;
     const connResult = s.connectionResult;
     return renderSettingsGroup({
       id: "settings-provider",
@@ -4608,6 +4777,35 @@
       summary: state.provider.has_provider ? state.provider.default_model + " via " + state.provider.base_url : "Not configured",
       children: [
         h("form", { class: "settings-form", onsubmit: (e) => { e.preventDefault(); settingsSaveProvider(e.target); } }, [
+          credentials.length || state.providerCredentials.loading || state.providerCredentials.error
+            ? settingsField("Voidware credential", h("select", {
+                class: "vw-select",
+                value: selectedCredentialName,
+                disabled: state.providerCredentials.loading,
+                onchange: (e) => applyCredentialToSettings(e.target.value),
+              }, [
+                h("option", { value: "" }, state.providerCredentials.loading ? "Loading credentials…" : "Manual or app-owned key"),
+                ...credentials.map((candidate) => h("option", {
+                  value: candidate.name,
+                  selected: selectedCredentialName === candidate.name,
+                }, (candidate.label || candidate.name) + " · " + (candidate.base_url || "No URL"))),
+              ]), state.providerCredentials.error || "Pick an existing Voidware provider without exposing its secret.") : null,
+          selectedCredential ? h("div", { class: "settings-provider-credential vw-card vw-card-compact" }, [
+            h("div", { class: "vw-summary-chip-row" }, [
+              h("span", { class: "vw-summary-chip" }, selectedCredential.source || "Voidware"),
+              selectedCredential.api_format ? h("span", { class: "vw-summary-chip" }, selectedCredential.api_format) : null,
+              selectedCredential.reusability ? h("span", { class: "vw-summary-chip" }, selectedCredential.reusability) : null,
+            ]),
+            h("div", { class: "vw-display-row" }, [
+              h("span", { class: "vw-display-row-label" }, "Credential"),
+              h("span", { class: "vw-display-row-value" }, selectedCredential.name || selectedCredentialName),
+            ]),
+            h("div", { class: "vw-display-row" }, [
+              h("span", { class: "vw-display-row-label" }, "Base URL"),
+              h("span", { class: "vw-display-row-value" }, selectedCredential.base_url || selectedCredential.baseURL || "Unavailable"),
+            ]),
+            renderGrantRenewal(state.provider.provider_credential_grant),
+          ]) : null,
           presets.length ? settingsField("Preset", h("select", {
             class: "vw-select",
             value: currentPresetId,
@@ -4616,6 +4814,7 @@
               if (!preset) return;
               s.draftBaseUrl = preset.default_base_url || "";
               s.draftEndpointMode = preset.endpoint_mode || "append_v1";
+              s.draftProviderCredentialName = "";
               render();
             },
           }, [
@@ -4625,7 +4824,7 @@
           settingsField("Base URL", h("input", {
             id: "settings-base-url",
             class: "vw-input",
-            type: "text",
+            type: "url",
             value: s.draftBaseUrl !== null ? s.draftBaseUrl : state.provider.base_url || "",
             required: true,
             placeholder: "https://api.openai.com",
@@ -4641,9 +4840,12 @@
             h("option", { value: "root", selected: (s.draftEndpointMode !== null ? s.draftEndpointMode : state.provider.endpoint_mode) === "root" }, "Root (use URL as-is)"),
           ])),
           settingsField("API key", passwordFieldWithToggle(
-            "settings-api-key", s.draftApiKey, (e) => { s.draftApiKey = e.target.value; }, s.showApiKey,
+            "settings-api-key", s.draftApiKey, (e) => {
+              s.draftApiKey = e.target.value;
+              if (s.draftApiKey) s.draftProviderCredentialName = "";
+            }, s.showApiKey,
             () => { s.showApiKey = !s.showApiKey; render(); },
-            state.provider.has_provider ? "••••••••  (leave empty to keep current)" : "Enter API key",
+            selectedCredentialName ? "Using selected Voidware credential" : state.provider.has_provider ? "••••••••  (leave empty to keep current)" : "Enter API key",
             "provider API key"
           )),
           renderBrokerStatus(),
@@ -4875,6 +5077,7 @@
 
   function renderSettingsView() {
     if (!state.providerPresets.loaded && !state.providerPresets.loading) fetchProviderPresets();
+    if (!state.providerCredentials.loaded && !state.providerCredentials.loading) fetchProviderCredentials();
     if (!state.schedule.loaded && !state.schedule.loading) fetchSchedule();
     if (state.provider.has_provider && !state.settings.modelsList.length && !state.settings.modelsLoading && !state.settings.modelsError) settingsLoadModels();
     const noBanner = !state.provider.has_provider

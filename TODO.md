@@ -8,26 +8,26 @@ Use `[x]` for done and `[ ]` for still-open.
 
 ## Active Roadmap
 
-### Phase 9.4 — Voidware provider reuse blockers
+### Phase 9.4 — Voidware provider reuse
 
 Goal: make the setup wizard and Agent Provider settings use existing
 Voidware-managed AI provider credentials instead of forcing users to paste a
 new API key into LLM-Dash.
 
-Blocked by Voidware support for durable broker/session reuse that can satisfy
-the intended "enter auth password once, reuse for up to 120 days" flow.
+Plan: [docs/plans/2026-05-09-phase-9-4-voidware-provider-reuse.md](docs/plans/2026-05-09-phase-9-4-voidware-provider-reuse.md)
 
-- [ ] Add a redacted provider discovery endpoint that reads Voidware auth
+- [x] Add a redacted provider discovery endpoint that reads Voidware auth
   metadata and filters to reusable HTTP AI providers with `baseURL`.
-- [ ] Add wizard/settings UI for selecting an existing Voidware provider
+- [x] Add wizard/settings UI for selecting an existing Voidware provider
   credential, showing only redacted metadata and non-secret provider fields.
-- [ ] Store the selected credential name plus non-secret model/base URL config;
+- [x] Store the selected credential name plus non-secret model/base URL config;
   do not copy raw secrets into LLM-Dash config or logs.
-- [ ] Request scoped broker access for the selected provider secret with a
+- [x] Request scoped broker access for the selected provider secret with a
   120-day TTL, track expiration, and prompt for renewal at the 90-day mark.
-- [ ] Replace the plaintext legacy auth-file fallback with a Voidware v3-aware
-  path; current encrypted `encryptedSecret` entries are invisible to the
-  LLM-Dash loader.
+  Voidware returns renewal metadata at the 75% TTL window.
+- [x] Replace the plaintext legacy auth-file fallback with broker-mediated
+  Voidware reads so v3 encrypted `encryptedSecret` entries work through the
+  shipped Voidware auth path.
 - [ ] Re-run the setup wizard e2e screenshot pass after provider reuse is
   functional.
 
@@ -63,7 +63,7 @@ enrichment + score-range schema hardening) settled.
 
 - [ ] Add focused tests for Voidware auth discovery, selected-provider
   persistence, broker renewal state, and v3 encrypted auth compatibility.
-- [ ] Keep screenshot artifacts under `e2e/screenshots/` and ensure the path is
+- [x] Keep screenshot artifacts under `e2e/screenshots/` and ensure the path is
   gitignored before the next headed e2e run.
 
 ## Completed History
