@@ -163,7 +163,7 @@ reviewer on a different model.
 **Verification:** `node --check web/app.js`; `git diff --check`; headed
 `agent-browser` screenshots; console/page errors; overflow/focus probes;
 three review passes clean or documented with fixed findings.
-**Checkpoint:** pending commit/push after docs update.
+**Checkpoint:** `cb12130`, pushed to origin.
 **Notes:** The blind pass receives no repo plan or task context beyond
 "review these screenshots for visual/UI defects"; this preserves the requested
 fresh-eye signal. Primary nano pass read stale draft artifacts in addition to
@@ -190,10 +190,7 @@ Blind final confirmation passed via `opencode-go/qwen3.6-plus`.
 | Stage | Commit | Push | Verification | Notes |
 |---|---|---|---|---|
 | Branch setup | n/a | Pushed branch | Preflight passed | No edits before approval. |
-| 1 | Pending | Pending | Passed | Controls, typography, wizard title, sidebar icons. |
-| 2 | Pending | Pending | Passed | Dashboard bounded panels and overflow probes. |
-| 3 | Pending | Pending | Passed | Settings, wizard, and copy pass. |
-| 4 | Pending | Pending | Passed | Native, nano, and blind visual gates. |
+| 1-4 | `cb12130` | Pushed | Passed | Combined checkpoint after overlapped implementation stages and final visual gates. |
 
 ## Verification Matrix
 
@@ -226,7 +223,7 @@ Blind final confirmation passed via `opencode-go/qwen3.6-plus`.
 - [x] App behavior remains local-first and zero-build.
 - [x] No benchmark data, changelog history, or old audit files rewritten.
 - [x] `TODO.md`, `LOGBOOK.md`, and this plan reflect final state.
-- [ ] Final branch has checkpoint commits pushed to origin.
+- [x] Final branch has checkpoint commits pushed to origin.
 - [x] Screenshot and review artifacts are available under
   `docs/plans/phase-9-5-saas-ui-ux-polish/artifacts/`.
 - [x] All blocking review findings are fixed or documented as non-blocking.
