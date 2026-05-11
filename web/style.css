@@ -159,6 +159,13 @@ body::before {
   display: none;
 }
 
+.mobile-menu-icon,
+.mobile-menu-icon svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
 .app-sidebar {
   min-height: 100dvh;
 }
@@ -209,19 +216,28 @@ body::before {
 }
 
 .vw-sidebar-icon {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
   width: 22px;
   height: 22px;
   border-radius: var(--vw-radius-sm);
   background: color-mix(in srgb, var(--vw-surface-3) 72%, transparent);
   color: var(--vw-text-soft);
-  font-size: 11px;
-  font-weight: var(--vw-weight-bold);
+}
+
+.vw-sidebar-icon svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+  stroke-width: 2;
 }
 
 .sidebar-footer {
-  display: grid;
-  gap: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
   margin-top: auto;
   padding: 16px 24px 4px;
 }
@@ -229,6 +245,7 @@ body::before {
 .freshness-chip {
   justify-content: center;
   min-height: 30px;
+  flex: 1 0 100%;
 }
 
 .app-content {
@@ -272,10 +289,35 @@ body::before {
 .vw-subpage-nav-link {
   border: 0;
   cursor: pointer;
+  min-height: 34px;
+  padding: 6px 12px;
+  border-radius: var(--vw-radius-md);
+  color: var(--vw-text-soft);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--vw-border-mid);
+  font: 600 12px/1 var(--vw-font-body);
 }
 
 .vw-subpage-nav-link[aria-current="page"],
 .vw-subpage-nav-link.active {
+  color: var(--vw-text);
+  background: var(--vw-surface-2);
+  box-shadow: 0 0 0 1px var(--vw-border-mid);
+}
+
+.vw-subpage-nav-link:hover {
+  color: var(--vw-text);
+  background: var(--vw-surface-2);
+}
+
+.vw-subpage-nav-link.view-btn:not([aria-current="page"]) {
+  color: var(--vw-text-soft);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--vw-border-mid);
+  opacity: 1;
+}
+
+.vw-subpage-nav-link.view-btn:not([aria-current="page"]):hover {
   color: var(--vw-text);
   background: var(--vw-surface-2);
 }
@@ -384,7 +426,7 @@ a {
   background: var(--vw-surface-2);
   box-shadow: 0 0 0 1px var(--vw-border);
   color: var(--vw-text-muted);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 11px;
 }
 
@@ -455,6 +497,11 @@ a {
 .models-sort-group {
   flex: 1 1 auto;
   min-width: 0;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 
 .models-footnote {
@@ -500,13 +547,14 @@ a {
 
 .sort-btn,
 .view-btn {
-  padding: 6px 11px;
-  min-height: 44px;
+  padding: 6px 10px;
+  min-height: 34px;
   background: transparent;
   color: var(--vw-text-muted);
-  font-family: var(--vw-font-mono);
-  font-size: 11px;
+  font-family: var(--vw-font-body);
+  font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .sort-btn:hover,
@@ -549,6 +597,10 @@ a {
   box-shadow: 0 0 8px rgba(124, 92, 196, 0.2);
 }
 
+.vw-sidebar-link.view-btn[aria-pressed="true"]::after {
+  display: none;
+}
+
 .action-btn,
 .filter-chip,
 .table-sort-btn,
@@ -556,13 +608,13 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 12px;
-  min-height: 44px;
+  padding: 7px 11px;
+  min-height: 34px;
   background: var(--vw-surface-1);
   color: var(--vw-text-soft);
   box-shadow: 0 0 0 1px var(--vw-border);
-  font-family: var(--vw-font-mono);
-  font-size: 11px;
+  font-family: var(--vw-font-body);
+  font-size: 12px;
   font-weight: 600;
   text-decoration: none;
 }
@@ -592,14 +644,14 @@ a {
 }
 
 .refresh-btn {
-  min-height: 44px;
+  min-height: 36px;
   padding: 8px 12px;
 }
 
 .refresh-error {
   flex-basis: 100%;
   color: var(--vw-error);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 11px;
   text-align: right;
 }
@@ -639,7 +691,7 @@ a {
   cursor: pointer;
   transition: background var(--vw-transition-fast);
   flex: 1 1 auto;
-  min-height: 44px;
+  min-height: 36px;
   text-align: left;
 }
 
@@ -685,7 +737,7 @@ a {
 }
 
 .icon-btn {
-  width: 44px;
+  width: 36px;
   padding: 0;
 }
 
@@ -705,10 +757,26 @@ a {
 .filter-panel {
   display: grid;
   gap: 14px;
-  padding: 18px;
+  padding: 14px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0));
   border-radius: var(--vw-radius-lg);
   box-shadow: 0 0 0 1px var(--vw-border-mid), 0 18px 40px rgba(0, 0, 0, 0.18);
+}
+
+.model-filter-stack {
+  display: grid;
+  gap: var(--vw-space-sm);
+}
+
+.model-search-strip {
+  display: grid;
+  grid-template-columns: auto minmax(220px, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--vw-surface-1);
+  border-radius: var(--vw-radius-md);
+  box-shadow: 0 0 0 1px var(--vw-border);
 }
 
 .filter-summary {
@@ -732,7 +800,7 @@ a {
 }
 
 .filter-card {
-  padding: var(--vw-space-lg);
+  padding: var(--vw-space-md);
   background: var(--vw-surface-1);
   border-radius: var(--vw-radius-md);
   box-shadow: 0 0 0 1px var(--vw-border);
@@ -748,8 +816,8 @@ a {
 .search-input,
 .text-input {
   width: 100%;
-  min-height: 40px;
-  padding: 10px 12px;
+  min-height: 34px;
+  padding: 8px 10px;
   border-radius: var(--vw-radius-sm);
   background: var(--vw-surface-1);
   color: var(--vw-text);
@@ -813,7 +881,7 @@ table.models tbody tr:focus-visible,
 .stats-filter-grid,
 .range-grid {
   display: grid;
-  gap: var(--vw-space-lg);
+  gap: var(--vw-space-md);
 }
 
 .stats-filter-grid {
@@ -830,8 +898,8 @@ table.models tbody tr:focus-visible,
 
 .range-card {
   display: grid;
-  gap: var(--vw-space-sm);
-  padding: 14px;
+  gap: 6px;
+  padding: 10px;
   background: var(--vw-surface-1);
   border-radius: var(--vw-radius-md);
   box-shadow: 0 0 0 1px var(--vw-border);
@@ -846,17 +914,18 @@ table.models tbody tr:focus-visible,
 
 .range-title,
 .range-values {
-  font-family: var(--vw-font-mono);
   font-size: 11px;
 }
 
 .range-title {
   color: var(--vw-text-soft);
+  font-family: var(--vw-font-body);
   font-weight: 600;
 }
 
 .range-values {
   color: var(--vw-text-faint);
+  font-family: var(--vw-font-mono);
 }
 
 .range-label {
@@ -1012,7 +1081,7 @@ table.models tbody tr:focus-visible,
   border-radius: var(--vw-radius-sm);
   box-shadow: 0 0 0 1px var(--vw-border);
   cursor: pointer;
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 11px;
 }
 
@@ -1034,7 +1103,7 @@ table.models tbody tr:focus-visible,
 .status-msg {
   padding: 40px 16px;
   color: var(--vw-text-muted);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 12px;
   text-align: center;
 }
@@ -1060,7 +1129,7 @@ table.models tbody tr:focus-visible,
 
 .empty-state h2 {
   margin: 0 0 8px;
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-display);
   font-size: 18px;
 }
 
@@ -1070,7 +1139,47 @@ table.models tbody tr:focus-visible,
 }
 
 .table-wrap {
-  overflow-x: auto;
+  position: relative;
+  max-height: clamp(300px, calc(100dvh - 340px), 620px);
+  overflow: auto;
+  border-radius: var(--vw-radius-md);
+  box-shadow:
+    0 0 0 1px var(--vw-border),
+    inset 0 14px 14px -16px rgba(255, 255, 255, 0.18),
+    inset 0 -18px 16px -18px rgba(0, 0, 0, 0.7);
+  scrollbar-gutter: stable both-edges;
+  scrollbar-color: var(--vw-accent-soft) var(--vw-surface-2);
+  scrollbar-width: thin;
+}
+
+.table-scroll-cue {
+  position: sticky;
+  bottom: 10px;
+  right: 10px;
+  z-index: 8;
+  float: right;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 24px;
+  margin: -34px 10px 10px 0;
+  color: var(--vw-text);
+  background: color-mix(in srgb, var(--vw-surface-3) 88%, transparent);
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px var(--vw-border-mid), 0 8px 22px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+}
+
+.chart-wrap::after {
+  content: "";
+  position: sticky;
+  right: 0;
+  display: block;
+  width: 22px;
+  height: 1px;
+  margin-left: auto;
+  pointer-events: none;
+  box-shadow: -18px 0 18px rgba(0, 0, 0, 0.45);
 }
 
 table.models,
@@ -1082,9 +1191,21 @@ table.data-table {
   font-variant-numeric: tabular-nums;
 }
 
+table.models {
+  min-width: 1120px;
+}
+
+table.data-table {
+  min-width: 820px;
+}
+
 table.models thead th,
 table.data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   padding: 6px 8px;
+  background: var(--vw-bg-soft);
   color: var(--vw-text-faint);
   font-family: var(--vw-font-mono);
   font-weight: 600;
@@ -1273,17 +1394,26 @@ table.data-table thead th.num,
 
 .chart-wrap {
   display: grid;
-  gap: var(--vw-space-xs);
-  max-width: 980px;
-  margin: 0 auto;
+  gap: 6px;
+  width: 100%;
+  max-height: clamp(320px, calc(100dvh - 360px), 620px);
+  overflow: auto;
+  padding: var(--vw-space-md);
+  background: var(--vw-surface-1);
+  border-radius: var(--vw-radius-lg);
+  box-shadow:
+    0 0 0 1px var(--vw-border-mid),
+    inset 0 -18px 16px -18px rgba(0, 0, 0, 0.7);
+  scrollbar-gutter: stable;
 }
 
 .chart-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
+  padding: 7px 10px;
   border-radius: var(--vw-radius-sm);
+  background: color-mix(in srgb, var(--vw-surface-2) 68%, transparent);
   cursor: pointer;
   transition: background 0.15s ease, box-shadow 0.15s ease;
 }
@@ -1306,7 +1436,7 @@ table.data-table thead th.num,
 }
 
 .chart-row .name {
-  width: 210px;
+  width: clamp(150px, 22vw, 260px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1321,12 +1451,12 @@ table.data-table thead th.num,
   align-items: center;
   gap: 2px;
   min-width: 0;
-  height: 14px;
+  height: 18px;
 }
 
 .chart-row .bars .bar {
-  height: 12px;
-  border-radius: 2px;
+  height: 16px;
+  border-radius: 3px;
   transition: width 0.4s ease;
 }
 
@@ -1342,10 +1472,10 @@ table.data-table thead th.num,
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 20px;
+  gap: 14px;
   margin-top: 14px;
   color: var(--vw-text-muted);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 10px;
 }
 
@@ -1369,7 +1499,7 @@ table.data-table thead th.num,
 
 .changelog-list,
 .changelog-panel {
-  min-height: 460px;
+  min-height: min(460px, calc(100dvh - 190px));
   background: var(--vw-surface-1);
   border-radius: var(--vw-radius-lg);
   box-shadow: 0 0 0 1px var(--vw-border-mid), 0 16px 40px rgba(0, 0, 0, 0.18);
@@ -1379,7 +1509,7 @@ table.data-table thead th.num,
   display: grid;
   gap: 10px;
   align-content: start;
-  max-height: 72vh;
+  max-height: calc(100dvh - 170px);
   overflow: auto;
   padding: var(--vw-space-lg);
 }
@@ -1417,7 +1547,7 @@ table.data-table thead th.num,
 }
 
 .changelog-title {
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-display);
   font-size: 13px;
   font-weight: 700;
   color: var(--vw-text);
@@ -1437,6 +1567,9 @@ table.data-table thead th.num,
 }
 
 .changelog-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  max-height: calc(100dvh - 170px);
   overflow: hidden;
 }
 
@@ -1449,7 +1582,7 @@ table.data-table thead th.num,
 .eyebrow {
   margin: 0 0 4px;
   color: var(--vw-text-faint);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -1458,16 +1591,23 @@ table.data-table thead th.num,
 .changelog-panel-head h2,
 .section-head h2 {
   margin: 0;
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-display);
   font-size: 18px;
 }
 
 .markdown {
   padding: 0 22px 24px;
   color: var(--vw-text-soft);
+  overflow: auto;
   overflow-wrap: break-word;
   word-break: break-word;
   max-inline-size: 65ch;
+}
+
+.changelog-body,
+.compare-body {
+  min-height: 0;
+  overflow: auto;
 }
 
 .markdown h1,
@@ -1588,7 +1728,7 @@ table.data-table thead th.num,
 
 .stats-label {
   color: var(--vw-text-faint);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1620,9 +1760,8 @@ table.data-table thead th.num,
 
 .leaderboard-summary .stats-card .stats-note {
   color: var(--vw-text-faint);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 11px;
-  letter-spacing: 0.04em;
 }
 
 .leaderboard-table-wrap {
@@ -1754,7 +1893,7 @@ table.data-table thead th.num,
 
 .detail-chart-head h3 {
   margin: 0;
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-display);
   font-size: 13px;
 }
 
@@ -1796,7 +1935,7 @@ table.data-table thead th.num,
   place-items: center;
   height: 180px;
   color: var(--vw-text-faint);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 12px;
 }
 
@@ -1828,7 +1967,6 @@ table.data-table thead th.num,
 .compare-date-field {
   display: grid;
   gap: 4px;
-  font-family: var(--vw-font-mono);
 }
 
 .compare-date-label {
@@ -1871,7 +2009,7 @@ table.data-table thead th.num,
 
 .compare-block-head h3 {
   margin: 0;
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-display);
   font-size: 14px;
 }
 
@@ -1982,7 +2120,7 @@ table.data-table thead th.num,
   background: var(--vw-surface-1);
   border-radius: var(--vw-radius-md);
   color: var(--vw-text-muted);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 13px;
   text-align: center;
 }
@@ -2011,7 +2149,7 @@ table.data-table thead th.num,
   color: var(--vw-bg);
   padding: 4px 10px;
   border-radius: 999px;
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 11px;
   font-weight: var(--vw-weight-semibold);
   letter-spacing: 0.04em;
@@ -2042,7 +2180,7 @@ table.data-table thead th.num,
   width: 36px;
   flex: 0 0 36px;
   padding: 0;
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-weight: var(--vw-weight-bold);
 }
 
@@ -2090,7 +2228,7 @@ table.data-table thead th.num,
   padding: 0;
   display: grid;
   gap: 10px;
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 13px;
 }
 
@@ -2139,13 +2277,13 @@ table.data-table thead th.num,
 
 .chart-card-head h3 {
   margin: 0;
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-display);
   font-size: 14px;
 }
 
 .chart-card-head span {
   color: var(--vw-text-faint);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -2202,7 +2340,7 @@ table.data-table thead th.num,
 
 .data-card-head h3 {
   margin: 0;
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-display);
   font-size: 16px;
 }
 
@@ -2313,7 +2451,7 @@ table.data-table thead th.num,
 .settings-view {
   display: grid;
   gap: var(--vw-space-lg);
-  max-width: 800px;
+  max-width: 1120px;
   margin: 0 auto;
   min-width: 0;
 }
@@ -2352,7 +2490,7 @@ table.data-table thead th.num,
   min-width: 0;
   padding: var(--vw-space-lg);
   background: var(--vw-bg-soft);
-  border-radius: var(--vw-radius-lg);
+  border-radius: var(--vw-radius-md);
   box-shadow: 0 0 0 1px var(--vw-border);
 }
 
@@ -2365,7 +2503,7 @@ table.data-table thead th.num,
 .vw-settings-group-head h3 {
   margin: 0;
   color: var(--vw-text);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-display);
   font-size: 15px;
   font-weight: var(--vw-weight-semibold);
 }
@@ -2383,9 +2521,16 @@ table.data-table thead th.num,
 
 .settings-form {
   display: grid;
-  gap: var(--vw-space-md);
+  gap: 12px;
   padding: var(--vw-space-xs) 0 0;
   min-width: 0;
+}
+
+.settings-state-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--vw-space-sm);
 }
 
 .settings-form .vw-field,
@@ -2447,7 +2592,7 @@ table.data-table thead th.num,
 .settings-field-status {
   margin: 0;
   color: var(--vw-text-muted);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 12px;
 }
 
@@ -2459,6 +2604,24 @@ table.data-table thead th.num,
   display: flex;
   flex-wrap: wrap;
   gap: var(--vw-space-xs);
+}
+
+@media (min-width: 900px) {
+  .settings-view {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .settings-view > .settings-auth-broker,
+  .settings-view > .settings-no-provider-banner,
+  .settings-view > .panel-shell {
+    grid-column: 1 / -1;
+  }
+
+  .settings-view > #settings-provider,
+  .settings-view > #settings-schedule {
+    grid-column: 1 / -1;
+  }
 }
 
 .settings-no-provider-banner {
@@ -2475,7 +2638,7 @@ table.data-table thead th.num,
 .settings-no-provider-banner p {
   margin: 0;
   color: var(--vw-warning);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 13px;
   font-weight: var(--vw-weight-semibold);
 }
@@ -2546,12 +2709,36 @@ table.data-table thead th.num,
   }
 }
 
+@media (max-width: 760px) {
+  .sort-btn,
+  .view-btn,
+  .action-btn,
+  .filter-chip,
+  .table-sort-btn,
+  .table-link-btn,
+  .vw-btn,
+  .panel-toggle-hitarea {
+    min-height: 44px;
+  }
+
+  .icon-btn,
+  .help-btn {
+    width: 44px;
+    flex-basis: 44px;
+  }
+
+  .model-search-strip {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+}
+
 .chart-empty {
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--vw-text-faint);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 12px;
   height: 200px;
 }
@@ -2691,7 +2878,7 @@ table.data-table thead th.num,
 .modal-head h2,
 .bootstrap-card h2 {
   margin: 0;
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-display);
   font-size: 18px;
 }
 
@@ -2720,7 +2907,7 @@ table.data-table thead th.num,
 .modal-terminal-state {
   margin: 0 0 12px;
   color: var(--vw-text-muted);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 11px;
 }
 
@@ -2806,7 +2993,7 @@ table.data-table thead th.num,
 .bootstrap-status {
   margin-top: 12px;
   color: var(--vw-text-soft);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 12px;
 }
 
@@ -2864,7 +3051,7 @@ table.data-table thead th.num,
   align-items: center;
   gap: 10px;
   color: var(--vw-text-muted);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 12px;
 }
 
@@ -2944,7 +3131,7 @@ table.data-table thead th.num,
   background: var(--vw-surface-2);
   color: var(--vw-text-soft);
   box-shadow: 0 0 0 1px var(--vw-border);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 12px;
   font-weight: var(--vw-weight-semibold);
   cursor: pointer;
@@ -3047,7 +3234,7 @@ table.data-table thead th.num,
   background: var(--vw-surface-1);
   color: var(--vw-text);
   box-shadow: 0 0 0 1px var(--vw-border);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 12px;
   transition:
     box-shadow var(--vw-transition-fast),
@@ -3089,7 +3276,7 @@ table.data-table thead th.num,
 
 .vw-label {
   color: var(--vw-text-soft);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 11px;
   font-weight: var(--vw-weight-semibold);
   letter-spacing: 0.04em;
@@ -3141,7 +3328,7 @@ table.data-table thead th.num,
   gap: 6px;
   padding: 4px 10px;
   border-radius: 999px;
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 11px;
   font-weight: var(--vw-weight-semibold);
   background: var(--vw-surface-2);
@@ -3220,7 +3407,7 @@ table.data-table thead th.num,
 
 .vw-modal-header h2 {
   margin: 0 0 4px;
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-display);
   font-size: 18px;
   font-weight: var(--vw-weight-bold);
 }
@@ -3260,7 +3447,7 @@ table.data-table thead th.num,
   border-radius: 50%;
   background: var(--vw-surface-3);
   color: var(--vw-text-faint);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 11px;
   font-weight: var(--vw-weight-bold);
   box-shadow: 0 0 0 1px var(--vw-border);
@@ -3287,7 +3474,7 @@ table.data-table thead th.num,
 }
 
 .vw-wizard-label {
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 9px;
   font-weight: var(--vw-weight-semibold);
   letter-spacing: 0.06em;
@@ -3338,6 +3525,13 @@ table.data-table thead th.num,
   line-height: 1.5;
 }
 
+.wizard-helper {
+  margin: 0;
+  color: var(--vw-text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
 .wizard-advanced {
   display: grid;
   gap: 14px;
@@ -3346,7 +3540,7 @@ table.data-table thead th.num,
 .wizard-advanced summary {
   cursor: pointer;
   color: var(--vw-text-muted);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 11px;
   font-weight: var(--vw-weight-semibold);
 }
@@ -3403,7 +3597,7 @@ table.data-table thead th.num,
 .wizard-error {
   margin: 0;
   color: var(--vw-error);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -3413,7 +3607,7 @@ table.data-table thead th.num,
   align-items: center;
   gap: var(--vw-space-sm);
   color: var(--vw-warning);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 11px;
 }
 
@@ -3434,13 +3628,13 @@ table.data-table thead th.num,
 }
 
 .wizard-test-item strong {
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-display);
   font-size: 12px;
 }
 
 .wizard-link {
   color: var(--vw-iridescent-5);
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 12px;
 }
 
@@ -3474,11 +3668,12 @@ table.data-table thead th.num,
 }
 
 .wizard-fs-brand {
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-display);
   font-size: 14px;
   font-weight: var(--vw-weight-bold);
   color: var(--vw-text-muted);
   letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .wizard-fs-close {
@@ -3508,7 +3703,7 @@ table.data-table thead th.num,
 }
 
 .wizard-fs-step-label {
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 11px;
   font-weight: var(--vw-weight-semibold);
   color: var(--vw-accent);
@@ -3518,7 +3713,7 @@ table.data-table thead th.num,
 
 .wizard-fs-title-block h1 {
   margin: 0;
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-display);
   font-size: 22px;
   font-weight: var(--vw-weight-bold);
   color: var(--vw-text);
@@ -3527,7 +3722,7 @@ table.data-table thead th.num,
 
 .wizard-fs-subtitle {
   margin: 0;
-  font-family: var(--vw-font-mono);
+  font-family: var(--vw-font-body);
   font-size: 13px;
   color: var(--vw-text-muted);
   line-height: 1.5;
@@ -3613,12 +3808,41 @@ table.data-table thead th.num,
 }
 
 @media (max-width: 960px) {
+  .models-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .models-toolbar-left {
+    align-items: flex-start;
+  }
+
+  .models-toolbar > .vw-btn {
+    align-self: flex-start;
+  }
+
   .changelog-view {
     grid-template-columns: 1fr;
   }
 
   .changelog-list {
+    display: flex;
+    min-height: 0;
     max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .changelog-item {
+    flex: 0 0 min(82vw, 420px);
+    scroll-snap-align: start;
+  }
+
+  .changelog-panel {
+    max-height: calc(100dvh - 360px);
+    min-height: 320px;
   }
 }
 

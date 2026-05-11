@@ -4,6 +4,56 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 076 — 2026-05-11
+
+**Agent:** GPT-5 Codex (prismhook, shxdowloop-ui)
+**Cycle:** Phase 9.5 — SaaS UI/UX Polish
+**Task:** Implement final dashboard/settings/wizard UI polish and review gates
+
+---
+
+Finished the Phase 9.5 product polish pass on the shxdowloop branch.
+
+- Replaced sidebar letter glyphs with inline icon affordances and cleaned the
+  mobile menu trigger.
+- Tightened typography and dense controls, with touch-size restoration at small
+  breakpoints.
+- Bounded Models, Chart, Changelog, and Stats panels with internal scroll,
+  sticky table headers, horizontal affordances, and overflow probes.
+- Reworked Settings into clearer Connection, Models, Research, and Schedule
+  surfaces with applied/dirty/revert states where save semantics support them.
+- Updated setup wizard step titles, service/key copy, URL handling labels,
+  schedule preview, and summary language.
+- Ran the requested full copy pass: removed `Model Ops`, avoided redundant
+  `Settings > Settings`, replaced visible `Agent Provider`/`Agent Tasks`
+  wording, and kept protocol terms scoped to key/URL/service controls.
+
+Visual gates:
+- Native screenshot review found table, changelog, and access-copy issues; all
+  blocking/medium findings were fixed.
+- Nano image review on `opencode-go/kimi-k2.6` produced useful findings but also
+  read stale draft screenshots; current findings were triaged and fixed.
+- Blind final visual confirmation on `opencode-go/qwen3.6-plus` passed against
+  the final-only screenshot folder.
+- Final native re-review passed with only low residual risks.
+
+Verification:
+- `node --check web/app.js`
+- `git diff --check`
+- headed `agent-browser` screenshots and probes at `1280x800`, `768x600`, and
+  representative app routes
+- browser console/page error checks
+- layout probes: no body horizontal overflow, no clipped controls, bounded
+  table scroll, and changelog preview strip horizontal-only on 768x600
+
+Residual risk:
+- The Models table remains intentionally dense at 768px and relies on internal
+  horizontal scroll.
+- Wizard progress is legible at 768px but should be watched below 600px in a
+  future true-mobile pass.
+
+---
+
 ## Entry 075 — 2026-05-11
 
 **Agent:** GPT-5 Codex (silverthread, docs/spec-planning)

@@ -22,9 +22,10 @@ Plan: [docs/plans/2026-05-10-polished-saas-ui-ux-plan.md](docs/plans/2026-05-10-
 
 Audit: [docs/plans/e2e-analysis/master-issue-list.md](docs/plans/e2e-analysis/master-issue-list.md)
 
-[ ] Implement the polished SaaS UI/UX pass: typography cleanup, dense controls,
-bounded panels, settings composition, wizard clarity, and screenshot
-verification.
+Done: implemented the polished UI/UX pass with sidebar icons, denser controls,
+bounded dashboard panels, settings and wizard composition, full copy cleanup
+away from `Model Ops`/ops phrasing, and final native/nano/blind screenshot
+reviews.
 
 ## Completed History
 
@@ -48,3 +49,4 @@ verification.
 - Phase 9.2 — Power-user shortcuts and visibility-aware data refresh.
 - Phase 9.3 — Agent Provider leaderboard on Stats.
 - Phase 9.4 — Voidware provider reuse and full app e2e screenshots.
+- Phase 9.5 — SaaS UI/UX polish and final visual review gates.

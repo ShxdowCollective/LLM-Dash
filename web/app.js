@@ -8,7 +8,7 @@
   const METRIC_LABELS = {
     intelligence: "Intelligence",
     coding: "Coding",
-    agents: "Agent Tasks",
+    agents: "Tool Use",
     speed: "Speed",
     cost: "Cost Score",
   };
@@ -17,14 +17,14 @@
     { key: "value", label: "Value" },
     { key: "intelligence", label: "Intelligence" },
     { key: "coding", label: "Coding" },
-    { key: "agents", label: "Agents" },
+    { key: "agents", label: "Tool Use" },
     { key: "speed", label: "Speed" },
     { key: "cost", label: "Cost" },
   ];
   const CHART_BARS = [
     { key: "intelligence", label: "Intelligence", raw: "var(--vw-iridescent-6)" },
     { key: "coding", label: "Coding", raw: "var(--vw-iridescent-5)" },
-    { key: "agents", label: "Agents", raw: "var(--vw-iridescent-4)" },
+    { key: "agents", label: "Tool Use", raw: "var(--vw-iridescent-4)" },
     { key: "speed", label: "Speed", raw: "var(--vw-iridescent-3)" },
   ];
   const TIER_COLOR_MAP = {
@@ -69,14 +69,14 @@
     },
     stats: {
       label: "Stats",
-      deck: "Inspect update-run duration, token, cost, and agent-runtime trends.",
+      deck: "Review update duration, token use, cost, and runtime trends.",
       subpages: [],
     },
     settings: {
       label: "Settings",
-      deck: "Configure providers, model choices, research keys, scheduling, and manual update paths.",
+      deck: "Choose connections, models, research sources, and update cadence.",
       subpages: [
-        { key: "provider", label: "Provider", view: "data" },
+        { key: "provider", label: "Connection", view: "data" },
         { key: "models", label: "Models", view: "data" },
         { key: "research", label: "Research", view: "data" },
         { key: "schedule", label: "Schedule", view: "data" },
@@ -96,9 +96,18 @@
   });
   const BOOTSTRAP_POLL_MS = 1000;
   const RUN_UPDATE_POLL_MS = 3000;
-  const WIZARD_STEPS = ["Provider", "Models", "Test", "Exa", "LLM Stats", "Schedule", "Summary"];
+  const WIZARD_STEPS = ["Connection", "Models", "Test", "Exa", "LLM Stats", "Schedule", "Summary"];
+  const WIZARD_TITLES = [
+    "Connection",
+    "Choose Models",
+    "Test Models",
+    "Research Key",
+    "LLM Stats",
+    "Schedule Updates",
+    "Review Setup",
+  ];
   const WIZARD_SUBTITLES = [
-    "Connect to your LLM provider",
+    "Connect LLM-Dash to a model service",
     "Choose default and backup models",
     "Verify your models work",
     "Enable web research with Exa",
@@ -130,8 +139,8 @@
     sortBy: "overall",
     ui: {
       sidebarOpen: false,
-      modelFiltersCollapsed: false,
-      statsFiltersCollapsed: false,
+      modelFiltersCollapsed: true,
+      statsFiltersCollapsed: true,
       modelInfoCollapsed: {},
       settingsCollapsed: {
         provider: false,
@@ -1393,7 +1402,7 @@
       state.wizard.connectionTestStatus = payload.models_count !== undefined
         ? payload.models_count + " models visible"
         : "Connection returned HTTP " + payload.status_code;
-      if (!payload.ok) state.wizard.connectionTestError = "Models endpoint returned HTTP " + payload.status_code + ".";
+      if (!payload.ok) state.wizard.connectionTestError = "Model list request returned HTTP " + payload.status_code + ".";
     } catch (error) {
       state.wizard.connectionTestState = "failed";
       state.wizard.connectionTestError = String((error && error.message) || error);
@@ -1404,7 +1413,7 @@
   async function saveProviderFromWizard(includeModels) {
     const payload = wizardPayload(includeModels);
     if (!payload.base_url) throw new Error("Base URL is required.");
-    if (!state.provider.has_provider && !payload.api_key && !payload.provider_credential_name) throw new Error("Choose a Voidware credential or enter an API key.");
+    if (!state.provider.has_provider && !payload.api_key && !payload.provider_credential_name) throw new Error("Choose a saved Voidware key or enter an API key.");
     if (includeModels && !payload.default_model) throw new Error("Default model is required.");
     const saved = await fetchJson("/api/provider", {
       method: "POST",
@@ -1607,7 +1616,7 @@
       state.wizard.connectionTestSkipped = true;
       wizardNext();
     } else if (state.wizard.step === 3) {
-      if (window.confirm("Skip Exa? Updates can still run, but web research may hit provider limits.")) {
+      if (window.confirm("Skip Exa? Updates can still run, but web research may have fewer sources.")) {
         state.wizard.exaSkipped = true;
         state.wizard.step = state.wizard.llmstatsAlreadyConfigured ? 5 : 4;
         render();
@@ -2388,7 +2397,7 @@
     const metricRows = [
       ["Intelligence (GPQA/AA)", model.intelligence],
       ["Coding (SWE-bench)", model.coding],
-      ["Agent Tasks", model.agents],
+      ["Tool Use", model.agents],
       ["Speed", model.speed],
       ["Cost Score", model.cost],
     ].map(([label, score]) =>
@@ -2550,9 +2559,20 @@
 
   function renderModelFilters() {
     const active = filterCount();
-    return renderCollapsiblePanel({
+    const quickSearch = h("div", { class: "model-search-strip" }, [
+      h("label", { class: "control-label", for: "model-search" }, "Search"),
+      h("div", { class: "search-shell" }, h("input", {
+        id: "model-search",
+        class: "search-input",
+        type: "search",
+        placeholder: "Search name, vendor, notes, pricing",
+        value: state.filter.text,
+        oninput: (event) => setTextFilter(event.target.value),
+      })),
+    ]);
+    const advanced = renderCollapsiblePanel({
       id: "model-filters",
-      title: "Model Filters",
+      title: "Advanced Filters",
       summary: [
         state.models.length + " / " + state.totalModelCount + " models",
         " · ",
@@ -2576,17 +2596,6 @@
               h("span", { class: "summary-pill" }, state.models.length + " / " + state.totalModelCount + " models"),
               h("span", { class: "summary-note" }, active ? active + " filters active" : "All filters open"),
             ]),
-          ]),
-          h("div", { class: "filter-card" }, [
-            h("label", { class: "control-label stacked", for: "model-search" }, "Search"),
-            h("div", { class: "search-shell" }, h("input", {
-              id: "model-search",
-              class: "search-input",
-              type: "search",
-              placeholder: "Search name, vendor, notes, params",
-              value: state.filter.text,
-              oninput: (event) => setTextFilter(event.target.value),
-            })),
           ]),
           h("div", { class: "filter-card" }, [
             h("div", { class: "control-label stacked" }, "Vendors"),
@@ -2614,6 +2623,7 @@
         ]),
       ],
     });
+    return h("div", { class: "model-filter-stack" }, [quickSearch, advanced]);
   }
 
   function renderStatsFilters() {
@@ -2774,24 +2784,24 @@
     const credentials = state.providerCredentials.credentials || [];
     return h("div", { class: "wizard-step-body" }, [
       credentials.length || state.providerCredentials.loading || state.providerCredentials.error
-        ? wizardField("Voidware Credential", h("select", {
+        ? wizardField("Saved Voidware key", h("select", {
             class: "vw-select",
             value: state.wizard.selectedCredentialName,
             disabled: state.providerCredentials.loading,
             onchange: (event) => applyCredentialToWizard(event.target.value),
           }, [
-            h("option", { value: "" }, state.providerCredentials.loading ? "Loading credentials…" : "Enter a new key"),
+            h("option", { value: "" }, state.providerCredentials.loading ? "Loading saved keys…" : "Use a new key"),
             ...credentials.map((candidate) => h("option", {
               value: candidate.name,
               selected: state.wizard.selectedCredentialName === candidate.name,
             }, (candidate.label || candidate.name) + " · " + (candidate.base_url || "No URL"))),
-          ]), state.providerCredentials.error || (state.wizard.selectedCredential ? "Secret stays in Voidware; LLM-Dash stores only the credential name." : "")) : null,
-      wizardField("Preset", h("select", {
+          ]), state.providerCredentials.error || (state.wizard.selectedCredential ? "Secret stays in Voidware; LLM-Dash stores only the saved key name." : "")) : null,
+      wizardField("Service", h("select", {
         class: "vw-select",
         value: state.wizard.presetId,
         onchange: (event) => applyWizardPreset(event.target.value),
       }, [
-        h("option", { value: "" }, "Choose a provider"),
+        h("option", { value: "" }, "Choose a service"),
         ...presets.map((preset) => h("option", {
           value: preset.id,
           selected: state.wizard.presetId === preset.id,
@@ -2803,7 +2813,7 @@
           state.wizard.selectedCredential.api_format ? h("span", { class: "vw-summary-chip" }, state.wizard.selectedCredential.api_format) : null,
         ]),
         h("div", { class: "vw-display-row" }, [
-          h("span", { class: "vw-display-row-label" }, "Credential"),
+          h("span", { class: "vw-display-row-label" }, "Saved key"),
           h("span", { class: "vw-display-row-value" }, state.wizard.selectedCredential.name),
         ]),
         h("div", { class: "vw-display-row" }, [
@@ -2829,7 +2839,7 @@
         class: "vw-input",
         type: "password",
         value: state.wizard.apiKey,
-        placeholder: state.wizard.selectedCredentialName ? "Using selected Voidware credential" : state.provider.has_provider ? "Leave blank to keep stored key" : "sk-…",
+        placeholder: state.wizard.selectedCredentialName ? "Using selected Voidware key" : state.provider.has_provider ? "Leave blank to keep stored key" : "sk-…",
         disabled: Boolean(state.wizard.selectedCredentialName),
         oninput: (event) => {
           state.wizard.apiKey = event.target.value;
@@ -2843,8 +2853,8 @@
         },
       })),
       h("div", { class: "wizard-preview vw-card-compact" }, [
-        h("span", null, "Chat: " + preview.chat),
-        h("span", null, "Models: " + preview.models),
+        h("span", null, "Requests: " + preview.chat),
+        h("span", null, "Model list: " + preview.models),
       ]),
       h("details", {
         class: "wizard-advanced",
@@ -2855,7 +2865,7 @@
       }, [
         h("summary", null, "Advanced"),
         h("div", { class: "wizard-advanced-body" }, [
-          wizardField("MODELS_OVERRIDE_URL", h("input", {
+          wizardField("Models URL override", h("input", {
             id: "wizard-models-override",
             class: "vw-input",
             value: state.wizard.modelsOverrideUrl,
@@ -2867,7 +2877,7 @@
               render();
             },
           })),
-          wizardField("Endpoint mode", h("select", {
+          wizardField("URL handling", h("select", {
             id: "wizard-endpoint-mode",
             class: "vw-select",
             value: state.wizard.endpointMode,
@@ -2878,8 +2888,8 @@
               render();
             },
           }, [
-            h("option", { value: "append_v1", selected: state.wizard.endpointMode === "append_v1" }, "OpenAI /v1"),
-            h("option", { value: "root", selected: state.wizard.endpointMode === "root" }, "Provider root"),
+            h("option", { value: "append_v1", selected: state.wizard.endpointMode === "append_v1" }, "Add /v1 automatically"),
+            h("option", { value: "root", selected: state.wizard.endpointMode === "root" }, "Use exactly as entered"),
           ])),
           renderHeaderEditor(),
         ]),
@@ -2971,10 +2981,12 @@
   function renderWizardExaStep() {
     if (state.wizard.exaAlreadyConfigured) {
       return h("div", { class: "wizard-step-body" }, [
-        wizardStatusChip("success", "Exa already configured"),
+        wizardStatusChip("success", "Exa is ready"),
+        h("p", { class: "wizard-helper" }, "Web research is already ready for update runs."),
       ]);
     }
     return h("div", { class: "wizard-step-body" }, [
+      h("p", { class: "wizard-helper" }, "Exa lets update agents search the web for current model releases and benchmark sources. You can skip it and add the key later in Settings."),
       wizardField("Exa API key", h("input", {
         id: "wizard-exa-key",
         class: "vw-input",
@@ -2993,10 +3005,12 @@
   function renderWizardLLMStatsStep() {
     if (state.wizard.llmstatsAlreadyConfigured) {
       return h("div", { class: "wizard-step-body" }, [
-        wizardStatusChip("success", "LLM Stats already configured"),
+        wizardStatusChip("success", "LLM Stats is ready"),
+        h("p", { class: "wizard-helper" }, "Catalog enrichment is already ready for update runs."),
       ]);
     }
     return h("div", { class: "wizard-step-body" }, [
+      h("p", { class: "wizard-helper" }, "LLM Stats is optional. It adds model catalog context when available; skipping keeps benchmark updates working."),
       wizardField("LLM Stats API key", h("input", {
         id: "wizard-llmstats-key",
         class: "vw-input",
@@ -3014,6 +3028,7 @@
 
   function renderWizardScheduleStep() {
     return h("div", { class: "wizard-step-body" }, [
+      h("p", { class: "wizard-helper" }, "Choose whether LLM-Dash should ask your local system to run updates automatically. Off keeps updates manual."),
       h("div", { class: "wizard-segmented" }, ["off", "daily", "weekly", "monthly"].map((cadence) => h("button", {
         class: "view-btn",
         type: "button",
@@ -3053,6 +3068,13 @@
           state.wizard.scheduleDayOfMonth = Number(event.target.value || 1);
         },
       }), "Limited to 1-28 so every month works.") : null,
+      h("p", { class: "wizard-helper" }, schedulePreview(
+        state.wizard.scheduleCadence,
+        state.wizard.scheduleTimeLocal,
+        state.wizard.scheduleDayOfWeek,
+        state.wizard.scheduleDayOfMonth,
+        wizardScheduleUtcEcho()
+      )),
       state.wizard.scheduleError ? h("p", { class: "wizard-error" }, state.wizard.scheduleError) : null,
     ]);
   }
@@ -3062,14 +3084,15 @@
       ? "Off"
       : state.wizard.scheduleCadence + " at " + state.wizard.scheduleTimeLocal + " (" + wizardScheduleUtcEcho() + ")";
     return h("div", { class: "wizard-step-body" }, [
+      h("p", { class: "wizard-helper" }, "Finish saves this setup locally and opens the dashboard. Secrets stay where they are saved."),
       h("div", { class: "wizard-summary-grid" }, [
-        h("div", null, [h("span", null, "Provider"), h("strong", null, state.wizard.selectedCredential?.label || state.wizard.preset?.label || state.wizard.baseUrl || "Custom")]),
+        h("div", null, [h("span", null, "Connection"), h("strong", null, state.wizard.selectedCredential?.label || state.wizard.preset?.label || state.wizard.baseUrl || "Custom")]),
         h("div", null, [h("span", null, "Base URL"), h("strong", null, state.wizard.baseUrl || "-")]),
-        h("div", null, [h("span", null, "Credential"), h("strong", null, state.wizard.selectedCredentialName || (state.wizard.apiKey ? redactSecret(state.wizard.apiKey) : "stored key"))]),
+        h("div", null, [h("span", null, "Saved key"), h("strong", null, state.wizard.selectedCredentialName || (state.wizard.apiKey ? redactSecret(state.wizard.apiKey) : "stored key"))]),
         h("div", null, [h("span", null, "Default"), h("strong", null, state.wizard.defaultModel || "—")]),
         h("div", null, [h("span", null, "Backup"), h("strong", null, state.wizard.backupModel || "—")]),
-        h("div", null, [h("span", null, "Exa"), h("strong", null, state.wizard.exaAlreadyConfigured ? "Configured" : state.wizard.exaSkipped ? "Skipped" : state.wizard.exaKey ? redactSecret(state.wizard.exaKey) : "Skipped")]),
-        h("div", null, [h("span", null, "LLM Stats"), h("strong", null, state.wizard.llmstatsAlreadyConfigured ? "Configured" : state.wizard.llmstatsSkipped ? "Skipped" : state.wizard.llmstatsKey ? redactSecret(state.wizard.llmstatsKey) : "Skipped")]),
+        h("div", null, [h("span", null, "Exa"), h("strong", null, state.wizard.exaAlreadyConfigured ? "Ready" : state.wizard.exaSkipped ? "Skipped" : state.wizard.exaKey ? redactSecret(state.wizard.exaKey) : "Skipped")]),
+        h("div", null, [h("span", null, "LLM Stats"), h("strong", null, state.wizard.llmstatsAlreadyConfigured ? "Ready" : state.wizard.llmstatsSkipped ? "Skipped" : state.wizard.llmstatsKey ? redactSecret(state.wizard.llmstatsKey) : "Skipped")]),
         h("div", null, [h("span", null, "Schedule"), h("strong", null, scheduleText)]),
       ]),
     ]);
@@ -3118,6 +3141,8 @@
       ? state.wizard.saving ? "Finishing…" : "Finish"
       : state.wizard.step === 5
         ? state.wizard.scheduleState === "saving" ? "Saving…" : "Next"
+        : state.wizard.step === 3 || state.wizard.step === 4
+          ? "Save and Continue"
         : "Next";
     return h("div", { class: "wizard-footer" }, [
       h("button", {
@@ -3144,7 +3169,7 @@
   }
 
   function renderWizard() {
-    const title = state.wizard.mode === "reconfigure" ? "Configure Agent Provider" : "Set Up Agent Provider";
+    const title = WIZARD_TITLES[state.wizard.step] || "Setup";
     const subtitle = WIZARD_SUBTITLES[state.wizard.step] || "";
     const stepLabel = "Step " + (state.wizard.step + 1) + " of " + WIZARD_STEPS.length;
     return h("div", { class: "wizard-fullscreen", role: "main", "aria-labelledby": "wizard-title" }, [
@@ -3197,7 +3222,7 @@
       h("div", { class: "modal-head" }, [
         h("div", null, [
           h("h2", { id: "refresh-modal-title" }, "Run Today’s Update"),
-          h("p", null, "Use this prompt with any supported CLI. It stays neutral so Claude, Codex, or Gemini can run it."),
+          h("p", null, "Use this prompt with any supported local agent. It stays neutral so Claude, Codex, or Gemini can run it."),
         ]),
         h("button", {
           class: "modal-close",
@@ -3258,7 +3283,7 @@
 
   function renderRunUpdateOverlay() {
     const isBusy = isRunUpdateBusy();
-    const model = state.provider.default_model || "configured model";
+    const model = state.provider.default_model || "selected model";
     const elapsed = state.runUpdate.startedAt
       ? formatElapsed((state.runUpdate.completedAt || Date.now()) - state.runUpdate.startedAt)
       : "0s";
@@ -3285,7 +3310,7 @@
       h("div", { class: "modal-head" }, [
         h("div", null, [
           h("h2", { id: "ru-title" }, runUpdateTitle()),
-          h("p", { id: "ru-model" }, model + " via Agent Provider"),
+          h("p", { id: "ru-model" }, model + " via saved connection"),
         ]),
         !isBusy ? h("button", {
           class: "modal-close",
@@ -3412,7 +3437,7 @@
       h("th", null, "Model"),
       h("th", null, "Intelligence"),
       h("th", null, "Coding"),
-      h("th", null, "Agent Tasks"),
+          h("th", null, "Tool Use"),
       h("th", null, "Speed"),
       h("th", { class: "num" }, "Overall"),
       h("th", { class: "trend-col" }, "Trend"),
@@ -3424,7 +3449,7 @@
       const overall = getOverall(model);
       const value = getValue(model);
       const isSelected = state.selectedModelIds.includes(model.id);
-      const sub = [model.vendor, model.pricing || null, model.status !== "active" ? model.status : null].filter(Boolean).join(" · ");
+      const sub = [model.vendor, model.pricing || null].filter(Boolean).join(" · ");
       return h("tr", {
         id: "model-row-" + model.id,
         class: isSelected ? "selected" : null,
@@ -3456,7 +3481,10 @@
       ]);
     }));
 
-    return h("div", { class: "table-wrap" }, h("table", { class: "models" }, [head, body]));
+    return h("div", { class: "table-wrap" }, [
+      h("table", { class: "models" }, [head, body]),
+      h("div", { class: "table-scroll-cue", "aria-hidden": "true" }, "↔"),
+    ]);
   }
 
   function renderChart() {
@@ -3515,7 +3543,7 @@
       ["trend", "Trend"],
       ["intelligence", "Intelligence"],
       ["coding", "Coding"],
-      ["agents", "Agents"],
+      ["agents", "Tool Use"],
       ["speed", "Speed"],
       ["cost", "Cost"],
     ];
@@ -3581,7 +3609,7 @@
       h("footer", { class: "models-footnote" }, [
         renderTierLegend(),
         h("p", { class: "sources" }, [
-          "Overall = avg(Intelligence, Coding, Agents, Speed). Value = avg(Overall, Cost). ",
+          "Overall = avg(Intelligence, Coding, Tool Use, Speed). Value = avg(Overall, Cost). ",
           "Scores from Artificial Analysis, SWE-bench, Terminal-Bench, OSWorld, GPQA Diamond, and vendor reports; every claim cites a URL in the changelog.",
         ]),
       ]),
@@ -3871,10 +3899,9 @@
             render();
           },
         }, [
-          h("div", { class: "changelog-item-top" }, [
-            h("span", { class: "changelog-date" }, formatShortDate(entry.date)),
-            newModels.length ? h("span", { class: "summary-pill small" }, "+" + newModels.length + " models") : null,
-          ]),
+          newModels.length ? h("div", { class: "changelog-item-top" }, [
+            h("span", { class: "summary-pill small" }, "+" + newModels.length + " models"),
+          ]) : null,
           h("div", { class: "changelog-title" }, entry.title || formatDate(entry.date)),
           entry.summary ? h("p", { class: "changelog-summary" }, entry.summary) : null,
         ]);
@@ -3882,10 +3909,9 @@
       h("section", { class: "changelog-panel" }, [
         h("div", { class: "changelog-panel-head" }, [
           h("div", null, [
-            h("p", { class: "eyebrow" }, tab === "compare" ? "Compare" : (active ? active.date : "")),
+            h("p", { class: "eyebrow" }, tab === "compare" ? "Compare" : "Selected entry"),
             h("h2", null, tab === "compare" ? "Compare changelogs" : (active ? (active.title || formatDate(active.date)) : "Changelog")),
           ]),
-          tab === "read" && active && active.summary ? h("p", { class: "panel-summary" }, active.summary) : null,
           tabStrip,
         ]),
         body,
@@ -4217,7 +4243,7 @@
           h("p", null, "Cost, tokens, duration, and word counts across the filtered runs."),
         ]),
         h("div", { class: "stats-grid" }, [
-          statCard("Runs", formatNumber(totals.runs, 0), "Changelogs with run metadata"),
+          statCard("Runs", formatNumber(totals.runs, 0), "Updates with recorded activity"),
           statCard("Total cost", formatCurrency(totals.cost), "Excludes runs without cost data"),
           statCard("Total duration", formatDuration(totals.duration), "Wall-clock time across all runs"),
           statCard("Input tokens", formatCompactNumber(totals.input), FULL_NUMBER.format(totals.input || 0)),
@@ -4242,8 +4268,8 @@
       ]),
       h("section", { class: "stats-section" }, [
         h("div", { class: "section-head" }, [
-          h("h2", null, "Agent Provider Leaderboard"),
-          h("p", null, "Ranks each agent + runtime by efficiency and best wall-clock. Cost-per-word and words-per-dollar use only runs that report both cost and word count; fastest run requires at least three timed runs."),
+          h("h2", null, "Runtime Leaderboard"),
+          h("p", null, "Ranks update runners by efficiency and best wall-clock time. Cost and word rankings use only runs that report both values; fastest run requires at least three timed runs."),
         ]),
         renderAgentLeaderboard(rows),
       ]),
@@ -4274,13 +4300,13 @@
       h("section", { class: "stats-section" }, [
         h("div", { class: "section-head" }, [
           h("h2", null, "Per-Agent Breakdown"),
-          h("p", null, "Grouped by agent model and provider for side-by-side comparison."),
+          h("p", null, "Grouped by model and runner for side-by-side comparison."),
         ]),
         renderAgentBreakdown(rows),
       ]),
       h("section", { class: "stats-section" }, [
         h("div", { class: "section-head" }, [
-          h("h2", null, "Run Metrics"),
+          h("h2", null, "Update Runs"),
           h("p", null, "All recorded runs. Click a column header to sort, or a date to view that changelog."),
         ]),
         renderRunTable(rows),
@@ -4312,17 +4338,91 @@
 
   function settingsStatusChip(text, tone) {
     if (!text) return null;
-    const cls = "vw-status-chip" + (tone === "success" ? " vw-status-success" : tone === "error" ? " vw-status-error" : tone === "loading" ? " vw-status-generating" : "");
+    const cls = "vw-status-chip" + (tone === "success" ? " vw-status-success" : tone === "error" ? " vw-status-error" : tone === "warning" ? " vw-status-warning" : tone === "loading" ? " vw-status-generating" : "");
     return h("span", { class: cls }, text);
+  }
+
+  function settingsProviderDirty() {
+    const s = state.settings;
+    const base = (s.draftBaseUrl !== null ? s.draftBaseUrl : state.provider.base_url || "").trim();
+    const mode = s.draftEndpointMode !== null ? s.draftEndpointMode : state.provider.endpoint_mode || "append_v1";
+    const credential = s.draftProviderCredentialName !== null ? s.draftProviderCredentialName : state.provider.provider_credential_name || "";
+    return Boolean(
+      s.draftApiKey.trim() ||
+      base !== (state.provider.base_url || "") ||
+      mode !== (state.provider.endpoint_mode || "append_v1") ||
+      credential !== (state.provider.provider_credential_name || "")
+    );
+  }
+
+  function settingsModelsDirty() {
+    const s = state.settings;
+    const nextDefault = (s.draftDefaultModel !== null ? s.draftDefaultModel : state.provider.default_model || "").trim();
+    const nextBackup = (s.draftBackupModel !== null ? s.draftBackupModel : state.provider.backup_model || "").trim();
+    return nextDefault !== (state.provider.default_model || "") || nextBackup !== (state.provider.backup_model || "");
+  }
+
+  function settingsScheduleDirty() {
+    const s = state.settings;
+    const currentCadence = state.schedule.enabled && state.schedule.cadence !== "off" ? state.schedule.cadence : "off";
+    return s.scheduleCadence !== currentCadence ||
+      String(s.scheduleTimeLocal || "09:00") !== String(state.schedule.time_local || "09:00") ||
+      Number(s.scheduleDayOfWeek || 1) !== Number(state.schedule.day_of_week || 1) ||
+      Number(s.scheduleDayOfMonth || 1) !== Number(state.schedule.day_of_month || 1);
+  }
+
+  function resetProviderDrafts() {
+    Object.assign(state.settings, {
+      draftBaseUrl: null,
+      draftEndpointMode: null,
+      draftApiKey: "",
+      draftProviderCredentialName: null,
+      connectionResult: null,
+      providerStatus: "",
+    });
+    render();
+  }
+
+  function resetModelDrafts() {
+    Object.assign(state.settings, {
+      draftDefaultModel: null,
+      draftBackupModel: null,
+      defaultTestResult: null,
+      backupTestResult: null,
+      modelsError: "",
+    });
+    render();
+  }
+
+  function resetScheduleDrafts() {
+    state.settings._scheduleInitialized = false;
+    initSettingsScheduleState();
+    state.settings.scheduleStatus = "";
+    render();
+  }
+
+  function localTimezoneLabel() {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "local time";
+  }
+
+  function schedulePreview(cadence, timeLocal, dayOfWeek, dayOfMonth, utcEcho) {
+    if (cadence === "off") return "Automatic updates are off. Manual Refresh still works.";
+    const time = timeLocal || "09:00";
+    const day = cadence === "weekly"
+      ? " on " + WEEKDAYS[(Number(dayOfWeek || 1) - 1 + 7) % 7]
+      : cadence === "monthly"
+        ? " on day " + Number(dayOfMonth || 1)
+        : "";
+    return cadence[0].toUpperCase() + cadence.slice(1) + day + " at " + time + " " + localTimezoneLabel() + " (" + (utcEcho || settingsScheduleUtcEcho()) + ")";
   }
 
   function authSourceLabel(source) {
     const labels = {
-      env: "Environment",
-      "voidware-provider": "Voidware provider",
-      "voidware-broker": "Voidware broker",
+      env: "From environment",
+      "voidware-provider": "Saved in Voidware",
+      "voidware-broker": "Access ready",
       "keyring-legacy": "Legacy keyring",
-      missing: "Not configured",
+      missing: "Not set",
     };
     return labels[source] || "Unavailable";
   }
@@ -4332,12 +4432,12 @@
       approval_required: "Approval needed",
       grant_denied: "Grant denied",
       grant_invalidated: "Grant expired",
-      cli_unavailable: "CLI unavailable",
-      broker_timeout: "Broker timed out",
-      broker_unavailable: "Broker unavailable",
+      cli_unavailable: "Voidware unavailable",
+      broker_timeout: "Voidware timed out",
+      broker_unavailable: "Voidware unavailable",
       renewal_needed: "Renewal needed",
     };
-    return labels[code] || "Broker unavailable";
+    return labels[code] || "Voidware unavailable";
   }
 
   function formatGrantDate(value) {
@@ -4353,7 +4453,7 @@
     const expires = formatGrantDate(grant.expiresAt);
     const tone = grant.renewalRecommended ? "error" : "success";
     return h("div", { class: "settings-auth-renewal vw-display-row" }, [
-      h("span", { class: "vw-display-row-label" }, "Provider grant"),
+      h("span", { class: "vw-display-row-label" }, "Access window"),
       h("span", { class: "vw-display-row-value" }, [
         settingsStatusChip(grant.renewalRecommended ? "Renew access" : "Access ready", tone),
         h("span", null, (renewAfter ? "Renew after " + renewAfter + " · " : "") + "Expires " + expires),
@@ -4381,19 +4481,19 @@
     if (!broker) return null;
     const available = Boolean(broker.available);
     const summary = available
-      ? "Broker ready" + (broker.persistence ? " · " + broker.persistence : "")
-      : broker.cli_available ? "Broker unavailable" : "CLI unavailable";
+      ? "Access ready" + (broker.persistence ? " · " + broker.persistence : "")
+      : broker.cli_available ? "Access unavailable" : "Voidware unavailable";
     const nextAction = available
-      ? "Secrets are managed through the local grant broker."
-      : brokerStatusCopy(broker.error_code) + ". Open the Voidware approval surface, then retry the save.";
+      ? "Secrets stay in Voidware. LLM-Dash receives temporary local access only when needed."
+      : brokerStatusCopy(broker.error_code) + ". Reconnect in Voidware, then retry the save.";
     return h("div", { class: "settings-auth-broker vw-card vw-card-compact" }, [
       h("div", { class: "settings-auth-broker-head" }, [
-        h("strong", null, "Voidware Auth"),
+        h("strong", null, "Voidware Access"),
         settingsStatusChip(summary, available ? "success" : "error"),
       ]),
       h("p", null, nextAction),
       h("div", { class: "vw-summary-chip-row" }, [
-        h("span", { class: "vw-summary-chip" }, "Max grant TTL " + (broker.grant_ttl || "120d")),
+        available ? h("span", { class: "vw-summary-chip" }, "Access up to " + (broker.grant_ttl || "120d")) : null,
         !available && broker.error_code ? h("span", { class: "vw-summary-chip" }, brokerStatusCopy(broker.error_code)) : null,
       ]),
     ]);
@@ -4493,7 +4593,7 @@
       s.draftProviderCredentialName = null;
       s.draftDefaultModel = null;
       s.draftBackupModel = null;
-      s.providerStatus = "Provider saved";
+      s.providerStatus = "Connection saved";
       s.providerStatusTone = "success";
       s.modelsList = [];
       settingsLoadModels();
@@ -4699,7 +4799,7 @@
     try {
       await fetchJson("/api/provider/key", { method: "DELETE" });
       await fetchProvider();
-      s.providerStatus = "API key removed";
+      s.providerStatus = "Key removed";
       s.providerStatusTone = "success";
       s.providerKeyConfirmRemove = false;
     } catch (error) {
@@ -4763,6 +4863,7 @@
 
   function renderSettingsProviderSection() {
     const s = state.settings;
+    const dirty = settingsProviderDirty();
     const presets = state.providerPresets.providers || [];
     const credentials = state.providerCredentials.credentials || [];
     const currentPresetId = presets.find((p) => p.base_url === state.provider.base_url)?.id || "";
@@ -4773,23 +4874,23 @@
     const connResult = s.connectionResult;
     return renderSettingsGroup({
       id: "settings-provider",
-      title: "Agent Provider",
-      summary: state.provider.has_provider ? state.provider.default_model + " via " + state.provider.base_url : "Not configured",
+      title: "Connection",
+      summary: state.provider.has_provider ? state.provider.default_model + " via " + state.provider.base_url : "Needs setup",
       children: [
         h("form", { class: "settings-form", onsubmit: (e) => { e.preventDefault(); settingsSaveProvider(e.target); } }, [
           credentials.length || state.providerCredentials.loading || state.providerCredentials.error
-            ? settingsField("Voidware credential", h("select", {
+            ? settingsField("Saved Voidware key", h("select", {
                 class: "vw-select",
-                value: selectedCredentialName,
-                disabled: state.providerCredentials.loading,
-                onchange: (e) => applyCredentialToSettings(e.target.value),
+            value: selectedCredentialName,
+            disabled: state.providerCredentials.loading,
+            onchange: (e) => applyCredentialToSettings(e.target.value),
               }, [
-                h("option", { value: "" }, state.providerCredentials.loading ? "Loading credentials…" : "Manual or app-owned key"),
+                h("option", { value: "" }, state.providerCredentials.loading ? "Loading saved keys…" : "Use a new key"),
                 ...credentials.map((candidate) => h("option", {
                   value: candidate.name,
                   selected: selectedCredentialName === candidate.name,
                 }, (candidate.label || candidate.name) + " · " + (candidate.base_url || "No URL"))),
-              ]), state.providerCredentials.error || "Pick an existing Voidware provider without exposing its secret.") : null,
+              ]), state.providerCredentials.error || "Use an existing Voidware key without exposing its secret.") : null,
           selectedCredential ? h("div", { class: "settings-provider-credential vw-card vw-card-compact" }, [
             h("div", { class: "vw-summary-chip-row" }, [
               h("span", { class: "vw-summary-chip" }, selectedCredential.source || "Voidware"),
@@ -4797,7 +4898,7 @@
               selectedCredential.reusability ? h("span", { class: "vw-summary-chip" }, selectedCredential.reusability) : null,
             ]),
             h("div", { class: "vw-display-row" }, [
-              h("span", { class: "vw-display-row-label" }, "Credential"),
+            h("span", { class: "vw-display-row-label" }, "Saved key"),
               h("span", { class: "vw-display-row-value" }, selectedCredential.name || selectedCredentialName),
             ]),
             h("div", { class: "vw-display-row" }, [
@@ -4806,7 +4907,7 @@
             ]),
             renderGrantRenewal(state.provider.provider_credential_grant),
           ]) : null,
-          presets.length ? settingsField("Preset", h("select", {
+          presets.length ? settingsField("Service", h("select", {
             class: "vw-select",
             value: currentPresetId,
             onchange: (e) => {
@@ -4828,30 +4929,34 @@
             value: s.draftBaseUrl !== null ? s.draftBaseUrl : state.provider.base_url || "",
             required: true,
             placeholder: "https://api.openai.com",
-            oninput: (e) => { s.draftBaseUrl = e.target.value; },
+            oninput: (e) => { s.draftBaseUrl = e.target.value; render(); },
           })),
-          settingsField("Endpoint mode", h("select", {
+          settingsField("URL handling", h("select", {
             id: "settings-endpoint-mode",
             class: "vw-select",
             value: s.draftEndpointMode !== null ? s.draftEndpointMode : state.provider.endpoint_mode || "append_v1",
-            onchange: (e) => { s.draftEndpointMode = e.target.value; },
+            onchange: (e) => { s.draftEndpointMode = e.target.value; render(); },
           }, [
-            h("option", { value: "append_v1", selected: (s.draftEndpointMode !== null ? s.draftEndpointMode : state.provider.endpoint_mode) !== "root" }, "Append /v1"),
-            h("option", { value: "root", selected: (s.draftEndpointMode !== null ? s.draftEndpointMode : state.provider.endpoint_mode) === "root" }, "Root (use URL as-is)"),
+            h("option", { value: "append_v1", selected: (s.draftEndpointMode !== null ? s.draftEndpointMode : state.provider.endpoint_mode) !== "root" }, "Add /v1 automatically"),
+            h("option", { value: "root", selected: (s.draftEndpointMode !== null ? s.draftEndpointMode : state.provider.endpoint_mode) === "root" }, "Use exactly as entered"),
           ])),
           settingsField("API key", passwordFieldWithToggle(
             "settings-api-key", s.draftApiKey, (e) => {
               s.draftApiKey = e.target.value;
               if (s.draftApiKey) s.draftProviderCredentialName = "";
+              render();
             }, s.showApiKey,
             () => { s.showApiKey = !s.showApiKey; render(); },
-            selectedCredentialName ? "Using selected Voidware credential" : state.provider.has_provider ? "••••••••  (leave empty to keep current)" : "Enter API key",
-            "provider API key"
+            selectedCredentialName ? "Using selected Voidware key" : state.provider.has_provider ? "••••••••  (leave empty to keep current)" : "Enter API key",
+            "model service API key"
           )),
-          renderBrokerStatus(),
-          renderCredentialStatus("Provider key", state.provider.auth && state.provider.auth.provider),
+          renderCredentialStatus("Model service key", state.provider.auth && state.provider.auth.provider),
+          h("div", { class: "settings-state-row" }, [
+            settingsStatusChip(dirty ? "Unsaved changes" : state.provider.has_provider ? "Applied" : "Setup needed", dirty ? "warning" : state.provider.has_provider ? "success" : "warning"),
+            dirty ? h("button", { class: "vw-btn vw-btn-tertiary", type: "button", onclick: resetProviderDrafts }, "Revert") : null,
+          ]),
           h("div", { class: "settings-actions" }, [
-            h("button", { class: "vw-btn vw-btn-primary", type: "submit", disabled: s.providerSaving }, s.providerSaving ? "Saving…" : "Save Provider"),
+            h("button", { class: "vw-btn vw-btn-primary", type: "submit", disabled: s.providerSaving }, s.providerSaving ? "Saving…" : "Save Connection"),
             h("button", { class: "vw-btn vw-btn-secondary", type: "button", disabled: s.testingConnection || !state.provider.has_provider, onclick: settingsTestConnection }, s.testingConnection ? "Testing…" : "Test Connection"),
             state.provider.has_provider ? h("button", {
               class: "vw-btn vw-btn-danger", type: "button",
@@ -4859,12 +4964,12 @@
               onclick: () => {
                 if (s.providerKeyConfirmRemove) { settingsRemoveProviderKey(); } else { s.providerKeyConfirmRemove = true; render(); }
               },
-            }, s.providerKeyConfirmRemove ? "Confirm Remove Key" : "Remove API Key") : null,
+            }, s.providerKeyConfirmRemove ? "Confirm Remove Key" : "Remove Key") : null,
             s.providerKeyConfirmRemove ? h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: () => { s.providerKeyConfirmRemove = false; render(); } }, "Cancel") : null,
           ]),
           settingsStatusChip(s.providerStatus, s.providerStatusTone),
           connResult ? h("div", { class: "settings-test-result" }, [
-            settingsStatusChip(connResult.ok ? "Connection OK — " + (connResult.models_count || 0) + " models" : "Failed: " + (connResult.error || "unknown error"), connResult.ok ? "success" : "error"),
+            settingsStatusChip(connResult.ok ? "Connection works — " + (connResult.models_count || 0) + " models" : "Could not connect: " + (connResult.error || "unknown error"), connResult.ok ? "success" : "error"),
           ]) : null,
         ]),
       ],
@@ -4874,6 +4979,7 @@
   function renderSettingsModelsSection() {
     const s = state.settings;
     const hasModels = s.modelsList.length > 0;
+    const dirty = settingsModelsDirty();
     const defaultResult = s.defaultTestResult;
     const backupResult = s.backupTestResult;
     return renderSettingsGroup({
@@ -4883,16 +4989,16 @@
       children: [
         h("div", { class: "settings-form" }, [
           settingsField("Default model", hasModels
-            ? h("select", { id: "settings-default-model", class: "vw-select", onchange: (e) => { s.draftDefaultModel = e.target.value; } }, s.modelsList.map((m) => {
+            ? h("select", { id: "settings-default-model", class: "vw-select", onchange: (e) => { s.draftDefaultModel = e.target.value; render(); } }, s.modelsList.map((m) => {
                 const mid = typeof m === "string" ? m : m.id;
                 const sel = s.draftDefaultModel !== null ? s.draftDefaultModel : state.provider.default_model;
                 return h("option", { value: mid, selected: mid === sel }, mid);
               }))
-            : h("input", { id: "settings-default-model", class: "vw-input", type: "text", value: s.draftDefaultModel !== null ? s.draftDefaultModel : state.provider.default_model || "", placeholder: "e.g. gpt-4o", oninput: (e) => { s.draftDefaultModel = e.target.value; } }),
-            hasModels ? null : "Enter the model ID exactly as your provider expects it."
+            : h("input", { id: "settings-default-model", class: "vw-input", type: "text", value: s.draftDefaultModel !== null ? s.draftDefaultModel : state.provider.default_model || "", placeholder: "e.g. gpt-4o", oninput: (e) => { s.draftDefaultModel = e.target.value; render(); } }),
+            hasModels ? null : "Enter the model ID exactly as the service names it."
           ),
           settingsField("Backup model", hasModels
-            ? h("select", { id: "settings-backup-model", class: "vw-select", onchange: (e) => { s.draftBackupModel = e.target.value; } }, [
+            ? h("select", { id: "settings-backup-model", class: "vw-select", onchange: (e) => { s.draftBackupModel = e.target.value; render(); } }, [
                 h("option", { value: "" }, "— none —"),
                 ...s.modelsList.map((m) => {
                   const mid = typeof m === "string" ? m : m.id;
@@ -4900,13 +5006,18 @@
                   return h("option", { value: mid, selected: mid === sel }, mid);
                 }),
               ])
-            : h("input", { id: "settings-backup-model", class: "vw-input", type: "text", value: s.draftBackupModel !== null ? s.draftBackupModel : state.provider.backup_model || "", placeholder: "Optional backup model", oninput: (e) => { s.draftBackupModel = e.target.value; } }),
+            : h("input", { id: "settings-backup-model", class: "vw-input", type: "text", value: s.draftBackupModel !== null ? s.draftBackupModel : state.provider.backup_model || "", placeholder: "Optional backup model", oninput: (e) => { s.draftBackupModel = e.target.value; render(); } }),
             hasModels ? null : "Optional fallback model for daily runs."
           ),
           h("div", { class: "settings-actions" }, [
-            h("button", { class: "vw-btn vw-btn-secondary", type: "button", disabled: s.modelsLoading || !state.provider.has_provider, onclick: settingsLoadModels }, s.modelsLoading ? "Loading…" : "Refresh Models"),
-            h("button", { class: "vw-btn vw-btn-secondary", type: "button", disabled: s.testingDefault || !state.provider.has_provider, onclick: () => settingsTestModel("default") }, s.testingDefault ? "Testing…" : "Test Default"),
+            h("button", { class: "vw-btn vw-btn-primary", type: "button", disabled: s.providerSaving || !state.provider.has_provider || !dirty, onclick: settingsSaveProvider }, s.providerSaving ? "Saving…" : "Save Models"),
+            h("button", { class: "vw-btn vw-btn-secondary", type: "button", disabled: s.modelsLoading || !state.provider.has_provider, onclick: settingsLoadModels }, s.modelsLoading ? "Loading…" : "Reload List"),
+            h("button", { class: "vw-btn vw-btn-secondary", type: "button", disabled: s.testingDefault || !state.provider.has_provider, onclick: () => settingsTestModel("default") }, s.testingDefault ? "Testing…" : "Test Primary"),
             state.provider.backup_model ? h("button", { class: "vw-btn vw-btn-secondary", type: "button", disabled: s.testingBackup, onclick: () => settingsTestModel("backup") }, s.testingBackup ? "Testing…" : "Test Backup") : null,
+            dirty ? h("button", { class: "vw-btn vw-btn-tertiary", type: "button", onclick: resetModelDrafts }, "Revert") : null,
+          ]),
+          h("div", { class: "settings-state-row" }, [
+            settingsStatusChip(dirty ? "Unsaved model choices" : state.provider.has_provider ? "Applied" : "Connection needed", dirty ? "warning" : state.provider.has_provider ? "success" : "warning"),
           ]),
           s.modelsError ? settingsStatusChip(s.modelsError, "error") : null,
           defaultResult ? settingsStatusChip(defaultResult.ok ? "✓ " + (defaultResult.model || "default") + " — " + (defaultResult.output || "ok").slice(0, 80) : "✗ Default: " + (defaultResult.error || "failed"), defaultResult.ok ? "success" : "error") : null,
@@ -4921,11 +5032,10 @@
     return renderSettingsGroup({
       id: "settings-exa",
       title: "Exa",
-      summary: state.provider.exa_configured ? "Configured" : "Not set",
+      summary: state.provider.exa_configured ? "Ready" : "Not set",
       children: [
         h("div", { class: "settings-form" }, [
-          h("p", { class: "settings-field-status" }, state.provider.exa_configured ? "Exa API key is configured." : "No Exa API key set. Web research will be unavailable."),
-          renderBrokerStatus(),
+          h("p", { class: "settings-field-status" }, state.provider.exa_configured ? "Exa is ready for web research." : "Add Exa to let update runs search the web."),
           renderCredentialStatus("Exa key", state.provider.auth && state.provider.auth.exa),
           settingsField("API key", passwordFieldWithToggle(
             "settings-exa-key", s.draftExaKey, (e) => { s.draftExaKey = e.target.value; }, s.showExaKey,
@@ -4934,7 +5044,7 @@
             "Exa API key"
           )),
           h("div", { class: "settings-actions" }, [
-            h("button", { class: "vw-btn vw-btn-primary", type: "button", disabled: s.exaSaving, onclick: settingsSaveExa }, s.exaSaving ? "Saving…" : "Save Exa Key"),
+            h("button", { class: "vw-btn vw-btn-primary", type: "button", disabled: s.exaSaving, onclick: settingsSaveExa }, s.exaSaving ? "Saving…" : "Save Exa"),
             state.provider.exa_configured ? h("button", {
               class: "vw-btn vw-btn-danger", type: "button",
               disabled: s.exaRemoving,
@@ -4955,20 +5065,19 @@
     return renderSettingsGroup({
       id: "settings-llmstats",
       title: "LLM Stats",
-      summary: state.provider.llmstats_configured ? "Configured" : "Not set",
+      summary: state.provider.llmstats_configured ? "Ready" : "Not set",
       children: [
         h("div", { class: "settings-form" }, [
-          h("p", { class: "settings-field-status" }, state.provider.llmstats_configured ? "LLM Stats API key is configured." : "No LLM Stats API key set. Update enrichment will be unavailable."),
-          renderBrokerStatus(),
+          h("p", { class: "settings-field-status" }, state.provider.llmstats_configured ? "LLM Stats is ready." : "Add LLM Stats for optional model catalog context."),
           renderCredentialStatus("LLM Stats key", state.provider.auth && state.provider.auth.llmstats),
           settingsField("API key", passwordFieldWithToggle(
             "settings-llmstats-key", s.draftLLMStatsKey, (e) => { s.draftLLMStatsKey = e.target.value; }, s.showLLMStatsKey,
             () => { s.showLLMStatsKey = !s.showLLMStatsKey; render(); },
-            state.provider.llmstats_configured ? "••••••••  (leave empty to keep current)" : "ze_…",
+            state.provider.llmstats_configured ? "••••••••  (leave empty to keep current)" : "optional key",
             "LLM Stats API key"
           )),
           h("div", { class: "settings-actions" }, [
-            h("button", { class: "vw-btn vw-btn-primary", type: "button", disabled: s.llmstatsSaving, onclick: settingsSaveLLMStats }, s.llmstatsSaving ? "Saving…" : "Save LLM Stats Key"),
+            h("button", { class: "vw-btn vw-btn-primary", type: "button", disabled: s.llmstatsSaving, onclick: settingsSaveLLMStats }, s.llmstatsSaving ? "Saving…" : "Save LLM Stats"),
             state.provider.llmstats_configured ? h("button", {
               class: "vw-btn vw-btn-secondary", type: "button",
               disabled: s.llmstatsTesting,
@@ -4984,7 +5093,7 @@
             s.llmstatsConfirmRemove ? h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: () => { s.llmstatsConfirmRemove = false; render(); } }, "Cancel") : null,
           ]),
           settingsStatusChip(s.llmstatsStatus, s.llmstatsStatusTone),
-          h("p", { class: "vw-hint" }, "Optional. Enriches update runs with model catalog and benchmark data from LLM Stats."),
+          h("p", { class: "vw-hint" }, "Optional. Adds model catalog and benchmark context when available."),
         ]),
       ],
     });
@@ -4993,6 +5102,7 @@
   function renderSettingsScheduleSection() {
     const s = state.settings;
     initSettingsScheduleState();
+    const dirty = settingsScheduleDirty();
     const scheduleLabel = !state.schedule.enabled || state.schedule.cadence === "off"
       ? "Off"
       : state.schedule.cadence + " · " + (state.schedule.time_local || "09:00") + " (" + (state.schedule.utc_echo || "UTC") + ")";
@@ -5025,6 +5135,11 @@
             value: String(s.scheduleDayOfMonth),
             oninput: (e) => { s.scheduleDayOfMonth = Number(e.target.value || 1); },
           }), "Limited to 1–28 so every month works.") : null,
+          h("p", { class: "settings-field-status" }, schedulePreview(s.scheduleCadence, s.scheduleTimeLocal, s.scheduleDayOfWeek, s.scheduleDayOfMonth, settingsScheduleUtcEcho())),
+          h("div", { class: "settings-state-row" }, [
+            settingsStatusChip(dirty ? "Unsaved schedule" : "Applied", dirty ? "warning" : "success"),
+            dirty ? h("button", { class: "vw-btn vw-btn-tertiary", type: "button", onclick: resetScheduleDrafts }, "Revert") : null,
+          ]),
           h("div", { class: "settings-actions" }, [
             h("button", { class: "vw-btn vw-btn-primary", type: "button", disabled: s.scheduleSaving, onclick: settingsSaveSchedule }, s.scheduleSaving ? "Saving…" : "Save Schedule"),
             state.schedule.enabled && state.schedule.cadence !== "off" ? h("button", { class: "vw-btn vw-btn-danger", type: "button", disabled: s.scheduleRemoving, onclick: settingsRemoveSchedule }, s.scheduleRemoving ? "Removing…" : "Remove Schedule") : null,
@@ -5040,8 +5155,8 @@
     const promptText = state.dataPromptLoading ? "Loading prompt…" : state.dataPrompt;
     return renderCollapsiblePanel({
       id: "settings-manual",
-      title: "Manual Update (CLI)",
-      summary: "Copy a prompt for manual dashboard refresh",
+      title: "Manual Refresh",
+      summary: "Copy a prompt for a local update run",
       collapsed: state.ui.settingsCollapsed.manual,
       onToggle: () => toggleSettingsSection("manual"),
       children: [
@@ -5082,15 +5197,15 @@
     if (state.provider.has_provider && !state.settings.modelsList.length && !state.settings.modelsLoading && !state.settings.modelsError) settingsLoadModels();
     const noBanner = !state.provider.has_provider
       ? h("div", { class: "settings-no-provider-banner vw-card" }, [
-          h("p", null, "Agent Provider not configured"),
-          h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: () => openWizard(0) }, "Run Setup Wizard"),
+          h("p", null, "Connection needs setup"),
+          h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: () => openWizard(0) }, "Open Setup"),
         ])
       : null;
     const subview = state.subview.settings || "provider";
     const pages = {
       provider: [noBanner, renderSettingsProviderSection(), renderSettingsManualSection()],
       models: [renderSettingsModelsSection()],
-      research: [renderSettingsExaSection(), renderSettingsLLMStatsSection()],
+      research: [renderBrokerStatus(), renderSettingsExaSection(), renderSettingsLLMStatsSection()],
       schedule: [renderSettingsScheduleSection()],
     };
     return h("div", { class: "settings-view" }, pages[subview] || pages.provider);
@@ -5214,7 +5329,7 @@
   const DETAIL_CHART_FIELDS = [
     { key: "intelligence", label: "Intelligence", color: "var(--vw-iridescent-1)" },
     { key: "coding", label: "Coding", color: "var(--vw-iridescent-2)" },
-    { key: "agents", label: "Agents", color: "var(--vw-iridescent-3)" },
+    { key: "agents", label: "Tool Use", color: "var(--vw-iridescent-3)" },
     { key: "speed", label: "Speed", color: "var(--vw-iridescent-4)" },
     { key: "cost", label: "Cost", color: "var(--vw-iridescent-5)" },
   ];
@@ -5496,7 +5611,7 @@
     const rows = [
       ["Intelligence", model.intelligence],
       ["Coding", model.coding],
-      ["Agents", model.agents],
+      ["Tool Use", model.agents],
       ["Speed", model.speed],
       ["Cost", model.cost],
     ];
@@ -5516,7 +5631,7 @@
   function buildHistoryTable(history) {
     if (!history || !history.length) return "_No history rows yet._";
     const lines = [
-      "| Date | Intelligence | Coding | Agents | Speed | Cost | Overall |",
+      "| Date | Intelligence | Coding | Tool Use | Speed | Cost | Overall |",
       "|---|---|---|---|---|---|---|",
     ];
     for (const row of history) {
@@ -5624,7 +5739,7 @@
       "Status",
       "Intelligence",
       "Coding",
-      "Agents",
+      "Tool Use",
       "Speed",
       "Overall",
       "Cost",
@@ -5679,15 +5794,18 @@
     if (!slot) return;
     syncRouteFromView();
     const config = AREA_CONFIG[state.area] || AREA_CONFIG.models;
+    const activeSubpage = config.subpages.find((item) => item.key === state.subview[state.area]);
+    const heading = state.area === "settings" && activeSubpage ? activeSubpage.label : config.label;
+    const kicker = state.area === "models" ? "Explore / Compare" : config.label;
     slot.replaceChildren(
       h("div", { class: "app-page-title" }, [
-        h("p", { class: "shell-kicker" }, state.area === "models" ? "Explore / Compare" : config.label),
-        h("h2", null, config.label),
+        h("p", { class: "shell-kicker" }, kicker),
+        h("h2", null, heading),
         h("p", null, config.deck),
       ])
     );
     const mobileTitle = document.querySelector(".shell-mobile-title");
-    if (mobileTitle) mobileTitle.textContent = config.label;
+    if (mobileTitle) mobileTitle.textContent = heading;
   }
 
   function renderSubpageNav() {

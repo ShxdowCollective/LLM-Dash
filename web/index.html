@@ -20,7 +20,13 @@
   <main id="app" class="llm-app vw-page-shell" data-booting="true">
     <header id="mobile-header" class="mobile-shell-header" aria-label="Mobile navigation">
       <button id="sidebar-toggle" class="vw-btn vw-btn-icon" type="button" aria-controls="sidebar" aria-expanded="false">
-        <span aria-hidden="true">Menu</span>
+        <span class="mobile-menu-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M4 7h16" />
+            <path d="M4 12h16" />
+            <path d="M4 17h16" />
+          </svg>
+        </span>
         <span class="sr-only">Open navigation</span>
       </button>
       <div>
@@ -34,7 +40,7 @@
     <aside id="sidebar" class="vw-sidebar app-sidebar" aria-label="Primary navigation">
       <div class="sidebar-brand">
         <p class="shell-kicker">LLM-Dash</p>
-        <h1>Model Ops</h1>
+        <h1>Model Benchmarks</h1>
         <p>Benchmarks, run history, and local update controls.</p>
       </div>
 
@@ -42,19 +48,45 @@
         <p class="vw-sidebar-heading">Workspace</p>
         <nav class="vw-sidebar-nav" aria-label="Dashboard areas">
           <button class="vw-sidebar-link view-btn" type="button" data-area="models" data-view="table" aria-pressed="true" aria-current="page">
-            <span class="vw-sidebar-icon" aria-hidden="true">M</span>
+            <span class="vw-sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 3v18h18" />
+                <path d="M7 14l4-4 3 3 5-6" />
+              </svg>
+            </span>
             <span class="vw-sidebar-label">Models</span>
           </button>
           <button class="vw-sidebar-link view-btn" type="button" data-area="changelog" data-view="changelog" aria-pressed="false">
-            <span class="vw-sidebar-icon" aria-hidden="true">L</span>
+            <span class="vw-sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M8 6h13" />
+                <path d="M8 12h13" />
+                <path d="M8 18h13" />
+                <path d="M3 6h.01" />
+                <path d="M3 12h.01" />
+                <path d="M3 18h.01" />
+              </svg>
+            </span>
             <span class="vw-sidebar-label">Changelog</span>
           </button>
           <button class="vw-sidebar-link view-btn" type="button" data-area="stats" data-view="stats" aria-pressed="false">
-            <span class="vw-sidebar-icon" aria-hidden="true">S</span>
+            <span class="vw-sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 3v18h18" />
+                <rect x="7" y="10" width="3" height="7" rx="1" />
+                <rect x="12" y="6" width="3" height="11" rx="1" />
+                <rect x="17" y="13" width="3" height="4" rx="1" />
+              </svg>
+            </span>
             <span class="vw-sidebar-label">Stats</span>
           </button>
           <button class="vw-sidebar-link view-btn" type="button" data-area="settings" data-view="data" aria-pressed="false">
-            <span class="vw-sidebar-icon" aria-hidden="true">C</span>
+            <span class="vw-sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 01-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 01-4 0v-.2a1.7 1.7 0 00-1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 01-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 010-4h.2a1.7 1.7 0 001.5-1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 012.8-2.8l.1.1a1.7 1.7 0 001.8.3h.1a1.7 1.7 0 001-1.5V3a2 2 0 014 0v.2a1.7 1.7 0 001 1.5h.1a1.7 1.7 0 001.8-.3l.1-.1a2 2 0 012.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8v.1a1.7 1.7 0 001.5 1h.2a2 2 0 010 4h-.2a1.7 1.7 0 00-1.5 1z" />
+              </svg>
+            </span>
             <span class="vw-sidebar-label">Settings</span>
           </button>
         </nav>
