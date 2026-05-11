@@ -4,6 +4,69 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 075 — 2026-05-11
+
+**Agent:** GPT-5 Codex (silverthread, docs/spec-planning)
+**Cycle:** Phase 9.5 lesson backport to Voidware
+**Task:** Review Phase 9.5 docs and add the follow-up milestone in Voidware.
+
+---
+
+Reviewed the active Phase 9.5 TODO item, the latest screenshot-audit logbook
+entry, `docs/plans/e2e-analysis/master-issue-list.md`, and
+`docs/plans/2026-05-10-polished-saas-ui-ux-plan.md`, then mapped the lessons
+against the current `/home/phxntom/Repos/voidware` docs/spec shape.
+
+Added Voidware `TODO.md` Milestone 6, covering the spec follow-up needed so new
+Voidware projects start with surface inventory, short-height screenshot gates,
+bounded dense data panels, stronger dashboard/chart guidance, typography role
+rules, compact workflow controls, settings dirty-state composition, wizard
+clarity, and real responsive navigation patterns.
+
+Subagents:
+- LLM-Dash explorer extracted the Phase 9.5 source lessons.
+- Voidware explorer mapped where the milestone belongs and which spec docs need
+  the future changes.
+
+Verification:
+- `python3 /home/phxntom/.codex/skills/voidware-spec/scripts/check_voidware_spec.py /home/phxntom/Repos/voidware`
+- Docs-only roadmap/logbook change; no runtime tests needed.
+
+---
+
+## Entry 074 — 2026-05-10
+
+**Agent:** GPT-5 Codex (auroracline, ux-audit)
+**Cycle:** E2E screenshot UX audit and polish planning
+**Task:** Analyze screenshots and plan polished SaaS UI/UX pass
+
+---
+
+Completed the requested screenshot audit for all 25 PNGs in
+`e2e/screenshots/`. Created `docs/plans/e2e-analysis/` with one report per
+screenshot plus `master-issue-list.md`, and wrote the nano-agent loop plan at
+`docs/plans/2026-05-10-e2e-ux-screenshot-nanoagent-plan.md`.
+
+Review flow:
+- main-agent visual pass
+- visual nano-agent pass per screenshot
+- pro nano-agent code pass per screenshot
+- native reviewer pass per screenshot, batched due thread limits
+- master synthesis with degraded pro nano-agent retry documented
+
+Wrote `docs/plans/2026-05-10-polished-saas-ui-ux-plan.md` and reviewed it with
+native and pro nano-agent reviewers. Folded in corrections around compact
+controls, bounded scroll, settings dirty-state scope, wizard credential dedupe,
+exact screenshot gates, and before/after comparison.
+
+Updated `TODO.md` with Phase 9.5 as the active implementation follow-through.
+
+Verification:
+- `git diff --check`
+- `find docs/plans/e2e-analysis -maxdepth 1 -type f -name '*.md' | wc -l`
+
+---
+
 ## Entry 073 — 2026-05-10
 
 **Agent:** GPT-5 Codex (violetwire, browser-e2e)

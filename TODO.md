@@ -16,7 +16,15 @@ metadata-only persistence, broker-mediated secret reads, 120-day grant tracking,
 encrypted Voidware v3 auth compatibility, focused backend tests for those
 contracts, and the setup wizard/dashboard/settings e2e screenshot pass.
 
-No active development items.
+### Phase 9.5 — SaaS UI/UX Polish
+
+Plan: [docs/plans/2026-05-10-polished-saas-ui-ux-plan.md](docs/plans/2026-05-10-polished-saas-ui-ux-plan.md)
+
+Audit: [docs/plans/e2e-analysis/master-issue-list.md](docs/plans/e2e-analysis/master-issue-list.md)
+
+[ ] Implement the polished SaaS UI/UX pass: typography cleanup, dense controls,
+bounded panels, settings composition, wizard clarity, and screenshot
+verification.
 
 ## Completed History
 
