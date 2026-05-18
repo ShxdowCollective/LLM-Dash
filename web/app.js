@@ -636,6 +636,7 @@
     "chevron-down": '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>',
     "refresh-cw": '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>',
     "filter-x": '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/><line x1="18" y1="8" x2="22" y2="12"/><line x1="22" y1="8" x2="18" y2="12"/></svg>',
+    "download": '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
     "x": '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
     "settings": '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>',
     "eye": '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
@@ -2570,60 +2571,78 @@
         oninput: (event) => setTextFilter(event.target.value),
       })),
     ]);
-    const advanced = renderCollapsiblePanel({
-      id: "model-filters",
-      title: "Advanced Filters",
-      summary: [
-        state.models.length + " / " + state.totalModelCount + " models",
-        " · ",
-        active ? active + " filters active" : "No filters",
-      ],
-      actions: [
-        h("button", {
-          class: "action-btn subtle icon-btn",
-          type: "button",
-          onclick: resetModelFilters,
-          "aria-label": "Reset filters",
-          title: "Reset filters",
-        }, icon("filter-x")),
-      ],
-      collapsed: state.ui.modelFiltersCollapsed,
-      onToggle: toggleModelFiltersCollapsed,
-      children: [
-        h("div", { class: "filter-panel" }, [
-          h("div", { class: "filter-summary" }, [
-            h("div", { class: "filter-summary-copy" }, [
-              h("span", { class: "summary-pill" }, state.models.length + " / " + state.totalModelCount + " models"),
-              h("span", { class: "summary-note" }, active ? active + " filters active" : "All filters open"),
-            ]),
-          ]),
-          h("div", { class: "filter-card" }, [
-            h("div", { class: "control-label stacked" }, "Vendors"),
-            h("div", { class: "chip-group" }, state.vendorOptions.map((vendor) =>
-              h("button", {
-                class: "filter-chip" + (state.filter.vendors.has(vendor) ? " is-active" : ""),
-                type: "button",
-                "aria-pressed": state.filter.vendors.has(vendor) ? "true" : "false",
-                onclick: () => toggleVendor(vendor),
-              }, vendor)
-            )),
-          ]),
-          h("div", { class: "filter-card" }, [
-            h("div", { class: "control-label stacked" }, "Tier"),
-            h("div", { class: "chip-group tier-chip-group" }, TIER_FILTERS.map((item) =>
-              h("button", {
-                class: "filter-chip tier-filter-chip" + (state.filter.tier === item.key ? " is-active" : ""),
-                type: "button",
-                "aria-pressed": state.filter.tier === item.key ? "true" : "false",
-                onclick: () => setTierFilter(item.key),
-              }, item.label)
-            )),
-          ]),
-          h("div", { class: "range-grid" }, METRIC_KEYS.map(renderRangeCard)),
+    const chevron = icon("chevron-down");
+    chevron.classList.add("panel-chevron");
+    if (state.ui.modelFiltersCollapsed) chevron.classList.add("is-collapsed");
+    const summary = [
+      state.models.length + " / " + state.totalModelCount + " models",
+      " · ",
+      active ? active + " filters active" : "No filters",
+    ];
+    const filterPanel = h("div", { class: "filter-panel" }, [
+      h("div", { class: "filter-summary" }, [
+        h("div", { class: "filter-summary-copy" }, [
+          h("span", { class: "summary-pill" }, state.models.length + " / " + state.totalModelCount + " models"),
+          h("span", { class: "summary-note" }, active ? active + " filters active" : "All filters open"),
         ]),
-      ],
-    });
-    return h("div", { class: "model-filter-stack" }, [quickSearch, advanced]);
+      ]),
+      h("div", { class: "filter-card" }, [
+        h("div", { class: "control-label stacked" }, "Vendors"),
+        h("div", { class: "chip-group" }, state.vendorOptions.map((vendor) =>
+          h("button", {
+            class: "filter-chip" + (state.filter.vendors.has(vendor) ? " is-active" : ""),
+            type: "button",
+            "aria-pressed": state.filter.vendors.has(vendor) ? "true" : "false",
+            onclick: () => toggleVendor(vendor),
+          }, vendor)
+        )),
+      ]),
+      h("div", { class: "filter-card" }, [
+        h("div", { class: "control-label stacked" }, "Tier"),
+        h("div", { class: "chip-group tier-chip-group" }, TIER_FILTERS.map((item) =>
+          h("button", {
+            class: "filter-chip tier-filter-chip" + (state.filter.tier === item.key ? " is-active" : ""),
+            type: "button",
+            "aria-pressed": state.filter.tier === item.key ? "true" : "false",
+            onclick: () => setTierFilter(item.key),
+          }, item.label)
+        )),
+      ]),
+      h("div", { class: "range-grid" }, METRIC_KEYS.map(renderRangeCard)),
+    ]);
+    return h("section", { class: "panel-shell model-filters-shell", id: "model-filters" }, [
+      h("div", { class: "model-filter-row" }, [
+        h("div", { class: "panel-head model-filter-head" }, [
+          h("button", {
+            class: "panel-toggle-hitarea",
+            type: "button",
+            "aria-expanded": String(!state.ui.modelFiltersCollapsed),
+            "aria-controls": "model-filters-body",
+            "aria-label": state.ui.modelFiltersCollapsed ? "Expand Advanced Filters" : "Collapse Advanced Filters",
+            onclick: toggleModelFiltersCollapsed,
+          }, [
+            h("span", { class: "panel-title" }, "Advanced Filters"),
+            h("span", { class: "panel-summary" }, summary),
+            chevron,
+          ]),
+          h("div", { class: "panel-head-right" }, [
+            h("button", {
+              class: "action-btn subtle icon-btn",
+              type: "button",
+              onclick: resetModelFilters,
+              "aria-label": "Reset filters",
+              title: "Reset filters",
+            }, icon("filter-x")),
+          ]),
+        ]),
+        quickSearch,
+      ]),
+      h("div", {
+        class: "panel-body" + (state.ui.modelFiltersCollapsed ? " is-hidden" : ""),
+        id: "model-filters-body",
+        hidden: state.ui.modelFiltersCollapsed,
+      }, [filterPanel]),
+    ]);
   }
 
   function renderStatsFilters() {
@@ -3481,9 +3500,8 @@
       ]);
     }));
 
-    return h("div", { class: "table-wrap" }, [
+    return h("div", { class: "table-wrap models-table-wrap" }, [
       h("table", { class: "models" }, [head, body]),
-      h("div", { class: "table-scroll-cue", "aria-hidden": "true" }, "↔"),
     ]);
   }
 
@@ -3569,7 +3587,7 @@
     ].map(([view, label]) => h("button", {
       class: "vw-segmented-item" + (state.view === view ? " active" : ""),
       type: "button",
-      "aria-current": state.view === view ? "page" : null,
+      "aria-pressed": state.view === view ? "true" : "false",
       onclick: () => switchView(view),
     }, label)));
   }
@@ -3596,11 +3614,13 @@
           renderModelSortControls(),
         ]),
         h("button", {
-          class: "vw-btn vw-btn-secondary",
+          class: "vw-btn vw-btn-secondary vw-btn-icon export-models-btn",
           type: "button",
           disabled: !state.models.length,
           onclick: downloadModelsCsv,
-        }, "Export Models CSV"),
+          "aria-label": "Download models CSV",
+          title: "Download models CSV",
+        }, icon("download")),
       ]),
       renderModelFilters(),
       renderDetailPanelsNode(selectedModels),
@@ -5800,7 +5820,6 @@
       h("div", { class: "app-page-title" }, [
         h("p", { class: "shell-kicker" }, kicker),
         h("h2", null, heading),
-        h("p", null, config.deck),
       ])
     );
     const mobileTitle = document.querySelector(".shell-mobile-title");

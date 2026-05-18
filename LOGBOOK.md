@@ -28,6 +28,27 @@ Completed the Phase 9.6 Voidware upgrade.
 - Fixed visual-review findings: the mobile drawer now has an internal close
   button with full nav labels, and the narrow Models table has a stronger
   right-edge overflow cue.
+- Completed the follow-up Models dashboard font-role pass: table headers,
+  list/chart model names, status/tier labels, and filters now use the body font,
+  while compact numeric score/rank values use tabular monospace for fast
+  scanning alongside the color bars; the selected model detail title also keeps
+  the console font.
+- Added a no-horizontal-scroll Models table layout: score bars collapse to
+  colored tier letters plus numeric values whenever the actual table lane cannot
+  fit the full bar treatment.
+- Expanded the desktop app shell to the full viewport, pinning the sidebar to
+  the left edge and giving the Models chart/table lane the remaining widescreen
+  space instead of a centered max-width frame.
+- Reworked the Models Table/Chart control as a fixed-width segmented switcher
+  with roomier labels and `aria-pressed` state so the text no longer crowds.
+- Centered Models summary-value numerals inside their colored table cells so the
+  Overall/Cost/Value columns sit optically even.
+- Removed redundant dashboard/sidebar subtitles, changed the Models CSV export
+  to an icon-only download button, and combined Advanced Filters with Search in
+  one row.
+- Switched the app-level body and display font tokens to a Roboto-first sans
+  stack so the main dashboard typography has no serif-like face in the active
+  cascade.
 - Final native review caught the close button inheriting full-width phone
   button styling and the Phase 9.6 plan being ignored by `.gitignore`; both
   were fixed and the focused re-review passed cleanly.
@@ -41,6 +62,8 @@ Verification:
 - isolated Voidware auth/broker smoke with temp `LLM_DASH_SHXDOW_ROOT`
 - headed `agent-browser` screenshots at `1280x800`, `768x600`, `1280x640`,
   plus mobile drawer evidence, console/page-error checks, and overflow probes
+- follow-up Models font/screenspace probes at `1280x800`, `1280x700`,
+  `768x600`, and `1920x1080`
 - visual nano-agent review on `opencode-go/kimi-k2.6`, with an alternate
   `opencode-go/qwen3.6-plus` confirmation after one no-final-response retry
 - final pro nano-agent attempts stalled without verdict, so final review fell

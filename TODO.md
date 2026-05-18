@@ -14,8 +14,15 @@ Plan: [docs/plans/2026-05-17-phase-9-6-voidware-0-9-8-upgrade.md](docs/plans/202
 Done: vendored Voidware `0.9.8` CSS/provenance, synced stale `voidware-spec`
 skill mirrors across WSL/Windows/remote workspaces, aligned route/drawer
 semantics with the current spec, fixed the mobile drawer close affordance and
-table overflow cue found by visual review, and passed static, auth, screenshot,
-visual nano-agent, and final review gates.
+table overflow cue found by visual review, moved the app body/display typography
+to a Roboto-first sans stack, kept model list/chart names on the UI font, and
+reserved monospace treatment for compact numeric score/rank values where
+tabular scanning matters, plus the selected model detail title; constrained
+table lanes collapse score bars to tier letters and numeric values instead of
+showing horizontal scroll; the desktop shell now spans the viewport with the
+sidebar pinned left so chart/table views can use widescreen room; Models chrome
+is tightened with no redundant subtitles, icon-only CSV download, and combined
+Advanced Filters/Search controls.
 
 ### Phase 9.4 — Voidware Provider Reuse
 
