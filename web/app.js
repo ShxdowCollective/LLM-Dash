@@ -3569,7 +3569,6 @@
     ].map(([view, label]) => h("button", {
       class: "vw-segmented-item" + (state.view === view ? " active" : ""),
       type: "button",
-      "aria-pressed": state.view === view ? "true" : "false",
       "aria-current": state.view === view ? "page" : null,
       onclick: () => switchView(view),
     }, label)));
@@ -5826,7 +5825,6 @@
         class: "vw-subpage-nav-link" + (selected ? " active" : ""),
         type: "button",
         "aria-current": selected ? "page" : null,
-        "aria-pressed": selected ? "true" : "false",
         onclick: () => switchArea(state.area, item.key),
       }, item.label));
     });
@@ -5837,7 +5835,6 @@
     document.querySelectorAll(".vw-sidebar-link").forEach((button) => {
       const isActive = button.dataset.area === state.area;
       button.classList.toggle("active", isActive);
-      button.setAttribute("aria-pressed", isActive ? "true" : "false");
       if (isActive) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
     });
@@ -5848,7 +5845,10 @@
       sidebar.classList.toggle("open", state.ui.sidebarOpen);
       sidebar.dataset.vwOpen = state.ui.sidebarOpen ? "true" : "false";
     }
-    if (backdrop) backdrop.classList.toggle("open", state.ui.sidebarOpen);
+    if (backdrop) {
+      backdrop.classList.toggle("open", state.ui.sidebarOpen);
+      backdrop.dataset.vwOpen = state.ui.sidebarOpen ? "true" : "false";
+    }
     if (toggle) toggle.setAttribute("aria-expanded", state.ui.sidebarOpen ? "true" : "false");
   }
 
@@ -6168,9 +6168,9 @@
     document.querySelectorAll(".sort-btn").forEach((button) => {
       button.setAttribute("aria-pressed", button.dataset.sort === state.sortBy ? "true" : "false");
     });
-    document.querySelectorAll(".view-btn").forEach((button) => {
+    document.querySelectorAll(".view-btn[data-view]").forEach((button) => {
       const isActive = button.dataset.view === state.view;
-      button.setAttribute("aria-pressed", isActive ? "true" : "false");
+      button.classList.toggle("active", isActive);
       if (isActive) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
     });
@@ -6239,6 +6239,12 @@
     if (sidebarBackdrop) sidebarBackdrop.addEventListener("click", () => {
       state.ui.sidebarOpen = false;
       syncShellNav();
+    });
+    const sidebarClose = document.getElementById("sidebar-close");
+    if (sidebarClose) sidebarClose.addEventListener("click", () => {
+      state.ui.sidebarOpen = false;
+      syncShellNav();
+      restoreFocus(sidebarToggle);
     });
     window.addEventListener("resize", scheduleChartDraw);
     window.addEventListener("keydown", (event) => {

@@ -73,7 +73,7 @@ in-progress update. Killing the agent doesn't affect the dashboard.
 | Research | Exa (preferred) | Structured search + content fetch with citation control |
 | Credential storage | Env → Voidware provider credential → Voidware broker → legacy keyring | Secrets stay outside repo/API responses; selected provider credentials use broker grants with renewal metadata |
 | Scheduling | OS-native jobs | systemd timer (Linux/WSL), launchd (macOS), Task Scheduler (Windows) |
-| Design system | Voidware v0.8.4 | Sidebar app shell, dark-native surfaces, and iridescent accent system |
+| Design system | Voidware v0.9.8 | Sidebar app shell, dark-native surfaces, and iridescent accent system |
 
 ---
 
@@ -324,7 +324,7 @@ expiration, invalidation, denial, or durable-secret-unavailable responses.
 
 ---
 
-## Design System — Voidware v0.8.4
+## Design System — Voidware v0.9.8
 
 The UI follows the Voidware design specification:
 

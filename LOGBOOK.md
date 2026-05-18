@@ -4,6 +4,54 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 077 — 2026-05-17
+
+**Agent:** GPT-5 Codex (nightglass, shxdow-flow)
+**Cycle:** Phase 9.6 — Voidware 0.9.8 Upgrade
+**Task:** Upgrade vendored Voidware CSS, sync workspace skills, and run review gates
+
+---
+
+Completed the Phase 9.6 Voidware upgrade.
+
+- Added the Phase 9.6 plan under `docs/plans/` and ran a pro nano-agent plan
+  review before implementation.
+- Updated vendored Voidware provenance to `0.9.8` and copied the only changed
+  CSS payload, `buttons.css`, from the current local Voidware source.
+- Refreshed visible Voidware docs references in README, Architecture, and
+  Development.
+- Synced stale `voidware-spec` skill mirrors to `0.9.8` across WSL, Windows,
+  ShxdowDocker, ShxdowMac, and the shxdowSkills master copy.
+- Aligned route navigation with the current spec by removing route-level
+  `aria-pressed`, keeping `aria-current`, and mirroring `data-vw-open` on the
+  sidebar backdrop.
+- Fixed visual-review findings: the mobile drawer now has an internal close
+  button with full nav labels, and the narrow Models table has a stronger
+  right-edge overflow cue.
+- Final native review caught the close button inheriting full-width phone
+  button styling and the Phase 9.6 plan being ignored by `.gitignore`; both
+  were fixed and the focused re-review passed cleanly.
+
+Verification:
+- `node --check web/app.js`
+- `python3 -m unittest discover -v`
+- `python3 -m py_compile server.py scripts/*.py tests/*.py`
+- `git diff --check`
+- Voidware spec checker with pinned skill `0.9.8`
+- isolated Voidware auth/broker smoke with temp `LLM_DASH_SHXDOW_ROOT`
+- headed `agent-browser` screenshots at `1280x800`, `768x600`, `1280x640`,
+  plus mobile drawer evidence, console/page-error checks, and overflow probes
+- visual nano-agent review on `opencode-go/kimi-k2.6`, with an alternate
+  `opencode-go/qwen3.6-plus` confirmation after one no-final-response retry
+- final pro nano-agent attempts stalled without verdict, so final review fell
+  back to native review per the requested route; focused native re-review passed
+
+Residual risk:
+- The Models table remains intentionally dense at 768px and depends on internal
+  horizontal scrolling with explicit visual cues.
+
+---
+
 ## Entry 076 — 2026-05-11
 
 **Agent:** GPT-5 Codex (prismhook, shxdowloop-ui)

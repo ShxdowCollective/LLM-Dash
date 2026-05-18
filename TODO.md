@@ -7,6 +7,16 @@ Use `[ ]` only for still-open work.
 
 ## Now
 
+### Phase 9.6 — Voidware 0.9.8 Upgrade
+
+Plan: [docs/plans/2026-05-17-phase-9-6-voidware-0-9-8-upgrade.md](docs/plans/2026-05-17-phase-9-6-voidware-0-9-8-upgrade.md)
+
+Done: vendored Voidware `0.9.8` CSS/provenance, synced stale `voidware-spec`
+skill mirrors across WSL/Windows/remote workspaces, aligned route/drawer
+semantics with the current spec, fixed the mobile drawer close affordance and
+table overflow cue found by visual review, and passed static, auth, screenshot,
+visual nano-agent, and final review gates.
+
 ### Phase 9.4 — Voidware Provider Reuse
 
 Plan: [docs/plans/2026-05-09-phase-9-4-voidware-provider-reuse.md](docs/plans/2026-05-09-phase-9-4-voidware-provider-reuse.md)
@@ -50,3 +60,4 @@ reviews.
 - Phase 9.3 — Agent Provider leaderboard on Stats.
 - Phase 9.4 — Voidware provider reuse and full app e2e screenshots.
 - Phase 9.5 — SaaS UI/UX polish and final visual review gates.
+- Phase 9.6 — Voidware 0.9.8 upgrade and workspace skill sync.

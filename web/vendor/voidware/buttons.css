@@ -44,6 +44,8 @@
 }
 
 .vw-btn-compact {
+  min-height: 32px;
+  padding: 0 12px;
   border-radius: var(--vw-radius-sm);
 }
 

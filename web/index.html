@@ -38,6 +38,12 @@
     <button id="sidebar-backdrop" class="vw-sidebar-backdrop" type="button" aria-label="Close navigation"></button>
 
     <aside id="sidebar" class="vw-sidebar app-sidebar" aria-label="Primary navigation">
+      <button id="sidebar-close" class="vw-btn vw-btn-icon sidebar-close-btn" type="button" aria-label="Close navigation">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M6 6l12 12" />
+          <path d="M18 6L6 18" />
+        </svg>
+      </button>
       <div class="sidebar-brand">
         <p class="shell-kicker">LLM-Dash</p>
         <h1>Model Benchmarks</h1>
@@ -47,7 +53,7 @@
       <div class="vw-sidebar-section">
         <p class="vw-sidebar-heading">Workspace</p>
         <nav class="vw-sidebar-nav" aria-label="Dashboard areas">
-          <button class="vw-sidebar-link view-btn" type="button" data-area="models" data-view="table" aria-pressed="true" aria-current="page">
+          <button class="vw-sidebar-link view-btn" type="button" data-area="models" data-view="table" aria-current="page">
             <span class="vw-sidebar-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 3v18h18" />
@@ -56,7 +62,7 @@
             </span>
             <span class="vw-sidebar-label">Models</span>
           </button>
-          <button class="vw-sidebar-link view-btn" type="button" data-area="changelog" data-view="changelog" aria-pressed="false">
+          <button class="vw-sidebar-link view-btn" type="button" data-area="changelog" data-view="changelog">
             <span class="vw-sidebar-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M8 6h13" />
@@ -69,7 +75,7 @@
             </span>
             <span class="vw-sidebar-label">Changelog</span>
           </button>
-          <button class="vw-sidebar-link view-btn" type="button" data-area="stats" data-view="stats" aria-pressed="false">
+          <button class="vw-sidebar-link view-btn" type="button" data-area="stats" data-view="stats">
             <span class="vw-sidebar-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 3v18h18" />
@@ -80,7 +86,7 @@
             </span>
             <span class="vw-sidebar-label">Stats</span>
           </button>
-          <button class="vw-sidebar-link view-btn" type="button" data-area="settings" data-view="data" aria-pressed="false">
+          <button class="vw-sidebar-link view-btn" type="button" data-area="settings" data-view="data">
             <span class="vw-sidebar-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="3" />
@@ -108,8 +114,8 @@
     <section id="content" class="vw-page-content app-content" tabindex="-1" aria-live="polite">
       <header id="page-header" class="app-page-header"></header>
       <nav id="subpage-nav" class="vw-subpage-nav" aria-label="Sub-pages">
-        <button class="vw-subpage-nav-link view-btn" type="button" data-area="models" data-view="table" aria-pressed="true" aria-current="page">Table</button>
-        <button class="vw-subpage-nav-link view-btn" type="button" data-area="models" data-view="chart" aria-pressed="false">Chart</button>
+        <button class="vw-subpage-nav-link view-btn" type="button" data-area="models" data-view="table" aria-current="page">Table</button>
+        <button class="vw-subpage-nav-link view-btn" type="button" data-area="models" data-view="chart">Chart</button>
       </nav>
 
       <section id="content-body" class="content-slot" aria-live="polite">

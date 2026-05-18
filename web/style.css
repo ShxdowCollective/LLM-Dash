@@ -174,6 +174,15 @@ body::before {
   padding: 4px 24px 28px;
 }
 
+.sidebar-close-btn {
+  display: none;
+}
+
+.sidebar-close-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
 .shell-kicker,
 .sidebar-brand p {
   margin: 0;
@@ -573,14 +582,14 @@ a {
   box-shadow: 0 0 0 1px var(--vw-accent-dim);
 }
 
-.view-btn[aria-pressed="true"] {
+.wizard-segmented .view-btn[aria-pressed="true"] {
   color: var(--vw-text);
   background: var(--vw-surface-3);
   box-shadow: 0 0 0 1px var(--vw-border-mid);
   position: relative;
 }
 
-.view-btn[aria-pressed="true"]::after {
+.wizard-segmented .view-btn[aria-pressed="true"]::after {
   content: "";
   position: absolute;
   bottom: -2px;
@@ -595,10 +604,6 @@ a {
     var(--vw-iridescent-4)
   );
   box-shadow: 0 0 8px rgba(124, 92, 196, 0.2);
-}
-
-.vw-sidebar-link.view-btn[aria-pressed="true"]::after {
-  display: none;
 }
 
 .action-btn,
@@ -1150,6 +1155,21 @@ table.models tbody tr:focus-visible,
   scrollbar-gutter: stable both-edges;
   scrollbar-color: var(--vw-accent-soft) var(--vw-surface-2);
   scrollbar-width: thin;
+}
+
+.table-wrap::after {
+  content: "";
+  position: sticky;
+  right: 0;
+  bottom: 0;
+  z-index: 7;
+  float: right;
+  width: 36px;
+  height: 100%;
+  min-height: 240px;
+  margin-left: -36px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--vw-bg) 78%, transparent));
+  pointer-events: none;
 }
 
 .table-scroll-cue {
@@ -3942,9 +3962,43 @@ table.data-table thead th.num,
     transition: transform var(--vw-transition);
   }
 
+  .sidebar-close-btn {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 2;
+    display: inline-grid;
+  }
+
   .app-sidebar.open,
   .app-sidebar[data-vw-open="true"] {
     transform: translateX(0);
+  }
+
+  .app-sidebar.open .vw-sidebar-section,
+  .app-sidebar[data-vw-open="true"] .vw-sidebar-section {
+    width: 100%;
+    padding-inline: 14px;
+  }
+
+  .app-sidebar.open .vw-sidebar-heading,
+  .app-sidebar.open .vw-sidebar-label,
+  .app-sidebar[data-vw-open="true"] .vw-sidebar-heading,
+  .app-sidebar[data-vw-open="true"] .vw-sidebar-label {
+    display: block;
+  }
+
+  .app-sidebar.open .vw-sidebar-nav,
+  .app-sidebar[data-vw-open="true"] .vw-sidebar-nav {
+    align-items: stretch;
+  }
+
+  .app-sidebar.open .vw-sidebar-link,
+  .app-sidebar[data-vw-open="true"] .vw-sidebar-link {
+    justify-content: flex-start;
+    width: 100%;
+    height: auto;
+    padding: 10px 12px;
   }
 
   .app-sidebar.open + .app-content {
@@ -3980,10 +4034,17 @@ table.data-table thead th.num,
   .sort-btn,
   .view-btn,
   .action-btn,
-  .vw-btn,
+  .vw-btn:not(.sidebar-close-btn),
   .filter-chip {
     width: 100%;
     justify-content: center;
+  }
+
+  .sidebar-close-btn {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
   }
 
   .sort-group {

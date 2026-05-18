@@ -89,7 +89,7 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 | File | Responsibility |
 |---|---|
 | `web/index.html` | App shell, font imports, mount points |
-| `web/style.css` | App-specific Voidware 0.8.4 overrides and component styles |
+| `web/style.css` | App-specific Voidware 0.9.8 overrides and component styles |
 | `web/app.js` | sql.js bootstrap, route state, area renderers, wizard, overlays |
 | `web/provider-presets.json` | Static catalog of provider presets for the setup wizard |
 | `web/vendor/` | Vendored libraries (sql-wasm, marked.js, uPlot) — committed, not installed |
@@ -139,7 +139,7 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 
 ### CSS
 
-- Voidware v0.8.4 CSS is vendored under `web/vendor/voidware/`; keep
+- Voidware v0.9.8 CSS is vendored under `web/vendor/voidware/`; keep
   provenance current in `web/vendor/voidware/VERSION.md`
 - Shadow-as-border: `box-shadow: 0 0 0 1px var(--vw-border)` instead of `border`
 - Focus: `outline` with `outline-offset`, not box-shadow
