@@ -4,6 +4,71 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 079 — 2026-05-18
+
+**Agent:** GPT-5 Codex (glassquill, shxdow-flow)
+**Cycle:** Dashboard nav and portrait layout polish
+**Task:** Remove compare/trend dashboard clutter and rebuild portrait Models layout
+
+---
+
+Polished the Models dashboard and Changelog surfaces after the scoring update.
+
+- Simplified the sidebar brand to `LLM-Dash` and removed the `Workspace` and
+  `Model Benchmarks` subtitles.
+- Changed the Models page header to kicker `Models` and title `Dashboard`.
+- Removed the visible Changelog Compare tab and deleted the now-unreachable
+  Compare helper/UI CSS.
+- Removed the main Models table Trend column/sort remnants while keeping model
+  detail history charts intact.
+- Added iridescent outlines/tinted active states to the Table/Chart picker and
+  Sort controls.
+- Reworked Settings > Models into a centered compact two-column form.
+- Added a portrait Dashboard card list so 1080x1920 hides the wide table and
+  shows tappable model cards with Overall/Value/Cost and metric summaries.
+- Added plan: `docs/plans/2026-05-18-dashboard-mobile-nav-refresh.md`.
+
+Verification:
+- `node --check web/app.js`
+- `python3 -m unittest discover -v`
+- `git diff --check`
+- Headed `agent-browser` probes at `1920x1080` and `1080x1920`: confirmed no
+  Trend column, no Changelog Compare tab/body, corrected nav/header copy,
+  colored picker styling, centered Settings Models panel, portrait card layout,
+  and no horizontal overflow or page errors.
+
+---
+
+## Entry 078 — 2026-05-17
+
+**Agent:** GPT-5 Codex (glassquill, shxdow-flow)
+**Cycle:** Models dashboard scoring polish
+**Task:** Update Agent wording, score weights, and formula tooltip
+
+---
+
+Updated the Models dashboard scoring presentation.
+
+- Renamed visible `Tool Use` labels to `Agent` across the Models table, chart
+  legend, filters, detail panels, model reports, and CSV export.
+- Changed Overall from an even average to a weighted score: 30% intelligence,
+  30% coding, 30% agent capability, and 10% speed.
+- Changed Value from an even Overall/Cost average to 80% Overall and 20% cost.
+- Moved the formula/source explanation out of the footer into a focused `?`
+  tooltip beside the CSV download button, while keeping the tier legend visible.
+- Updated README, Architecture, and TODO notes for the new scoring expectation.
+
+Verification:
+- `node --check web/app.js`
+- `python3 -m unittest discover -v`
+- `git diff --check`
+- Headed `agent-browser` probe on Models table: confirmed Agent table/header
+  wording, no old formula footer text, tooltip content/hover visibility,
+  weighted first-row Overall `9.3`, weighted Value `8.4`, no body horizontal
+  overflow at desktop and 768px widths, and no browser console/page errors.
+
+---
+
 ## Entry 077 — 2026-05-17
 
 **Agent:** GPT-5 Codex (nightglass, shxdow-flow)

@@ -100,6 +100,10 @@ pair. Re-running an update for the same date upserts via the `UNIQUE` constraint
 Scores are normalized to a 0.0–10.0 scale. Every score claim in a changelog
 must cite a source URL.
 
+The dashboard computes Overall as a weighted composite: 30% intelligence, 30%
+coding, 30% agent capability, and 10% speed. Value weights Overall at 80% and
+cost at 20%.
+
 #### `changelogs`
 
 Index table for changelog entries. The full Markdown body lives on disk at
@@ -203,7 +207,7 @@ Every filter change rebuilds a parameterized SQL query executed against the
 in-browser sql.js instance. Filters include:
 
 - **Vendor multi-select** — pill toggles
-- **Tier chips** — S through F (computed from overall score)
+- **Tier chips** — S through F (computed from weighted overall score)
 - **Range sliders** — dual-handle, one per benchmark dimension
 - **Text search** — case-insensitive LIKE across name, vendor, notes, params
 

@@ -37,8 +37,8 @@
 ## Features
 
 - **Models leaderboard** — sortable table with five benchmark dimensions
-  (intelligence, coding, agents, speed, cost), tier grades S–F, and per-vendor
-  color coding.
+  (intelligence, coding, agent capability, speed, cost), tier grades S–F, and
+  per-vendor color coding.
 - **Interactive charts** — horizontal bar comparisons powered by uPlot.
 - **Changelog timeline** — append-only daily entries rendered from Markdown,
   with full-text search.

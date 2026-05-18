@@ -8,23 +8,34 @@
   const METRIC_LABELS = {
     intelligence: "Intelligence",
     coding: "Coding",
-    agents: "Tool Use",
+    agents: "Agent",
     speed: "Speed",
     cost: "Cost Score",
   };
+  const OVERALL_WEIGHTS = {
+    intelligence: 0.3,
+    coding: 0.3,
+    agents: 0.3,
+    speed: 0.1,
+  };
+  const VALUE_WEIGHTS = {
+    overall: 0.8,
+    cost: 0.2,
+  };
+  const SCORE_FORMULA_COPY = "Overall = 30% Intelligence + 30% Coding + 30% Agent + 10% Speed. Value = 80% Overall + 20% Cost. Scores come from Artificial Analysis, SWE-bench, Terminal-Bench, OSWorld, GPQA Diamond, and vendor reports; every claim cites a URL in the changelog.";
   const SORT_OPTIONS = [
     { key: "overall", label: "Overall" },
     { key: "value", label: "Value" },
     { key: "intelligence", label: "Intelligence" },
     { key: "coding", label: "Coding" },
-    { key: "agents", label: "Tool Use" },
+    { key: "agents", label: "Agent" },
     { key: "speed", label: "Speed" },
     { key: "cost", label: "Cost" },
   ];
   const CHART_BARS = [
     { key: "intelligence", label: "Intelligence", raw: "var(--vw-iridescent-6)" },
     { key: "coding", label: "Coding", raw: "var(--vw-iridescent-5)" },
-    { key: "agents", label: "Tool Use", raw: "var(--vw-iridescent-4)" },
+    { key: "agents", label: "Agent", raw: "var(--vw-iridescent-4)" },
     { key: "speed", label: "Speed", raw: "var(--vw-iridescent-3)" },
   ];
   const TIER_COLOR_MAP = {
@@ -167,8 +178,6 @@
     detailUplots: {},
     detailChartFrames: {},
     scoreHistory: new Map(),
-    activeChangelogTab: "read",
-    changelogCompare: { from: null, to: null, active: false },
     focusedRowIndex: -1,
     helpModal: { open: false, returnFocus: null },
     uiToastShownFor: null,
@@ -365,44 +374,40 @@
     },
   };
 
-  function avg(values) {
-    const valid = values.filter((value) => value !== null && value !== undefined && value !== "");
+  function weightedAvg(entries) {
+    const valid = entries
+      .filter(([value]) => value !== null && value !== undefined && value !== "")
+      .map(([value, weight]) => [Number(value), Number(weight)])
+      .filter(([value, weight]) => Number.isFinite(value) && Number.isFinite(weight) && weight > 0);
     if (!valid.length) return null;
-    const total = valid.reduce((sum, value) => sum + Number(value), 0);
-    return +(total / valid.length).toFixed(1);
+    const weightedTotal = valid.reduce((sum, [value, weight]) => sum + value * weight, 0);
+    const weightTotal = valid.reduce((sum, [, weight]) => sum + weight, 0);
+    return +(weightedTotal / weightTotal).toFixed(1);
   }
 
   function getOverall(model) {
-    return avg([model.intelligence, model.coding, model.agents, model.speed]);
+    return weightedAvg([
+      [model.intelligence, OVERALL_WEIGHTS.intelligence],
+      [model.coding, OVERALL_WEIGHTS.coding],
+      [model.agents, OVERALL_WEIGHTS.agents],
+      [model.speed, OVERALL_WEIGHTS.speed],
+    ]);
   }
 
   function getValue(model) {
     const overall = getOverall(model);
-    return overall !== null ? avg([overall, model.cost]) : model.cost;
+    return weightedAvg([
+      [overall, VALUE_WEIGHTS.overall],
+      [model.cost, VALUE_WEIGHTS.cost],
+    ]);
   }
 
   function avgOverallRow(row) {
-    return avg([row.intelligence, row.coding, row.agents, row.speed]);
+    return getOverall(row);
   }
 
   function modelHistory(modelId) {
     return state.scoreHistory.get(modelId) || null;
-  }
-
-  function modelOverallSeries(history) {
-    if (!history || !history.length) return [];
-    const points = [];
-    for (const row of history) {
-      const value = avgOverallRow(row);
-      if (value !== null && Number.isFinite(value)) points.push(value);
-    }
-    return points;
-  }
-
-  function sparkDelta(modelId) {
-    const points = modelOverallSeries(modelHistory(modelId));
-    if (points.length < 2) return null;
-    return points[points.length - 1] - points[points.length - 2];
   }
 
   function tier(score) {
@@ -466,10 +471,6 @@
   function sortKey(model, key) {
     if (key === "overall") return getOverall(model) ?? 0;
     if (key === "value") return getValue(model) ?? 0;
-    if (key === "trend") {
-      const delta = sparkDelta(model.id);
-      return delta !== null ? delta : -Infinity;
-    }
     return model[key] ?? 0;
   }
 
@@ -546,48 +547,19 @@
     return base;
   }
 
-  function currentRouteParams() {
-    if (state.area === "changelog" && state.activeChangelogTab === "compare") {
-      const params = { tab: "compare" };
-      if (state.changelogCompare.from) params.from = state.changelogCompare.from;
-      if (state.changelogCompare.to) params.to = state.changelogCompare.to;
-      return params;
-    }
-    return null;
-  }
-
   function applyRoute(route, options) {
     const next = route || parseHashRoute(location.hash);
     state.view = next.view;
     state.area = next.area;
     state.subview[next.area] = next.subview;
-    if (next.area === "changelog" && next.params) {
-      const tab = next.params.tab === "compare" ? "compare" : "read";
-      state.activeChangelogTab = tab;
-      if (tab === "compare") {
-        state.changelogCompare.active = true;
-        state.changelogCompare.from = next.params.from || state.changelogCompare.from || null;
-        state.changelogCompare.to = next.params.to || state.changelogCompare.to || null;
-      }
-    } else if (next.area === "changelog") {
-      state.activeChangelogTab = "read";
-    }
     if (options && options.updateHash) {
-      const hash = hashForRoute(state.area, state.subview[state.area], currentRouteParams());
+      const hash = hashForRoute(state.area, state.subview[state.area], null);
       if (location.hash !== hash) {
         const url = location.pathname + location.search + hash;
         if (options.replace) history.replaceState({}, "", url);
         else history.pushState({}, "", url);
       }
     }
-  }
-
-  function pushChangelogRouteHash(replace) {
-    const hash = hashForRoute(state.area, state.subview[state.area], currentRouteParams());
-    if (location.hash === hash) return;
-    const url = location.pathname + location.search + hash;
-    if (replace) history.replaceState({}, "", url);
-    else history.pushState({}, "", url);
   }
 
   const HEX_COLOR_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
@@ -917,48 +889,6 @@
 
   function formatAgentKey(row) {
     return (row.agent_name || "") + "|" + (row.agent_runtime || "");
-  }
-
-  const SPARK_WIDTH = 80;
-  const SPARK_HEIGHT = 24;
-  const SPARK_MIN = 0;
-  const SPARK_MAX = 10;
-
-  function renderSparkline(modelId) {
-    const points = modelOverallSeries(modelHistory(modelId));
-    const wrap = document.createElement("span");
-    if (points.length < 2) {
-      wrap.className = "spark spark-empty";
-      wrap.setAttribute("aria-label", "no trend yet");
-      wrap.textContent = "—";
-      return wrap;
-    }
-    const stepX = SPARK_WIDTH / (points.length - 1);
-    let pathD = "";
-    for (let i = 0; i < points.length; i++) {
-      const x = (i * stepX).toFixed(2);
-      const yNorm = (points[i] - SPARK_MIN) / (SPARK_MAX - SPARK_MIN);
-      const y = (SPARK_HEIGHT - yNorm * SPARK_HEIGHT).toFixed(2);
-      pathD += (i === 0 ? "M" : "L") + x + "," + y + " ";
-    }
-    const last = points[points.length - 1];
-    const prev = points[points.length - 2];
-    const delta = last - prev;
-    const colorVar =
-      delta > 0.05 ? "--vw-iridescent-3" :
-      delta < -0.05 ? "--vw-iridescent-7" :
-      "--vw-iridescent-5";
-    const lastX = ((points.length - 1) * stepX).toFixed(2);
-    const lastY = (SPARK_HEIGHT - ((last - SPARK_MIN) / (SPARK_MAX - SPARK_MIN)) * SPARK_HEIGHT).toFixed(2);
-    wrap.className = "spark";
-    wrap.setAttribute("role", "img");
-    wrap.setAttribute("aria-label", points.length + "-point overall trend, latest " + last.toFixed(1));
-    wrap.innerHTML =
-      '<svg width="' + SPARK_WIDTH + '" height="' + SPARK_HEIGHT + '" viewBox="0 0 ' + SPARK_WIDTH + ' ' + SPARK_HEIGHT + '">' +
-        '<path d="' + pathD.trim() + '" fill="none" stroke="var(' + colorVar + ')" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>' +
-        '<circle cx="' + lastX + '" cy="' + lastY + '" r="1.8" fill="var(' + colorVar + ')"/>' +
-      '</svg>';
-    return wrap;
   }
 
   function formatAgentLabel(row) {
@@ -2398,7 +2328,7 @@
     const metricRows = [
       ["Intelligence (GPQA/AA)", model.intelligence],
       ["Coding (SWE-bench)", model.coding],
-      ["Tool Use", model.agents],
+      ["Agent", model.agents],
       ["Speed", model.speed],
       ["Cost Score", model.cost],
     ].map(([label, score]) =>
@@ -3456,10 +3386,9 @@
       h("th", null, "Model"),
       h("th", null, "Intelligence"),
       h("th", null, "Coding"),
-          h("th", null, "Tool Use"),
+      h("th", null, "Agent"),
       h("th", null, "Speed"),
       h("th", { class: "num" }, "Overall"),
-      h("th", { class: "trend-col" }, "Trend"),
       h("th", { class: "num" }, "Cost"),
       h("th", { class: "num" }, "Value"),
     ]));
@@ -3494,7 +3423,6 @@
         h("td", null, renderScoreCell(model.agents)),
         h("td", null, renderScoreCell(model.speed)),
         h("td", { class: "summary-cell " + tier(overall).cls }, overall !== null ? overall.toFixed(1) : "—"),
-        h("td", { class: "trend-col" }, renderSparkline(model.id)),
         h("td", { class: "summary-cell " + tier(model.cost).cls }, model.cost !== null ? Number(model.cost).toFixed(1) : "—"),
         h("td", { class: "summary-cell " + tier(value).cls }, value !== null ? value.toFixed(1) : "—"),
       ]);
@@ -3554,14 +3482,70 @@
     ]);
   }
 
+  function renderMobileModelCards() {
+    if (!state.models.length) {
+      return null;
+    }
+    const metrics = [
+      ["intelligence", "Intel"],
+      ["coding", "Coding"],
+      ["agents", "Agent"],
+      ["speed", "Speed"],
+    ];
+    const scoreText = (value) => value !== null && value !== undefined ? Number(value).toFixed(1) : "—";
+    return h("div", { class: "models-mobile-list", "aria-label": "Models dashboard cards" }, state.models.map((model, index) => {
+      const overall = getOverall(model);
+      const value = getValue(model);
+      const isSelected = state.selectedModelIds.includes(model.id);
+      const sub = [model.vendor, model.pricing || null].filter(Boolean).join(" · ");
+      return h("button", {
+        class: "mobile-model-card" + (isSelected ? " selected" : ""),
+        type: "button",
+        style: { "--model-color": safeHex(model.color, "#888888") },
+        "aria-pressed": String(isSelected),
+        "aria-label": (isSelected ? "Remove " : "Add ") + model.name + " comparison",
+        onclick: () => toggleModelSelection(model.id),
+      }, [
+        h("div", { class: "mobile-model-card-head" }, [
+          h("span", { class: "mobile-rank" }, String(index + 1)),
+          h("span", { class: "mobile-model-dot", "aria-hidden": "true" }),
+          h("span", { class: "mobile-model-title" }, [
+            h("span", { class: "mobile-model-name" }, model.name),
+            statusBadge(model.status),
+          ]),
+        ]),
+        sub ? h("div", { class: "mobile-model-sub" }, sub) : null,
+        h("div", { class: "mobile-score-grid" }, [
+          h("span", { class: "mobile-score-chip " + tier(overall).cls }, [
+            h("span", null, "Overall"),
+            h("strong", null, scoreText(overall)),
+          ]),
+          h("span", { class: "mobile-score-chip " + tier(value).cls }, [
+            h("span", null, "Value"),
+            h("strong", null, scoreText(value)),
+          ]),
+          h("span", { class: "mobile-score-chip " + tier(model.cost).cls }, [
+            h("span", null, "Cost"),
+            h("strong", null, scoreText(model.cost)),
+          ]),
+        ]),
+        h("div", { class: "mobile-metric-grid" }, metrics.map(([key, label]) =>
+          h("span", { class: "mobile-metric-pill " + tier(model[key]).cls }, [
+            h("span", null, label),
+            h("strong", null, scoreText(model[key])),
+          ])
+        )),
+      ]);
+    }));
+  }
+
   function renderModelSortControls() {
     const options = [
       ["overall", "Overall"],
       ["value", "Value"],
-      ["trend", "Trend"],
       ["intelligence", "Intelligence"],
       ["coding", "Coding"],
-      ["agents", "Tool Use"],
+      ["agents", "Agent"],
       ["speed", "Speed"],
       ["cost", "Cost"],
     ];
@@ -3570,6 +3554,7 @@
       ...options.map(([key, label]) => h("button", {
         class: "sort-btn",
         type: "button",
+        dataset: { sort: key },
         "aria-pressed": key === state.sortBy ? "true" : "false",
         onclick: () => {
           state.sortBy = key;
@@ -3603,6 +3588,17 @@
     ]);
   }
 
+  function renderScoreFormulaHelp() {
+    return h("span", {
+      class: "models-formula-help",
+      role: "img",
+      tabindex: "0",
+      title: SCORE_FORMULA_COPY,
+      "aria-label": SCORE_FORMULA_COPY,
+      dataset: { tooltip: SCORE_FORMULA_COPY },
+    }, "?");
+  }
+
   function renderModelsArea() {
     const selectedModels = state.selectedModelIds
       .map((id) => state.models.find((m) => m.id === id))
@@ -3613,24 +3609,23 @@
           renderModelsSegmented(),
           renderModelSortControls(),
         ]),
-        h("button", {
-          class: "vw-btn vw-btn-secondary vw-btn-icon export-models-btn",
-          type: "button",
-          disabled: !state.models.length,
-          onclick: downloadModelsCsv,
-          "aria-label": "Download models CSV",
-          title: "Download models CSV",
-        }, icon("download")),
+        h("div", { class: "models-toolbar-actions" }, [
+          renderScoreFormulaHelp(),
+          h("button", {
+            class: "vw-btn vw-btn-secondary vw-btn-icon export-models-btn",
+            type: "button",
+            disabled: !state.models.length,
+            onclick: downloadModelsCsv,
+            "aria-label": "Download models CSV",
+            title: "Download models CSV",
+          }, icon("download")),
+        ]),
       ]),
       renderModelFilters(),
       renderDetailPanelsNode(selectedModels),
-      state.view === "chart" ? renderChart() : renderTable(),
+      ...(state.view === "chart" ? [renderChart()] : [renderTable(), renderMobileModelCards()]),
       h("footer", { class: "models-footnote" }, [
         renderTierLegend(),
-        h("p", { class: "sources" }, [
-          "Overall = avg(Intelligence, Coding, Tool Use, Speed). Value = avg(Overall, Cost). ",
-          "Scores from Artificial Analysis, SWE-bench, Terminal-Bench, OSWorld, GPQA Diamond, and vendor reports; every claim cites a URL in the changelog.",
-        ]),
       ]),
     ]);
   }
@@ -3645,78 +3640,6 @@
     }
   }
 
-  function safeParseJson(value) {
-    if (!value) return null;
-    try { return JSON.parse(value); } catch (_) { return null; }
-  }
-
-  function lookupPriorScore(modelName, field, asOfDate) {
-    if (!METRIC_KEYS.includes(field)) return null;
-    const lcName = String(modelName || "").toLowerCase();
-    const model = state.models.find((m) => String(m.name || "").toLowerCase() === lcName);
-    const history = model ? state.scoreHistory.get(model.id) : null;
-    if (!history || !history.length) return null;
-    let prior = null;
-    for (const row of history) {
-      if (row.as_of < asOfDate) {
-        const value = row[field];
-        if (value !== null && value !== undefined && value !== "") prior = Number(value);
-      } else {
-        break;
-      }
-    }
-    return prior;
-  }
-
-  function diffChangelogs(fromDate, toDate) {
-    if (!fromDate || !toDate || fromDate >= toDate) {
-      return { newModels: [], scoreChanges: [], statusChanges: [] };
-    }
-    const newSinceA = new Map();
-    const scoreDeltas = new Map();
-    const statusDeltas = new Map();
-    const ascending = [...state.changelogs].sort((a, b) => String(a.date).localeCompare(String(b.date)));
-    for (const row of ascending) {
-      if (row.date <= fromDate || row.date > toDate) continue;
-      const parsed = safeParseJson(row.changed_json) || {};
-      const newModelsRaw = parseJsonArray(row.new_models_json);
-      for (const m of newModelsRaw) {
-        const entry = typeof m === "string" ? { name: m } : m;
-        const name = entry && entry.name;
-        if (name && !newSinceA.has(name)) newSinceA.set(name, entry);
-      }
-      for (const u of (parsed.score_updates || [])) {
-        if (!u || !u.name || !u.field) continue;
-        const k = u.name + "|" + u.field;
-        const existing = scoreDeltas.get(k);
-        scoreDeltas.set(k, {
-          name: u.name,
-          field: u.field,
-          from: existing && existing.from !== undefined ? existing.from : lookupPriorScore(u.name, u.field, row.date),
-          to: u.new === undefined ? u.to : u.new,
-          occurred: row.date,
-          source_url: u.source_url || (existing && existing.source_url) || "",
-        });
-      }
-      for (const s of (parsed.status_changes || [])) {
-        if (!s || !s.name) continue;
-        const existing = statusDeltas.get(s.name);
-        statusDeltas.set(s.name, {
-          name: s.name,
-          from: existing && existing.from !== undefined ? existing.from : null,
-          to: s.to,
-          occurred: row.date,
-          source_url: s.source_url || (existing && existing.source_url) || "",
-        });
-      }
-    }
-    return {
-      newModels: [...newSinceA.values()],
-      scoreChanges: [...scoreDeltas.values()],
-      statusChanges: [...statusDeltas.values()],
-    };
-  }
-
   function renderMarkdown(markdown) {
     const article = h("article", { class: "markdown vw-markdown" });
     if (window.marked && typeof window.marked.parse === "function") {
@@ -3729,120 +3652,6 @@
       article.appendChild(h("pre", { class: "raw-markdown" }, markdown));
     }
     return article;
-  }
-
-  function setChangelogTab(tab) {
-    const next = tab === "compare" ? "compare" : "read";
-    if (state.activeChangelogTab === next) return;
-    state.activeChangelogTab = next;
-    if (next === "compare") {
-      state.changelogCompare.active = true;
-      const dates = state.changelogs.map((c) => c.date).sort();
-      if (!state.changelogCompare.from && dates.length) state.changelogCompare.from = dates[0];
-      if (!state.changelogCompare.to && dates.length) state.changelogCompare.to = dates[dates.length - 1];
-    }
-    pushChangelogRouteHash(false);
-    render();
-  }
-
-  function setCompareDate(field, value) {
-    if (field !== "from" && field !== "to") return;
-    state.changelogCompare[field] = value || null;
-    pushChangelogRouteHash(true);
-    render();
-  }
-
-  function renderCompareDatePicker(label, value, field) {
-    const dates = state.changelogs.map((c) => c.date).sort();
-    return h("label", { class: "compare-date-field" }, [
-      h("span", { class: "compare-date-label" }, label),
-      h("select", {
-        class: "compare-date-select",
-        value: value || "",
-        onchange: (event) => setCompareDate(field, event.target.value),
-      }, [
-        h("option", { value: "" }, "—"),
-        ...dates.map((date) => h("option", { value: date, selected: date === value }, formatShortDate(date))),
-      ]),
-    ]);
-  }
-
-  function renderCompareScoreArrow(from, to) {
-    const fromText = from === null || from === undefined ? "—" : Number(from).toFixed(1);
-    const toText = to === null || to === undefined ? "—" : Number(to).toFixed(1);
-    let cls = "compare-arrow";
-    if (typeof from === "number" && typeof to === "number") {
-      if (to > from + 0.05) cls += " up";
-      else if (to < from - 0.05) cls += " down";
-      else cls += " flat";
-    }
-    return h("span", { class: cls }, [
-      h("span", { class: "compare-from" }, fromText),
-      h("span", { class: "compare-arrow-glyph" }, " → "),
-      h("span", { class: "compare-to" }, toText),
-    ]);
-  }
-
-  function renderCompareSection(diff) {
-    const { newModels, scoreChanges, statusChanges } = diff;
-    const totalChanges = newModels.length + scoreChanges.length + statusChanges.length;
-    if (!totalChanges) {
-      return h("div", { class: "compare-empty" }, "No changes between " +
-        (state.changelogCompare.from || "—") + " and " + (state.changelogCompare.to || "—") + ".");
-    }
-    const newModelsBlock = newModels.length ? h("div", { class: "compare-block" }, [
-      h("div", { class: "compare-block-head" }, [
-        h("h3", null, "New models"),
-        h("span", { class: "compare-count" }, String(newModels.length)),
-      ]),
-      h("ul", { class: "compare-new-list" }, newModels.map((m) => h("li", null, [
-        h("span", { class: "compare-model-name" }, m.name || ""),
-        m.vendor ? h("span", { class: "compare-vendor-pill" }, m.vendor) : null,
-      ]))),
-    ]) : null;
-    const byModel = new Map();
-    for (const change of scoreChanges) {
-      if (!byModel.has(change.name)) byModel.set(change.name, []);
-      byModel.get(change.name).push(change);
-    }
-    const scoreBlock = scoreChanges.length ? h("div", { class: "compare-block" }, [
-      h("div", { class: "compare-block-head" }, [
-        h("h3", null, "Score changes"),
-        h("span", { class: "compare-count" }, String(scoreChanges.length)),
-      ]),
-      h("div", { class: "compare-score-groups" }, [...byModel.entries()].map(([name, changes]) =>
-        h("div", { class: "compare-score-group" }, [
-          h("div", { class: "compare-score-group-head" }, name),
-          h("ul", { class: "compare-score-list" }, changes.map((c) => h("li", null, [
-            h("span", { class: "compare-field" }, c.field),
-            renderCompareScoreArrow(c.from, c.to),
-            h("span", { class: "compare-occurred" }, formatShortDate(c.occurred)),
-            c.source_url ? h("a", {
-              class: "compare-source",
-              href: c.source_url,
-              target: "_blank",
-              rel: "noopener noreferrer",
-            }, "source") : null,
-          ]))),
-        ])
-      )),
-    ]) : null;
-    const statusBlock = statusChanges.length ? h("div", { class: "compare-block" }, [
-      h("div", { class: "compare-block-head" }, [
-        h("h3", null, "Status changes"),
-        h("span", { class: "compare-count" }, String(statusChanges.length)),
-      ]),
-      h("ul", { class: "compare-status-list" }, statusChanges.map((s) => h("li", null, [
-        h("span", { class: "compare-model-name" }, s.name),
-        h("span", { class: "compare-arrow flat" }, [
-          h("span", { class: "compare-from" }, s.from || "—"),
-          h("span", { class: "compare-arrow-glyph" }, " → "),
-          h("span", { class: "compare-to" }, s.to || "—"),
-        ]),
-        h("span", { class: "compare-occurred" }, formatShortDate(s.occurred)),
-      ]))),
-    ]) : null;
-    return h("div", { class: "compare-sections" }, [newModelsBlock, scoreBlock, statusBlock].filter(Boolean));
   }
 
   function renderChangelogReadBody(active, cache) {
@@ -3865,42 +3674,15 @@
     return renderMarkdown(cache.body);
   }
 
-  function renderChangelogCompareBody() {
-    const fromDate = state.changelogCompare.from;
-    const toDate = state.changelogCompare.to;
-    const validRange = fromDate && toDate && fromDate < toDate;
-    const diff = validRange ? diffChangelogs(fromDate, toDate) : { newModels: [], scoreChanges: [], statusChanges: [] };
-    return h("div", { class: "compare-body" }, [
-      h("div", { class: "compare-controls" }, [
-        renderCompareDatePicker("From (older)", fromDate, "from"),
-        renderCompareDatePicker("To (newer)", toDate, "to"),
-      ]),
-      validRange
-        ? renderCompareSection(diff)
-        : h("div", { class: "compare-empty" }, "Pick two changelog dates above (older on the left, newer on the right) to compare."),
-    ]);
-  }
-
   function renderChangelog() {
     if (!state.changelogs.length) {
       return renderEmptyState("No Changelogs Yet", "Run a daily update and entries will appear here.");
     }
     const active = state.changelogs.find((row) => row.date === state.activeChangelogDate) || state.changelogs[0];
     if (active && state.activeChangelogDate !== active.date) state.activeChangelogDate = active.date;
-    if (active && state.activeChangelogTab !== "compare") ensureChangelogBody(active.date);
+    if (active) ensureChangelogBody(active.date);
     const cache = active ? state.changelogBodies[active.date] : null;
-    const tab = state.activeChangelogTab === "compare" ? "compare" : "read";
-    const body = tab === "compare" ? renderChangelogCompareBody() : renderChangelogReadBody(active, cache);
-    const tabStrip = h("div", { class: "changelog-tabs vw-segmented", role: "tablist" }, [
-      ["read", "Read"],
-      ["compare", "Compare"],
-    ].map(([key, label]) => h("button", {
-      class: "vw-segmented-item" + (tab === key ? " active" : ""),
-      type: "button",
-      role: "tab",
-      "aria-selected": String(tab === key),
-      onclick: () => setChangelogTab(key),
-    }, label)));
+    const body = renderChangelogReadBody(active, cache);
 
     return h("div", { class: "changelog-view" }, [
       h("aside", { class: "changelog-list" }, state.changelogs.map((entry) => {
@@ -3911,10 +3693,6 @@
           type: "button",
           onclick: () => {
             state.activeChangelogDate = entry.date;
-            if (state.activeChangelogTab !== "read") {
-              state.activeChangelogTab = "read";
-              pushChangelogRouteHash(true);
-            }
             render();
           },
         }, [
@@ -3928,10 +3706,9 @@
       h("section", { class: "changelog-panel" }, [
         h("div", { class: "changelog-panel-head" }, [
           h("div", null, [
-            h("p", { class: "eyebrow" }, tab === "compare" ? "Compare" : "Selected entry"),
-            h("h2", null, tab === "compare" ? "Compare changelogs" : (active ? (active.title || formatDate(active.date)) : "Changelog")),
+            h("p", { class: "eyebrow" }, "Selected entry"),
+            h("h2", null, active ? (active.title || formatDate(active.date)) : "Changelog"),
           ]),
-          tabStrip,
         ]),
         body,
       ]),
@@ -5006,28 +4783,30 @@
       title: "Models",
       summary: state.provider.default_model ? state.provider.default_model + (state.provider.backup_model ? " / " + state.provider.backup_model : "") : "Not set",
       children: [
-        h("div", { class: "settings-form" }, [
-          settingsField("Default model", hasModels
-            ? h("select", { id: "settings-default-model", class: "vw-select", onchange: (e) => { s.draftDefaultModel = e.target.value; render(); } }, s.modelsList.map((m) => {
-                const mid = typeof m === "string" ? m : m.id;
-                const sel = s.draftDefaultModel !== null ? s.draftDefaultModel : state.provider.default_model;
-                return h("option", { value: mid, selected: mid === sel }, mid);
-              }))
-            : h("input", { id: "settings-default-model", class: "vw-input", type: "text", value: s.draftDefaultModel !== null ? s.draftDefaultModel : state.provider.default_model || "", placeholder: "e.g. gpt-4o", oninput: (e) => { s.draftDefaultModel = e.target.value; render(); } }),
-            hasModels ? null : "Enter the model ID exactly as the service names it."
-          ),
-          settingsField("Backup model", hasModels
-            ? h("select", { id: "settings-backup-model", class: "vw-select", onchange: (e) => { s.draftBackupModel = e.target.value; render(); } }, [
-                h("option", { value: "" }, "— none —"),
-                ...s.modelsList.map((m) => {
+        h("div", { class: "settings-form settings-models-compact" }, [
+          h("div", { class: "settings-models-grid" }, [
+            settingsField("Default model", hasModels
+              ? h("select", { id: "settings-default-model", class: "vw-select", onchange: (e) => { s.draftDefaultModel = e.target.value; render(); } }, s.modelsList.map((m) => {
                   const mid = typeof m === "string" ? m : m.id;
-                  const sel = s.draftBackupModel !== null ? s.draftBackupModel : state.provider.backup_model;
+                  const sel = s.draftDefaultModel !== null ? s.draftDefaultModel : state.provider.default_model;
                   return h("option", { value: mid, selected: mid === sel }, mid);
-                }),
-              ])
-            : h("input", { id: "settings-backup-model", class: "vw-input", type: "text", value: s.draftBackupModel !== null ? s.draftBackupModel : state.provider.backup_model || "", placeholder: "Optional backup model", oninput: (e) => { s.draftBackupModel = e.target.value; render(); } }),
-            hasModels ? null : "Optional fallback model for daily runs."
-          ),
+                }))
+              : h("input", { id: "settings-default-model", class: "vw-input", type: "text", value: s.draftDefaultModel !== null ? s.draftDefaultModel : state.provider.default_model || "", placeholder: "e.g. gpt-4o", oninput: (e) => { s.draftDefaultModel = e.target.value; render(); } }),
+              hasModels ? null : "Enter the model ID exactly as the service names it."
+            ),
+            settingsField("Backup model", hasModels
+              ? h("select", { id: "settings-backup-model", class: "vw-select", onchange: (e) => { s.draftBackupModel = e.target.value; render(); } }, [
+                  h("option", { value: "" }, "— none —"),
+                  ...s.modelsList.map((m) => {
+                    const mid = typeof m === "string" ? m : m.id;
+                    const sel = s.draftBackupModel !== null ? s.draftBackupModel : state.provider.backup_model;
+                    return h("option", { value: mid, selected: mid === sel }, mid);
+                  }),
+                ])
+              : h("input", { id: "settings-backup-model", class: "vw-input", type: "text", value: s.draftBackupModel !== null ? s.draftBackupModel : state.provider.backup_model || "", placeholder: "Optional backup model", oninput: (e) => { s.draftBackupModel = e.target.value; render(); } }),
+              hasModels ? null : "Optional fallback model for daily runs."
+            ),
+          ]),
           h("div", { class: "settings-actions" }, [
             h("button", { class: "vw-btn vw-btn-primary", type: "button", disabled: s.providerSaving || !state.provider.has_provider || !dirty, onclick: settingsSaveProvider }, s.providerSaving ? "Saving…" : "Save Models"),
             h("button", { class: "vw-btn vw-btn-secondary", type: "button", disabled: s.modelsLoading || !state.provider.has_provider, onclick: settingsLoadModels }, s.modelsLoading ? "Loading…" : "Reload List"),
@@ -5348,7 +5127,7 @@
   const DETAIL_CHART_FIELDS = [
     { key: "intelligence", label: "Intelligence", color: "var(--vw-iridescent-1)" },
     { key: "coding", label: "Coding", color: "var(--vw-iridescent-2)" },
-    { key: "agents", label: "Tool Use", color: "var(--vw-iridescent-3)" },
+    { key: "agents", label: "Agent", color: "var(--vw-iridescent-3)" },
     { key: "speed", label: "Speed", color: "var(--vw-iridescent-4)" },
     { key: "cost", label: "Cost", color: "var(--vw-iridescent-5)" },
   ];
@@ -5630,7 +5409,7 @@
     const rows = [
       ["Intelligence", model.intelligence],
       ["Coding", model.coding],
-      ["Tool Use", model.agents],
+      ["Agent", model.agents],
       ["Speed", model.speed],
       ["Cost", model.cost],
     ];
@@ -5650,7 +5429,7 @@
   function buildHistoryTable(history) {
     if (!history || !history.length) return "_No history rows yet._";
     const lines = [
-      "| Date | Intelligence | Coding | Tool Use | Speed | Cost | Overall |",
+      "| Date | Intelligence | Coding | Agent | Speed | Cost | Overall |",
       "|---|---|---|---|---|---|---|",
     ];
     for (const row of history) {
@@ -5758,7 +5537,7 @@
       "Status",
       "Intelligence",
       "Coding",
-      "Tool Use",
+      "Agent",
       "Speed",
       "Overall",
       "Cost",
@@ -5814,8 +5593,8 @@
     syncRouteFromView();
     const config = AREA_CONFIG[state.area] || AREA_CONFIG.models;
     const activeSubpage = config.subpages.find((item) => item.key === state.subview[state.area]);
-    const heading = state.area === "settings" && activeSubpage ? activeSubpage.label : config.label;
-    const kicker = state.area === "models" ? "Explore / Compare" : config.label;
+    const heading = state.area === "models" ? "Dashboard" : (state.area === "settings" && activeSubpage ? activeSubpage.label : config.label);
+    const kicker = state.area === "models" ? "Models" : config.label;
     slot.replaceChildren(
       h("div", { class: "app-page-title" }, [
         h("p", { class: "shell-kicker" }, kicker),

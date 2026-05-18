@@ -22,7 +22,12 @@ table lanes collapse score bars to tier letters and numeric values instead of
 showing horizontal scroll; the desktop shell now spans the viewport with the
 sidebar pinned left so chart/table views can use widescreen room; Models chrome
 is tightened with no redundant subtitles, icon-only CSV download, and combined
-Advanced Filters/Search controls.
+Advanced Filters/Search controls. Follow-up: Models now uses Agent wording,
+weighted Overall/Value scoring, and a compact scoring tooltip next to CSV
+export. Follow-up: Changelog is read-only again with no Compare tab, the main
+Models table no longer has a Trend column/sort path, Dashboard portrait layout
+uses model cards at 1080x1920, and Settings > Models is centered in a compact
+form.
 
 ### Phase 9.4 — Voidware Provider Reuse
 
