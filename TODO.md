@@ -7,47 +7,52 @@ Use `[ ]` only for still-open work.
 
 ## Now
 
-### Phase 9.6 — Voidware 0.9.8 Upgrade
+### Fresh Setup Wizard Walkthrough
 
-Plan: [docs/plans/2026-05-17-phase-9-6-voidware-0-9-8-upgrade.md](docs/plans/2026-05-17-phase-9-6-voidware-0-9-8-upgrade.md)
+Status: active headed-browser walkthrough on `http://127.0.0.1:8787`.
 
-Done: vendored Voidware `0.9.8` CSS/provenance, synced stale `voidware-spec`
-skill mirrors across WSL/Windows/remote workspaces, aligned route/drawer
-semantics with the current spec, fixed the mobile drawer close affordance and
-table overflow cue found by visual review, moved the app body/display typography
-to a Roboto-first sans stack, kept model list/chart names on the UI font, and
-reserved monospace treatment for compact numeric score/rank values where
-tabular scanning matters, plus the selected model detail title; constrained
-table lanes collapse score bars to tier letters and numeric values instead of
-showing horizontal scroll; the desktop shell now spans the viewport with the
-sidebar pinned left so chart/table views can use widescreen room; Models chrome
-is tightened with no redundant subtitles, icon-only CSV download, and combined
-Advanced Filters/Search controls. Follow-up: Models now uses Agent wording,
-weighted Overall/Value scoring, and a compact scoring tooltip next to CSV
-export. Follow-up: Changelog is read-only again with no Compare tab, the main
-Models table no longer has a Trend column/sort path, Dashboard portrait layout
-uses model cards at 1080x1920, and Settings > Models is centered in a compact
-form.
+Done so far: reset local generated state, launched a clean seeded DB, opened a
+headed `agent-browser` session, fixed Voidware broker autostart, added a narrow
+keyring fallback for unavailable broker/CLI secret writes, and cleaned first-run
+wizard loading so spinner and step-1 form render without shell/nav flashes or
+component jumps.
 
-### Phase 9.4 — Voidware Provider Reuse
+Screenshot set:
+`artifacts/browser-sessions/2026-05-18-fresh-wizard/`
 
-Plan: [docs/plans/2026-05-09-phase-9-4-voidware-provider-reuse.md](docs/plans/2026-05-09-phase-9-4-voidware-provider-reuse.md)
+- [ ] Finish manual wizard walkthrough through provider, model, Exa, LLM Stats,
+  schedule, and summary steps.
+- [ ] Run a refresh from the configured wizard flow and verify update overlay
+  behavior.
+- [ ] Capture final walkthrough screenshots and add the final screenshot refs to
+  `LOGBOOK.md`.
+- [ ] Archive/split `LOGBOOK.md` after the active walkthrough, since it is over
+  the usual size threshold.
 
-Done: redacted provider discovery, wizard/settings credential selection,
-metadata-only persistence, broker-mediated secret reads, 120-day grant tracking,
-encrypted Voidware v3 auth compatibility, focused backend tests for those
-contracts, and the setup wizard/dashboard/settings e2e screenshot pass.
+### CSS Fix Milestone — Wizard First-Run Polish
 
-### Phase 9.5 — SaaS UI/UX Polish
+Track visual-only follow-ups here instead of mixing them into refresh/data work.
 
-Plan: [docs/plans/2026-05-10-polished-saas-ui-ux-plan.md](docs/plans/2026-05-10-polished-saas-ui-ux-plan.md)
+- [ ] Review the full first-run wizard at desktop and narrow widths.
+- [ ] Check loading, progress, form, footer, error, and success states for
+  jumps, mis-centering, clipped controls, and text overflow.
+- [ ] Confirm screenshots:
+  `01-wizard-connection.png`, `02-wizard-no-nav-flash.png`,
+  `03-wizard-boot-spinner.png`, `04-centered-boot-spinner.png`, and
+  `05-wizard-stable-step1-load.png`.
+- [ ] Promote any remaining CSS-only findings into a focused fix pass.
 
-Audit: [docs/plans/e2e-analysis/master-issue-list.md](docs/plans/e2e-analysis/master-issue-list.md)
+## Recent Completed
 
-Done: implemented the polished UI/UX pass with sidebar icons, denser controls,
-bounded dashboard panels, settings and wizard composition, full copy cleanup
-away from `Model Ops`/ops phrasing, and final native/nano/blind screenshot
-reviews.
+- Phase 9.6 — Voidware 0.9.8 upgrade, workspace skill sync, route/drawer
+  semantics, dashboard typography/layout polish, Agent wording, weighted
+  scoring, read-only Changelog, portrait model cards, and compact Settings >
+  Models.
+- Phase 9.5 — SaaS UI/UX polish: sidebar icons, dense controls, bounded panels,
+  settings/wizard composition, copy cleanup, and screenshot review gates.
+- Phase 9.4 — Voidware provider reuse: credential discovery, metadata-only
+  persistence, broker-mediated reads, 120-day grants, encrypted v3 auth
+  compatibility, backend tests, and e2e screenshots.
 
 ## Completed History
 

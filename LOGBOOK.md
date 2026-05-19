@@ -4,6 +4,58 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 080 — 2026-05-19
+
+**Agent:** GPT-5 Codex (cinderbloom, dev-browser)
+**Cycle:** Fresh wizard walkthrough support
+**Task:** Launch a clean dev session and fix first-run wizard blockers
+
+---
+
+Started a fresh local walkthrough session for the setup wizard.
+
+- Reset generated local app state with `scripts/reset_local_state.py`, removing
+  the old dashboard DB, metrics CSV, LLM-Dash provider/schedule config, and
+  generated run logs.
+- Relaunched FastAPI on `http://127.0.0.1:8787` and opened a headed
+  `agent-browser` session for screenshot-backed feedback.
+- Captured wizard screenshots under
+  `artifacts/browser-sessions/2026-05-18-fresh-wizard/`.
+- Fixed the Voidware broker path: LLM-Dash now autostarts the auth broker with
+  the resolved CLI command instead of surfacing `broker_unavailable` when the
+  socket is missing.
+- Added a narrow legacy keyring fallback for provider, Exa, and LLM Stats
+  secret save/delete when the broker or CLI is unavailable.
+- Reworked first-run loading polish: static boot state and JS placeholders now
+  use spinner-only loading, hide the dashboard shell while booting, keep
+  `data-booting` until ready/wizard/error, and center the spinner against the
+  viewport.
+- Removed the wizard step-1 load jump by rendering only a centered spinner while
+  wizard presets, credentials, and schedule data load; the full title/progress/
+  form/footer render together once ready.
+
+Artifacts:
+- `artifacts/browser-sessions/2026-05-18-fresh-wizard/01-wizard-connection.png`
+- `artifacts/browser-sessions/2026-05-18-fresh-wizard/02-wizard-no-nav-flash.png`
+- `artifacts/browser-sessions/2026-05-18-fresh-wizard/03-wizard-boot-spinner.png`
+- `artifacts/browser-sessions/2026-05-18-fresh-wizard/04-centered-boot-spinner.png`
+- `artifacts/browser-sessions/2026-05-18-fresh-wizard/05-wizard-stable-step1-load.png`
+
+Verification:
+- `python -m unittest tests.test_voidware_auth`
+- `node --check web/app.js`
+- Headed `agent-browser` reload/screenshot/snapshot passes on the setup wizard.
+- Direct broker status check: broker available at
+  `~/.shxdow/tmp/auth-broker/1000.sock`.
+
+Residual notes:
+- CSS feedback is still being gathered live; final TODO/CSS milestone updates
+  are intentionally deferred until the walkthrough is done.
+- `LOGBOOK.md` is over the usual split threshold and should be archived after
+  this active review loop, not mid-walkthrough.
+
+---
+
 ## Entry 079 — 2026-05-18
 
 **Agent:** GPT-5 Codex (glassquill, shxdow-flow)
