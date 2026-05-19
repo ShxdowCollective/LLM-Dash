@@ -267,6 +267,8 @@
       connectionTestError: "",
       connectionTestStatus: "",
       connectionTestSkipped: false,
+      voidwareGrantState: "idle",
+      voidwareGrantError: "",
       availableModels: [],
       modelsLoading: false,
       modelsError: "",
@@ -1129,6 +1131,46 @@
     return candidate && candidate.endpoint_mode ? candidate.endpoint_mode : "append_v1";
   }
 
+  const WIZARD_CUSTOM_PRESET_ID = "custom-openai-compatible";
+
+  function inferPresetIdFromConnection(baseUrl, modelsOverrideUrl) {
+    const base = stripTrailingSlash(baseUrl);
+    const models = stripTrailingSlash(modelsOverrideUrl);
+    for (const preset of state.providerPresets.providers) {
+      const presetBase = stripTrailingSlash(preset.default_base_url);
+      const presetModels = stripTrailingSlash(preset.models_override_url);
+      if (base && presetBase && base === presetBase) return preset.id;
+      if (models && presetModels && models === presetModels) return preset.id;
+      const alternates = preset.alternate_model_catalogs || [];
+      for (const alt of alternates) {
+        const altUrl = stripTrailingSlash(alt.models_override_url);
+        if (altUrl && (base === altUrl || models === altUrl)) return preset.id;
+      }
+    }
+    return WIZARD_CUSTOM_PRESET_ID;
+  }
+
+  function setWizardPresetMetadata(presetId) {
+    const preset = presetId ? providerById(presetId) : null;
+    state.wizard.presetId = preset ? presetId : "";
+    state.wizard.preset = preset;
+  }
+
+  function maybeApplyWizardPresetModelExamples(preset) {
+    if (!preset) return;
+    const examples = [];
+    if (Array.isArray(preset.model_examples) && preset.model_examples.length) {
+      examples.push(...preset.model_examples);
+    } else if (Array.isArray(preset.examples)) {
+      preset.examples.forEach((item) => {
+        if (Array.isArray(item.model_examples)) examples.push(...item.model_examples);
+      });
+    }
+    const unique = [...new Set(examples)];
+    if (!state.wizard.defaultModel && unique[0]) state.wizard.defaultModel = unique[0];
+    if (!state.wizard.backupModel && unique[1]) state.wizard.backupModel = unique[1];
+  }
+
   function applyCredentialToWizard(name, shouldRender) {
     const candidate = providerCredentialByName(name);
     state.wizard.selectedCredentialName = candidate ? candidate.name : "";
@@ -1138,13 +1180,18 @@
       state.wizard.modelsOverrideUrl = candidate.models_url || "";
       state.wizard.endpointMode = candidateEndpointMode(candidate);
       state.wizard.apiKey = "";
-      state.wizard.presetId = "";
-      state.wizard.preset = null;
+      setWizardPresetMetadata(inferPresetIdFromConnection(candidate.base_url, candidate.models_url));
       state.wizard.connectionTestState = "idle";
       state.wizard.connectionTestError = "";
       state.wizard.connectionTestSkipped = false;
+      state.wizard.voidwareGrantState = "idle";
+      state.wizard.voidwareGrantError = "";
       state.wizard.availableModels = [];
       state.wizard.modelsError = "";
+    } else {
+      setWizardPresetMetadata("");
+      state.wizard.voidwareGrantState = "idle";
+      state.wizard.voidwareGrantError = "";
     }
     if (shouldRender !== false) render();
   }
@@ -1245,6 +1292,8 @@
       connectionTestError: "",
       connectionTestStatus: "",
       connectionTestSkipped: false,
+      voidwareGrantState: "idle",
+      voidwareGrantError: "",
       availableModels: [],
       modelsLoading: false,
       modelsError: "",
@@ -1280,8 +1329,11 @@
     await Promise.all([fetchProviderPresets(), fetchProviderCredentials(), fetchSchedule()]);
     if (!state.wizard.open || state.wizard.openRequestId !== requestId) return;
     resetWizardFromCurrent(startStep || 0, { loading: false, requestId });
-    if (!state.wizard.baseUrl && state.providerPresets.providers.length) {
+    if (!state.wizard.baseUrl && !state.wizard.selectedCredentialName && state.providerPresets.providers.length) {
       applyWizardPreset(state.providerPresets.providers[0].id, false);
+    } else if (state.wizard.selectedCredentialName && !state.wizard.presetId) {
+      const cred = state.wizard.selectedCredential;
+      setWizardPresetMetadata(inferPresetIdFromConnection(cred && cred.base_url, cred && cred.models_url));
     }
     render();
     if (state.wizard.step === 1) ensureWizardModelsLoaded();
@@ -1298,22 +1350,20 @@
 
   function applyWizardPreset(presetId, shouldRender) {
     const preset = providerById(presetId);
-    state.wizard.presetId = presetId;
-    state.wizard.preset = preset;
+    const usingSavedCredential = Boolean(state.wizard.selectedCredentialName);
+    setWizardPresetMetadata(presetId);
     if (preset) {
-      state.wizard.selectedCredentialName = "";
-      state.wizard.selectedCredential = null;
-      state.wizard.baseUrl = preset.default_base_url || "";
-      state.wizard.modelsOverrideUrl = preset.models_override_url || "";
-      state.wizard.endpointMode = preset.endpoint_mode || "append_v1";
-      state.wizard.connectionTestState = "idle";
-      state.wizard.connectionTestError = "";
-      state.wizard.connectionTestSkipped = false;
-      state.wizard.availableModels = [];
-      state.wizard.modelsError = "";
-      const examples = modelExamples();
-      if (!state.wizard.defaultModel && examples[0]) state.wizard.defaultModel = examples[0];
-      if (!state.wizard.backupModel && examples[1]) state.wizard.backupModel = examples[1];
+      if (!usingSavedCredential) {
+        state.wizard.baseUrl = preset.default_base_url || "";
+        state.wizard.modelsOverrideUrl = preset.models_override_url || "";
+        state.wizard.endpointMode = preset.endpoint_mode || "append_v1";
+        state.wizard.connectionTestState = "idle";
+        state.wizard.connectionTestError = "";
+        state.wizard.connectionTestSkipped = false;
+        state.wizard.availableModels = [];
+        state.wizard.modelsError = "";
+      }
+      maybeApplyWizardPresetModelExamples(preset);
     }
     if (shouldRender !== false) render();
   }
@@ -1336,7 +1386,11 @@
       if (!payload.ok) state.wizard.connectionTestError = "Model list request returned HTTP " + payload.status_code + ".";
     } catch (error) {
       state.wizard.connectionTestState = "failed";
-      state.wizard.connectionTestError = String((error && error.message) || error);
+      state.wizard.connectionTestError = voidwareErrorMessage(error);
+      if (voidwareErrorCode(error) === "approval_required") {
+        state.wizard.voidwareGrantState = "failed";
+        state.wizard.voidwareGrantError = state.wizard.connectionTestError;
+      }
     }
     render();
   }
@@ -2769,6 +2823,21 @@
           h("span", { class: "vw-display-row-label" }, "Base URL"),
           h("span", { class: "vw-display-row-value" }, state.wizard.selectedCredential.base_url || "Unavailable"),
         ]),
+      ]) : null,
+      state.wizard.selectedCredentialName ? h("div", { class: "wizard-voidware-grant vw-card vw-card-compact" }, [
+        h("p", { class: "vw-hint" }, "Authorize LLM-Dash to read this saved key through the Voidware auth broker. Approve the prompt in Voidware manager or your broker terminal."),
+        h("div", { class: "wizard-voidware-grant-row" }, [
+          h("button", {
+            class: "vw-btn vw-btn-secondary",
+            type: "button",
+            disabled: state.wizard.voidwareGrantState === "requesting",
+            onclick: requestWizardVoidwareGrant,
+          }, state.wizard.voidwareGrantState === "requesting" ? "Waiting for approval…" : "Authorize access"),
+          state.wizard.voidwareGrantState === "success"
+            ? wizardStatusChip("success", "Access granted")
+            : null,
+        ]),
+        state.wizard.voidwareGrantError ? h("p", { class: "wizard-error" }, state.wizard.voidwareGrantError) : null,
       ]) : null,
       wizardField("Base URL", h("input", {
         id: "wizard-base-url",
@@ -4234,6 +4303,38 @@
       missing: "Not set",
     };
     return labels[source] || "Unavailable";
+  }
+
+  function voidwareErrorMessage(error) {
+    const detail = error && error.payload && error.payload.detail;
+    if (detail && typeof detail === "object" && detail.message) return String(detail.message);
+    return String((error && error.message) || error || "Request failed.");
+  }
+
+  function voidwareErrorCode(error) {
+    const detail = error && error.payload && error.payload.detail;
+    return detail && typeof detail === "object" ? String(detail.code || "") : "";
+  }
+
+  async function requestWizardVoidwareGrant() {
+    if (!state.wizard.selectedCredentialName) return;
+    state.wizard.voidwareGrantState = "requesting";
+    state.wizard.voidwareGrantError = "";
+    render();
+    try {
+      await fetchJson("/api/voidware/broker/grant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credential_name: state.wizard.selectedCredentialName }),
+      });
+      state.wizard.voidwareGrantState = "success";
+      state.wizard.connectionTestState = "idle";
+      state.wizard.connectionTestError = "";
+    } catch (error) {
+      state.wizard.voidwareGrantState = "failed";
+      state.wizard.voidwareGrantError = voidwareErrorMessage(error);
+    }
+    render();
   }
 
   function brokerStatusCopy(code) {

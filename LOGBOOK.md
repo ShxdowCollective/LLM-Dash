@@ -4,6 +4,43 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 081 — 2026-05-19
+
+**Agent:** Cursor (dev-browser walkthrough)
+**Cycle:** Fresh wizard walkthrough
+**Task:** Abort walkthrough — Voidware broker approval gap
+
+---
+
+Aborted the headed setup wizard test. Saved Voidware credentials cannot complete
+Connection test without an approval surface Voidware does not expose to
+browser + local-server apps.
+
+Findings:
+
+- Failure mode: `approval_required` / broker message requiring interactive TTY
+  or an existing grant when the local broker has `approvalSurface: none` and
+  `canApprove: false` (headless `auth broker start --app llm-dash`).
+- Voidware’s supported integrator paths are **Voidware manager (Electron)** or
+  **foreground TTY broker**; no embeddable dialog/package for LLM-Dash to collect
+  auth password and mint `vwgr_...` inside the app UI.
+- LLM-Dash changes in this session (stop headless autostart, `/api/voidware/broker`,
+  wizard **Authorize access**, clearer errors) improve messaging but do not remove
+  the upstream dependency.
+
+Handoff:
+
+- Voidware `TODO.md`: **Milestone 8 — Auth Broker Approval for Third-Party Local
+  Apps**; Voidware `LOGBOOK.md` Entry 055.
+- LLM-Dash `TODO.md`: walkthrough marked aborted; CSS milestone paused.
+
+Artifacts retained:
+
+- `artifacts/browser-sessions/2026-05-18-fresh-wizard/`
+- `artifacts/browser-sessions/2026-05-19-wizard-walkthrough/06-credential-chip-user-file.png`
+
+---
+
 ## Entry 080 — 2026-05-19
 
 **Agent:** GPT-5 Codex (cinderbloom, dev-browser)

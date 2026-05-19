@@ -7,31 +7,48 @@ Use `[ ]` only for still-open work.
 
 ## Now
 
-### Fresh Setup Wizard Walkthrough
+### BLOCKED — Voidware saved-credential / broker approval (upstream)
 
-Status: active headed-browser walkthrough on `http://127.0.0.1:8787`.
+**Status:** Fresh setup wizard walkthrough **aborted** (2026-05-19).
 
-Done so far: reset local generated state, launched a clean seeded DB, opened a
-headed `agent-browser` session, fixed Voidware broker autostart, added a narrow
-keyring fallback for unavailable broker/CLI secret writes, and cleaned first-run
-wizard loading so spinner and step-1 form render without shell/nav flashes or
-component jumps.
+LLM-Dash cannot ship the first-run wizard flow for **saved Voidware keys** until
+Voidware provides an approval surface third-party local apps can use (not only
+Electron manager or a TTY foreground broker). See Voidware `TODO.md` **Milestone
+8 — Auth Broker Approval for Third-Party Local Apps**.
 
-Screenshot set:
-`artifacts/browser-sessions/2026-05-18-fresh-wizard/`
+In-repo mitigations already attempted (no headless broker autostart, grant API,
+wizard **Authorize access** UI) do not replace that product surface.
 
-- [ ] Finish manual wizard walkthrough through provider, model, Exa, LLM Stats,
-  schedule, and summary steps.
-- [ ] Run a refresh from the configured wizard flow and verify update overlay
-  behavior.
-- [ ] Capture final walkthrough screenshots and add the final screenshot refs to
-  `LOGBOOK.md`.
-- [ ] Archive/split `LOGBOOK.md` after the active walkthrough, since it is over
-  the usual size threshold.
+- [ ] Unblock when Voidware Milestone 8 lands; re-run wizard walkthrough from
+  Connection step with saved credentials.
+- [ ] Revisit whether LLM-Dash should keep env/keyring-only fallback for wizard
+  until embeddable approval exists (product decision).
 
-### CSS Fix Milestone — Wizard First-Run Polish
+### Fresh Setup Wizard Walkthrough (aborted)
 
-Track visual-only follow-ups here instead of mixing them into refresh/data work.
+Was: active headed-browser walkthrough on `http://127.0.0.1:8787`.
+
+Done before abort: reset local state, broker autostart fix (later revised),
+keyring fallback, wizard loading polish, service/credential UX fixes, voidware
+grant endpoint/UI experiment.
+
+Screenshot sets:
+
+- `artifacts/browser-sessions/2026-05-18-fresh-wizard/`
+- `artifacts/browser-sessions/2026-05-19-wizard-walkthrough/`
+
+Cancelled (blocked on Voidware Milestone 8):
+
+- ~~Finish manual wizard walkthrough through provider, model, Exa, LLM Stats,
+  schedule, and summary steps.~~
+- ~~Run a refresh from the configured wizard flow and verify update overlay
+  behavior.~~
+- ~~Capture final walkthrough screenshots and add refs to `LOGBOOK.md`.~~
+- ~~Archive/split `LOGBOOK.md` after the active walkthrough.~~
+
+### CSS Fix Milestone — Wizard First-Run Polish (paused)
+
+Paused with wizard walkthrough; resume after broker approval unblock.
 
 - [ ] Review the full first-run wizard at desktop and narrow widths.
 - [ ] Check loading, progress, form, footer, error, and success states for
@@ -41,6 +58,12 @@ Track visual-only follow-ups here instead of mixing them into refresh/data work.
   `03-wizard-boot-spinner.png`, `04-centered-boot-spinner.png`, and
   `05-wizard-stable-step1-load.png`.
 - [ ] Promote any remaining CSS-only findings into a focused fix pass.
+- [ ] **Copy pass (includes status chips):** map raw credential metadata to
+  user-facing labels on wizard/settings credential cards. Example: saved-key
+  chip shows `user-file` instead of something readable (e.g. “Saved in
+  Voidware” / “From your machine”). Same pass should cover `api_format`,
+  `reusability`, and broker chips — no internal slugs in the UI.
+  Evidence: `artifacts/browser-sessions/2026-05-19-wizard-walkthrough/06-credential-chip-user-file.png`.
 
 ## Recent Completed
 

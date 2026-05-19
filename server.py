@@ -92,6 +92,10 @@ class LLMStatsPayload(BaseModel):
     api_key: str
 
 
+class VoidwareGrantPayload(BaseModel):
+    credential_name: str
+
+
 class SchedulePayload(BaseModel):
     cadence: str = "off"
     time_local: str = "09:00"
@@ -148,6 +152,17 @@ def _redact_known_secrets(text: str) -> str:
 
 def _http_error(exc: Exception, status_code: int = 400) -> HTTPException:
     return HTTPException(status_code=status_code, detail=str(exc))
+
+
+def _voidware_auth_http_error(exc: voidware_auth.VoidwareAuthError) -> HTTPException:
+    detail: dict[str, Any] = {
+        "message": _redact_known_secrets(str(exc)),
+        "code": exc.code,
+        "broker": voidware_auth.broker_status(),
+    }
+    if exc.details:
+        detail.update(exc.details)
+    return HTTPException(status_code=403, detail=detail)
 
 
 def _provider_presets() -> dict[str, Any]:
@@ -481,10 +496,30 @@ def post_provider(payload: ProviderPayload) -> dict[str, Any]:
         raise _http_error(exc)
 
 
+@app.get("/api/voidware/broker")
+def get_voidware_broker() -> dict[str, Any]:
+    return voidware_auth.broker_status()
+
+
+@app.post("/api/voidware/broker/grant")
+def post_voidware_broker_grant(payload: VoidwareGrantPayload) -> dict[str, Any]:
+    name = payload.credential_name.strip()
+    if not name:
+        raise _http_error(ValueError("credential_name is required."))
+    try:
+        result = voidware_auth.request_credential_access_grant(name)
+    except voidware_auth.VoidwareAuthError as exc:
+        raise _voidware_auth_http_error(exc) from exc
+    grant = result.get("grant") if isinstance(result.get("grant"), dict) else {}
+    return {"ok": bool(result.get("secret")), "grant": grant}
+
+
 @app.get("/api/provider/test-connection")
 async def test_provider_connection() -> dict[str, Any]:
     try:
         status_code, payload = await _fetch_provider_models()
+    except voidware_auth.VoidwareAuthError as exc:
+        raise _voidware_auth_http_error(exc) from exc
     except ConfigError as exc:
         raise _http_error(exc)
     except Exception as exc:
@@ -496,6 +531,8 @@ async def test_provider_connection() -> dict[str, Any]:
 async def test_provider_connection_payload(payload: ProviderPayload) -> dict[str, Any]:
     try:
         status_code, body = await _fetch_models_for_bundle(_bundle_from_payload(payload))
+    except voidware_auth.VoidwareAuthError as exc:
+        raise _voidware_auth_http_error(exc) from exc
     except ConfigError as exc:
         raise _http_error(exc)
     except Exception as exc:

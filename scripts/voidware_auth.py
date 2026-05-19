@@ -20,6 +20,8 @@ EXA_SECRET_NAME = "llmdash.exa.api_key"
 LLMSTATS_SECRET_NAME = "llmdash.llmstats.api_key"
 # Request the longest broker grant lifetime Voidware currently accepts.
 MAX_GRANT_TTL = "120d"
+DEFAULT_BROKER_TIMEOUT = 20
+APPROVAL_BROKER_TIMEOUT = 120
 ROOT = Path(__file__).resolve().parents[1]
 CLIENT_GRANT_SERVICE_NAME = "llm-dash-voidware-grants"
 
@@ -103,53 +105,50 @@ def _run_once(cmd: list[str], args: list[str], *, secret: str | None = None, tim
     return payload
 
 
-def _broker_autostart_action(args: list[str]) -> str:
-    if len(args) < 3 or args[0] != "auth" or args[1] != "broker":
-        return ""
-    return args[2] if args[2] in {"status", "request"} else ""
+def _status_payload() -> dict[str, Any]:
+    payload = _run(["auth", "broker", "status", *_context_flags(), "--json"], timeout=8)
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    return {
+        "ok": bool(payload.get("ok")),
+        "error_code": str(payload.get("errorCode") or ""),
+        "data": data,
+    }
 
 
-def _start_broker(cmd: list[str]) -> dict[str, Any]:
-    try:
-        child = subprocess.Popen(
-            [*cmd, "auth", "broker", "start", "--app", APP_NAME, *_context_flags()],
-            cwd=ROOT,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=(os.name != "nt"),
-        )
-    except FileNotFoundError:
-        return {"ok": False, "error": "voidware CLI not found", "errorCode": "cli_unavailable"}
-    except OSError as exc:
-        return {"ok": False, "error": f"voidware broker start failed: {exc}", "errorCode": "broker_start_failed"}
-
-    deadline = time.monotonic() + 3
-    status_args = ["auth", "broker", "status", *_context_flags(), "--json"]
-    last_error = "broker did not report ready"
-    while time.monotonic() < deadline:
-        payload = _run_once(cmd, status_args, timeout=3)
-        if payload.get("ok"):
-            return payload
-        last_error = str(payload.get("error") or last_error)
-        if child.poll() is not None:
-            break
-        time.sleep(0.1)
-    return {"ok": False, "error": last_error, "errorCode": "broker_start_failed"}
+def _ensure_payload() -> dict[str, Any]:
+    payload = _run(
+        ["auth", "broker", "ensure", "--app", APP_NAME, *_context_flags(), "--json"],
+        timeout=8,
+    )
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    status = data.get("status") if isinstance(data.get("status"), dict) else {}
+    actions = data.get("actions") if isinstance(data.get("actions"), list) else []
+    return {
+        "ok": bool(payload.get("ok")),
+        "error_code": str(payload.get("errorCode") or ""),
+        "running": bool(data.get("running")),
+        "status": status,
+        "actions": actions,
+    }
 
 
-def _run(args: list[str], *, secret: str | None = None, timeout: int = 20) -> dict[str, Any]:
+def _approval_hint(status: dict[str, Any]) -> str:
+    surface = str(status.get("approvalSurface") or status.get("approval_surface") or "")
+    if surface == "electron":
+        return "Approve the access request in the Voidware manager window."
+    if surface == "tty":
+        return "Approve the access request in the terminal where the Voidware auth broker is running."
+    return (
+        "Start an approval-capable Voidware auth broker (Voidware manager or "
+        "`voidware auth broker start` in a terminal), then authorize access."
+    )
+
+
+def _run(args: list[str], *, secret: str | None = None, timeout: int = DEFAULT_BROKER_TIMEOUT) -> dict[str, Any]:
     cmd = resolve_cli()
     if not cmd:
         return {"ok": False, "error": "voidware CLI not found", "errorCode": "cli_unavailable"}
-    payload = _run_once(cmd, args, secret=secret, timeout=timeout)
-    action = _broker_autostart_action(args)
-    if action and payload.get("errorCode") == "broker_unavailable":
-        started = _start_broker(cmd)
-        if started.get("ok"):
-            return _run_once(cmd, args, secret=secret, timeout=timeout)
-        return started
-    return payload
+    return _run_once(cmd, args, secret=secret, timeout=timeout)
 
 
 def broker_status() -> dict[str, Any]:
@@ -159,20 +158,27 @@ def broker_status() -> dict[str, Any]:
             "available": False,
             "cli_available": False,
             "persistence": "",
+            "approval_surface": "",
+            "can_approve": False,
             "error_code": "cli_unavailable",
             "grant_ttl": MAX_GRANT_TTL,
+            "bootstrap_actions": [],
         }
-    payload = _run(["auth", "broker", "status", *_context_flags(), "--json"], timeout=8)
-    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    status = _status_payload()
+    data = status["data"]
+    ensure = _ensure_payload() if not status["ok"] else {"running": True, "status": data, "actions": []}
+    broker_data = ensure["status"] if ensure.get("running") and ensure.get("status") else data
     return {
-        "available": bool(payload.get("ok")),
+        "available": bool(status["ok"] or ensure.get("running")),
         "cli_available": True,
-        "persistence": str(data.get("persistence") or ""),
-        "approval_surface": str(data.get("approvalSurface") or ""),
-        "durable_grants": bool(data.get("durableGrants")),
-        "durable_secrets": bool(data.get("durableSecrets")),
-        "error_code": str(payload.get("errorCode") or ""),
+        "persistence": str(broker_data.get("persistence") or ""),
+        "approval_surface": str(broker_data.get("approvalSurface") or ""),
+        "can_approve": bool(broker_data.get("canApprove")),
+        "durable_grants": bool(broker_data.get("durableGrants")),
+        "durable_secrets": bool(broker_data.get("durableSecrets")),
+        "error_code": status["error_code"] or str(ensure.get("error_code") or ""),
         "grant_ttl": MAX_GRANT_TTL,
+        "bootstrap_actions": ensure.get("actions") or [],
     }
 
 
@@ -223,11 +229,35 @@ def _request_args(
 def _unwrap_or_raise(payload: dict[str, Any]) -> Any:
     if payload.get("ok"):
         return payload.get("data")
-    raise VoidwareAuthError(
-        _redact(str(payload.get("error") or "voidware broker request failed")),
-        code=str(payload.get("errorCode") or "broker_error"),
-        details=payload.get("details") if isinstance(payload.get("details"), dict) else {},
-    )
+    code = str(payload.get("errorCode") or "broker_error")
+    message = _redact(str(payload.get("error") or "voidware broker request failed"))
+    details: dict[str, Any] = {}
+    if code == "approval_required":
+        status = broker_status()
+        message = (
+            "Voidware needs your approval before LLM-Dash can use this saved key. "
+            + _approval_hint({"approvalSurface": status.get("approval_surface")})
+        )
+        details["broker"] = status
+    raise VoidwareAuthError(message, code=code, details=details)
+
+
+def _require_approval_capable_broker() -> dict[str, Any]:
+    status = broker_status()
+    if not status.get("available"):
+        actions = status.get("bootstrap_actions") or []
+        hint = "Voidware auth broker is not running."
+        if actions:
+            hint += " Start it with Voidware manager or `voidware auth broker start` in a terminal."
+        raise VoidwareAuthError(hint, code="broker_unavailable", details={"broker": status})
+    if not status.get("can_approve"):
+        raise VoidwareAuthError(
+            "The running Voidware auth broker cannot show approval prompts. "
+            + _approval_hint({"approvalSurface": status.get("approval_surface")}),
+            code="approval_required",
+            details={"broker": status},
+        )
+    return status
 
 
 def _grant_metadata(data: dict[str, Any]) -> dict[str, Any]:
@@ -374,17 +404,21 @@ def _run_cached_request(
     *,
     scope: str,
     allow_secret_output: bool = False,
+    require_fresh_grant: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     account = _grant_cache_account(operation, target, scope)
-    cached = _load_cached_grant(account)
+    cached = {} if require_fresh_grant else _load_cached_grant(account)
     if cached:
-        payload = _run(_request_args(
-            operation,
-            target=target,
-            scope=scope,
-            grant_token=str(cached.get("grantToken")),
-            allow_secret_output=allow_secret_output,
-        ))
+        payload = _run(
+            _request_args(
+                operation,
+                target=target,
+                scope=scope,
+                grant_token=str(cached.get("grantToken")),
+                allow_secret_output=allow_secret_output,
+            ),
+            timeout=DEFAULT_BROKER_TIMEOUT,
+        )
         if payload.get("ok"):
             return payload, cached
         if payload.get("errorCode") in FRESH_GRANT_CODES:
@@ -392,25 +426,35 @@ def _run_cached_request(
         else:
             return payload, cached
 
-    payload = _run(_request_args(
-        operation,
-        target=target,
-        scope=scope,
-        allow_secret_output=allow_secret_output,
-    ))
+    _require_approval_capable_broker()
+    payload = _run(
+        _request_args(
+            operation,
+            target=target,
+            scope=scope,
+            allow_secret_output=allow_secret_output,
+        ),
+        timeout=APPROVAL_BROKER_TIMEOUT,
+    )
     data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
     if payload.get("ok") and isinstance(data, dict):
         _store_cached_grant(account, data, operation=operation, target=target, scope=scope)
     return payload, {}
 
 
-def read_secret_with_grant(name: str) -> dict[str, Any]:
+def request_credential_access_grant(name: str) -> dict[str, Any]:
+    """Request (or renew) broker access for a saved Voidware credential; may block for user approval."""
+    return read_secret_with_grant(name, require_fresh_grant=True)
+
+
+def read_secret_with_grant(name: str, *, require_fresh_grant: bool = False) -> dict[str, Any]:
     scope = f"auth:secret:read:{name}"
     payload, cached_grant = _run_cached_request(
         "auth:secret:read",
         target=name,
         scope=scope,
         allow_secret_output=True,
+        require_fresh_grant=require_fresh_grant,
     )
     data = _unwrap_or_raise(payload)
     data = data if isinstance(data, dict) else {}

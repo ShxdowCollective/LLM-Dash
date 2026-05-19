@@ -184,35 +184,42 @@ class VoidwareAuthTests(unittest.TestCase):
         self.assertEqual(cached["renewalWindowStartsAt"], "2098-10-01T00:00:00Z")
         self.assertIs(cached["renewalRecommended"], True)
 
-    def test_broker_request_autostarts_with_resolved_cli_command(self) -> None:
+    def test_broker_request_does_not_autostart_headless_broker(self) -> None:
         calls: list[tuple[list[str], list[str]]] = []
-        popen_calls: list[list[str]] = []
-
-        class FakeChild:
-            def poll(self) -> None:
-                return None
 
         def fake_run_once(cmd: list[str], args: list[str], **kwargs) -> dict[str, object]:
             calls.append((cmd, args))
-            if len(calls) == 1:
-                return {"ok": False, "errorCode": "broker_unavailable", "error": "missing socket"}
-            return {"ok": True, "data": {"endpoint": "sock"}}
-
-        def fake_popen(command: list[str], **kwargs) -> FakeChild:
-            popen_calls.append(command)
-            return FakeChild()
+            return {"ok": False, "errorCode": "broker_unavailable", "error": "missing socket"}
 
         with (
             patch.object(voidware_auth, "resolve_cli", return_value=["node", "/opt/voidware/bin.js"]),
             patch.object(voidware_auth, "_run_once", side_effect=fake_run_once),
-            patch.object(voidware_auth.subprocess, "Popen", side_effect=fake_popen),
+            patch.object(voidware_auth.subprocess, "Popen") as popen,
         ):
             payload = voidware_auth._run(["auth", "broker", "request", "auth:secret:read", "alpha", "--json"])
 
-        self.assertTrue(payload["ok"])
-        self.assertEqual(popen_calls[0][:6], ["node", "/opt/voidware/bin.js", "auth", "broker", "start", "--app"])
-        self.assertNotIn("--background", popen_calls[0])
-        self.assertEqual(calls[-1][1][:3], ["auth", "broker", "request"])
+        self.assertFalse(payload["ok"])
+        popen.assert_not_called()
+        self.assertEqual(calls[0][1][:3], ["auth", "broker", "request"])
+
+    def test_secret_read_requires_approval_capable_broker_without_cached_grant(self) -> None:
+        with (
+            patch.object(voidware_auth, "_load_cached_grant", return_value={}),
+            patch.object(
+                voidware_auth,
+                "broker_status",
+                return_value={
+                    "available": True,
+                    "can_approve": False,
+                    "approval_surface": "none",
+                    "bootstrap_actions": [],
+                },
+            ),
+        ):
+            with self.assertRaises(voidware_auth.VoidwareAuthError) as ctx:
+                voidware_auth.read_secret_with_grant("alpha")
+
+        self.assertEqual(ctx.exception.code, "approval_required")
 
     def test_v3_encrypted_auth_file_uses_broker_instead_of_plaintext_fallback(self) -> None:
         auth_file = Path(self.tmp.name) / "auth.json"
