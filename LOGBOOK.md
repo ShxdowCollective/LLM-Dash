@@ -4,6 +4,192 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 079 — 2026-05-18
+
+**Agent:** GPT-5 Codex (glassquill, shxdow-flow)
+**Cycle:** Dashboard nav and portrait layout polish
+**Task:** Remove compare/trend dashboard clutter and rebuild portrait Models layout
+
+---
+
+Polished the Models dashboard and Changelog surfaces after the scoring update.
+
+- Simplified the sidebar brand to `LLM-Dash` and removed the `Workspace` and
+  `Model Benchmarks` subtitles.
+- Changed the Models page header to kicker `Models` and title `Dashboard`.
+- Removed the visible Changelog Compare tab and deleted the now-unreachable
+  Compare helper/UI CSS.
+- Removed the main Models table Trend column/sort remnants while keeping model
+  detail history charts intact.
+- Added iridescent outlines/tinted active states to the Table/Chart picker and
+  Sort controls.
+- Reworked Settings > Models into a centered compact two-column form.
+- Added a portrait Dashboard card list so 1080x1920 hides the wide table and
+  shows tappable model cards with Overall/Value/Cost and metric summaries.
+- Added plan: `docs/plans/2026-05-18-dashboard-mobile-nav-refresh.md`.
+
+Verification:
+- `node --check web/app.js`
+- `python3 -m unittest discover -v`
+- `git diff --check`
+- Headed `agent-browser` probes at `1920x1080` and `1080x1920`: confirmed no
+  Trend column, no Changelog Compare tab/body, corrected nav/header copy,
+  colored picker styling, centered Settings Models panel, portrait card layout,
+  and no horizontal overflow or page errors.
+
+---
+
+## Entry 078 — 2026-05-17
+
+**Agent:** GPT-5 Codex (glassquill, shxdow-flow)
+**Cycle:** Models dashboard scoring polish
+**Task:** Update Agent wording, score weights, and formula tooltip
+
+---
+
+Updated the Models dashboard scoring presentation.
+
+- Renamed visible `Tool Use` labels to `Agent` across the Models table, chart
+  legend, filters, detail panels, model reports, and CSV export.
+- Changed Overall from an even average to a weighted score: 30% intelligence,
+  30% coding, 30% agent capability, and 10% speed.
+- Changed Value from an even Overall/Cost average to 80% Overall and 20% cost.
+- Moved the formula/source explanation out of the footer into a focused `?`
+  tooltip beside the CSV download button, while keeping the tier legend visible.
+- Updated README, Architecture, and TODO notes for the new scoring expectation.
+
+Verification:
+- `node --check web/app.js`
+- `python3 -m unittest discover -v`
+- `git diff --check`
+- Headed `agent-browser` probe on Models table: confirmed Agent table/header
+  wording, no old formula footer text, tooltip content/hover visibility,
+  weighted first-row Overall `9.3`, weighted Value `8.4`, no body horizontal
+  overflow at desktop and 768px widths, and no browser console/page errors.
+
+---
+
+## Entry 077 — 2026-05-17
+
+**Agent:** GPT-5 Codex (nightglass, shxdow-flow)
+**Cycle:** Phase 9.6 — Voidware 0.9.8 Upgrade
+**Task:** Upgrade vendored Voidware CSS, sync workspace skills, and run review gates
+
+---
+
+Completed the Phase 9.6 Voidware upgrade.
+
+- Added the Phase 9.6 plan under `docs/plans/` and ran a pro nano-agent plan
+  review before implementation.
+- Updated vendored Voidware provenance to `0.9.8` and copied the only changed
+  CSS payload, `buttons.css`, from the current local Voidware source.
+- Refreshed visible Voidware docs references in README, Architecture, and
+  Development.
+- Synced stale `voidware-spec` skill mirrors to `0.9.8` across WSL, Windows,
+  ShxdowDocker, ShxdowMac, and the shxdowSkills master copy.
+- Aligned route navigation with the current spec by removing route-level
+  `aria-pressed`, keeping `aria-current`, and mirroring `data-vw-open` on the
+  sidebar backdrop.
+- Fixed visual-review findings: the mobile drawer now has an internal close
+  button with full nav labels, and the narrow Models table has a stronger
+  right-edge overflow cue.
+- Completed the follow-up Models dashboard font-role pass: table headers,
+  list/chart model names, status/tier labels, and filters now use the body font,
+  while compact numeric score/rank values use tabular monospace for fast
+  scanning alongside the color bars; the selected model detail title also keeps
+  the console font.
+- Added a no-horizontal-scroll Models table layout: score bars collapse to
+  colored tier letters plus numeric values whenever the actual table lane cannot
+  fit the full bar treatment.
+- Expanded the desktop app shell to the full viewport, pinning the sidebar to
+  the left edge and giving the Models chart/table lane the remaining widescreen
+  space instead of a centered max-width frame.
+- Reworked the Models Table/Chart control as a fixed-width segmented switcher
+  with roomier labels and `aria-pressed` state so the text no longer crowds.
+- Centered Models summary-value numerals inside their colored table cells so the
+  Overall/Cost/Value columns sit optically even.
+- Removed redundant dashboard/sidebar subtitles, changed the Models CSV export
+  to an icon-only download button, and combined Advanced Filters with Search in
+  one row.
+- Switched the app-level body and display font tokens to a Roboto-first sans
+  stack so the main dashboard typography has no serif-like face in the active
+  cascade.
+- Final native review caught the close button inheriting full-width phone
+  button styling and the Phase 9.6 plan being ignored by `.gitignore`; both
+  were fixed and the focused re-review passed cleanly.
+
+Verification:
+- `node --check web/app.js`
+- `python3 -m unittest discover -v`
+- `python3 -m py_compile server.py scripts/*.py tests/*.py`
+- `git diff --check`
+- Voidware spec checker with pinned skill `0.9.8`
+- isolated Voidware auth/broker smoke with temp `LLM_DASH_SHXDOW_ROOT`
+- headed `agent-browser` screenshots at `1280x800`, `768x600`, `1280x640`,
+  plus mobile drawer evidence, console/page-error checks, and overflow probes
+- follow-up Models font/screenspace probes at `1280x800`, `1280x700`,
+  `768x600`, and `1920x1080`
+- visual nano-agent review on `opencode-go/kimi-k2.6`, with an alternate
+  `opencode-go/qwen3.6-plus` confirmation after one no-final-response retry
+- final pro nano-agent attempts stalled without verdict, so final review fell
+  back to native review per the requested route; focused native re-review passed
+
+Residual risk:
+- The Models table remains intentionally dense at 768px and depends on internal
+  horizontal scrolling with explicit visual cues.
+
+---
+
+## Entry 076 — 2026-05-11
+
+**Agent:** GPT-5 Codex (prismhook, shxdowloop-ui)
+**Cycle:** Phase 9.5 — SaaS UI/UX Polish
+**Task:** Implement final dashboard/settings/wizard UI polish and review gates
+
+---
+
+Finished the Phase 9.5 product polish pass on the shxdowloop branch.
+
+- Replaced sidebar letter glyphs with inline icon affordances and cleaned the
+  mobile menu trigger.
+- Tightened typography and dense controls, with touch-size restoration at small
+  breakpoints.
+- Bounded Models, Chart, Changelog, and Stats panels with internal scroll,
+  sticky table headers, horizontal affordances, and overflow probes.
+- Reworked Settings into clearer Connection, Models, Research, and Schedule
+  surfaces with applied/dirty/revert states where save semantics support them.
+- Updated setup wizard step titles, service/key copy, URL handling labels,
+  schedule preview, and summary language.
+- Ran the requested full copy pass: removed `Model Ops`, avoided redundant
+  `Settings > Settings`, replaced visible `Agent Provider`/`Agent Tasks`
+  wording, and kept protocol terms scoped to key/URL/service controls.
+
+Visual gates:
+- Native screenshot review found table, changelog, and access-copy issues; all
+  blocking/medium findings were fixed.
+- Nano image review on `opencode-go/kimi-k2.6` produced useful findings but also
+  read stale draft screenshots; current findings were triaged and fixed.
+- Blind final visual confirmation on `opencode-go/qwen3.6-plus` passed against
+  the final-only screenshot folder.
+- Final native re-review passed with only low residual risks.
+
+Verification:
+- `node --check web/app.js`
+- `git diff --check`
+- headed `agent-browser` screenshots and probes at `1280x800`, `768x600`, and
+  representative app routes
+- browser console/page error checks
+- layout probes: no body horizontal overflow, no clipped controls, bounded
+  table scroll, and changelog preview strip horizontal-only on 768x600
+
+Residual risk:
+- The Models table remains intentionally dense at 768px and relies on internal
+  horizontal scroll.
+- Wizard progress is legible at 768px but should be watched below 600px in a
+  future true-mobile pass.
+
+---
+
 ## Entry 075 — 2026-05-11
 
 **Agent:** GPT-5 Codex (silverthread, docs/spec-planning)

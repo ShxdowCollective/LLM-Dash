@@ -73,7 +73,7 @@ in-progress update. Killing the agent doesn't affect the dashboard.
 | Research | Exa (preferred) | Structured search + content fetch with citation control |
 | Credential storage | Env → Voidware provider credential → Voidware broker → legacy keyring | Secrets stay outside repo/API responses; selected provider credentials use broker grants with renewal metadata |
 | Scheduling | OS-native jobs | systemd timer (Linux/WSL), launchd (macOS), Task Scheduler (Windows) |
-| Design system | Voidware v0.8.4 | Sidebar app shell, dark-native surfaces, and iridescent accent system |
+| Design system | Voidware v0.9.8 | Sidebar app shell, dark-native surfaces, and iridescent accent system |
 
 ---
 
@@ -99,6 +99,10 @@ pair. Re-running an update for the same date upserts via the `UNIQUE` constraint
 
 Scores are normalized to a 0.0–10.0 scale. Every score claim in a changelog
 must cite a source URL.
+
+The dashboard computes Overall as a weighted composite: 30% intelligence, 30%
+coding, 30% agent capability, and 10% speed. Value weights Overall at 80% and
+cost at 20%.
 
 #### `changelogs`
 
@@ -203,7 +207,7 @@ Every filter change rebuilds a parameterized SQL query executed against the
 in-browser sql.js instance. Filters include:
 
 - **Vendor multi-select** — pill toggles
-- **Tier chips** — S through F (computed from overall score)
+- **Tier chips** — S through F (computed from weighted overall score)
 - **Range sliders** — dual-handle, one per benchmark dimension
 - **Text search** — case-insensitive LIKE across name, vendor, notes, params
 
@@ -324,7 +328,7 @@ expiration, invalidation, denial, or durable-secret-unavailable responses.
 
 ---
 
-## Design System — Voidware v0.8.4
+## Design System — Voidware v0.9.8
 
 The UI follows the Voidware design specification:
 

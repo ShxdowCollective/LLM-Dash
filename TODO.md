@@ -7,6 +7,28 @@ Use `[ ]` only for still-open work.
 
 ## Now
 
+### Phase 9.6 — Voidware 0.9.8 Upgrade
+
+Plan: [docs/plans/2026-05-17-phase-9-6-voidware-0-9-8-upgrade.md](docs/plans/2026-05-17-phase-9-6-voidware-0-9-8-upgrade.md)
+
+Done: vendored Voidware `0.9.8` CSS/provenance, synced stale `voidware-spec`
+skill mirrors across WSL/Windows/remote workspaces, aligned route/drawer
+semantics with the current spec, fixed the mobile drawer close affordance and
+table overflow cue found by visual review, moved the app body/display typography
+to a Roboto-first sans stack, kept model list/chart names on the UI font, and
+reserved monospace treatment for compact numeric score/rank values where
+tabular scanning matters, plus the selected model detail title; constrained
+table lanes collapse score bars to tier letters and numeric values instead of
+showing horizontal scroll; the desktop shell now spans the viewport with the
+sidebar pinned left so chart/table views can use widescreen room; Models chrome
+is tightened with no redundant subtitles, icon-only CSV download, and combined
+Advanced Filters/Search controls. Follow-up: Models now uses Agent wording,
+weighted Overall/Value scoring, and a compact scoring tooltip next to CSV
+export. Follow-up: Changelog is read-only again with no Compare tab, the main
+Models table no longer has a Trend column/sort path, Dashboard portrait layout
+uses model cards at 1080x1920, and Settings > Models is centered in a compact
+form.
+
 ### Phase 9.4 — Voidware Provider Reuse
 
 Plan: [docs/plans/2026-05-09-phase-9-4-voidware-provider-reuse.md](docs/plans/2026-05-09-phase-9-4-voidware-provider-reuse.md)
@@ -22,9 +44,10 @@ Plan: [docs/plans/2026-05-10-polished-saas-ui-ux-plan.md](docs/plans/2026-05-10-
 
 Audit: [docs/plans/e2e-analysis/master-issue-list.md](docs/plans/e2e-analysis/master-issue-list.md)
 
-[ ] Implement the polished SaaS UI/UX pass: typography cleanup, dense controls,
-bounded panels, settings composition, wizard clarity, and screenshot
-verification.
+Done: implemented the polished UI/UX pass with sidebar icons, denser controls,
+bounded dashboard panels, settings and wizard composition, full copy cleanup
+away from `Model Ops`/ops phrasing, and final native/nano/blind screenshot
+reviews.
 
 ## Completed History
 
@@ -48,3 +71,5 @@ verification.
 - Phase 9.2 — Power-user shortcuts and visibility-aware data refresh.
 - Phase 9.3 — Agent Provider leaderboard on Stats.
 - Phase 9.4 — Voidware provider reuse and full app e2e screenshots.
+- Phase 9.5 — SaaS UI/UX polish and final visual review gates.
+- Phase 9.6 — Voidware 0.9.8 upgrade and workspace skill sync.
