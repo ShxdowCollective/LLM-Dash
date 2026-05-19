@@ -41,6 +41,7 @@ SENSITIVE_HEADER_PARTS = ("authorization", "api-key", "apikey", "x-api-key", "to
 ENDPOINT_MODE_APPEND_V1 = "append_v1"
 ENDPOINT_MODE_ROOT = "root"
 ENDPOINT_MODES = {ENDPOINT_MODE_APPEND_V1, ENDPOINT_MODE_ROOT}
+SECRET_FALLBACK_CODES = {"broker_unavailable", "broker_timeout", "cli_unavailable"}
 
 
 class ConfigError(ValueError):
@@ -172,6 +173,30 @@ def _keyring_get(name: str) -> str:
         return keyring.get_password(KEYRING_SERVICE, name) or ""
     except Exception:
         return ""
+
+
+def _keyring_set(name: str, value: str) -> bool:
+    try:
+        import keyring
+    except Exception:
+        return False
+    try:
+        keyring.set_password(KEYRING_SERVICE, name, value)
+        return True
+    except Exception:
+        return False
+
+
+def _keyring_delete(name: str) -> bool:
+    try:
+        import keyring
+    except Exception:
+        return False
+    try:
+        keyring.delete_password(KEYRING_SERVICE, name)
+        return True
+    except Exception:
+        return False
 
 
 def _legacy_secret(name: str) -> str:
@@ -540,6 +565,40 @@ def load_provider_config() -> ProviderConfig:
     )
 
 
+def _save_secret(
+    broker_name: str,
+    keyring_name: str,
+    secret: str,
+    *,
+    metadata: dict[str, Any],
+    custom: dict[str, Any],
+) -> None:
+    try:
+        voidware_auth.write_secret(
+            broker_name,
+            secret,
+            metadata=metadata,
+            custom=custom,
+        )
+        return
+    except voidware_auth.VoidwareAuthError as exc:
+        if exc.code not in SECRET_FALLBACK_CODES:
+            raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
+        if not _keyring_set(keyring_name, secret):
+            raise ConfigError(f"Voidware auth {exc.code}: {exc}; legacy keyring fallback failed.") from exc
+
+
+def _remove_secret(broker_name: str, keyring_names: tuple[str, ...]) -> None:
+    try:
+        voidware_auth.delete_secret(broker_name)
+    except voidware_auth.VoidwareAuthError as exc:
+        if exc.code not in SECRET_FALLBACK_CODES:
+            raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
+
+    for name in keyring_names:
+        _keyring_delete(name)
+
+
 def load_provider_bundle() -> ProviderBundle:
     config = load_provider_config()
     return ProviderBundle(
@@ -625,15 +684,13 @@ def save_provider_api_key(api_key: str) -> None:
     secret = str(api_key or "").strip()
     if not secret:
         raise ConfigError("api_key is required")
-    try:
-        voidware_auth.write_secret(
-            voidware_auth.PROVIDER_SECRET_NAME,
-            secret,
-            metadata={"label": "LLM-Dash Agent Provider", "envVar": PROVIDER_KEY_NAME},
-            custom={"app": APP_NAME, "kind": "agent-provider"},
-        )
-    except voidware_auth.VoidwareAuthError as exc:
-        raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
+    _save_secret(
+        voidware_auth.PROVIDER_SECRET_NAME,
+        PROVIDER_KEY_NAME,
+        secret,
+        metadata={"label": "LLM-Dash Agent Provider", "envVar": PROVIDER_KEY_NAME},
+        custom={"app": APP_NAME, "kind": "agent-provider"},
+    )
 
 
 def load_exa_api_key() -> str:
@@ -644,22 +701,17 @@ def save_exa_api_key(api_key: str) -> None:
     secret = str(api_key or "").strip()
     if not secret:
         raise ConfigError("api_key is required")
-    try:
-        voidware_auth.write_secret(
-            voidware_auth.EXA_SECRET_NAME,
-            secret,
-            metadata={"label": "LLM-Dash Exa", "envVar": EXA_KEY_NAME},
-            custom={"app": APP_NAME, "kind": "exa"},
-        )
-    except voidware_auth.VoidwareAuthError as exc:
-        raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
+    _save_secret(
+        voidware_auth.EXA_SECRET_NAME,
+        EXA_KEY_NAME,
+        secret,
+        metadata={"label": "LLM-Dash Exa", "envVar": EXA_KEY_NAME},
+        custom={"app": APP_NAME, "kind": "exa"},
+    )
 
 
 def remove_exa_api_key() -> None:
-    try:
-        voidware_auth.delete_secret(voidware_auth.EXA_SECRET_NAME)
-    except voidware_auth.VoidwareAuthError as exc:
-        raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
+    _remove_secret(voidware_auth.EXA_SECRET_NAME, (EXA_KEY_NAME,))
 
 
 def load_llmstats_api_key() -> str:
@@ -670,26 +722,18 @@ def save_llmstats_api_key(api_key: str) -> None:
     secret = str(api_key or "").strip()
     if not secret:
         raise ConfigError("api_key is required")
-    try:
-        voidware_auth.write_secret(
-            voidware_auth.LLMSTATS_SECRET_NAME,
-            secret,
-            metadata={"label": "LLM-Dash LLM Stats", "envVar": LLMSTATS_KEY_NAME},
-            custom={"app": APP_NAME, "kind": "llmstats"},
-        )
-    except voidware_auth.VoidwareAuthError as exc:
-        raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
+    _save_secret(
+        voidware_auth.LLMSTATS_SECRET_NAME,
+        LLMSTATS_KEY_NAME,
+        secret,
+        metadata={"label": "LLM-Dash LLM Stats", "envVar": LLMSTATS_KEY_NAME},
+        custom={"app": APP_NAME, "kind": "llmstats"},
+    )
 
 
 def remove_llmstats_api_key() -> None:
-    try:
-        voidware_auth.delete_secret(voidware_auth.LLMSTATS_SECRET_NAME)
-    except voidware_auth.VoidwareAuthError as exc:
-        raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
+    _remove_secret(voidware_auth.LLMSTATS_SECRET_NAME, (LLMSTATS_KEY_NAME,))
 
 
 def remove_provider_api_key() -> None:
-    try:
-        voidware_auth.delete_secret(voidware_auth.PROVIDER_SECRET_NAME)
-    except voidware_auth.VoidwareAuthError as exc:
-        raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
+    _remove_secret(voidware_auth.PROVIDER_SECRET_NAME, PROVIDER_KEY_NAMES)

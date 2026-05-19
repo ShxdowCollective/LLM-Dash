@@ -10,6 +10,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -81,10 +82,7 @@ def _parse_json(stdout: str, stderr: str) -> dict[str, Any]:
     return {"ok": False, "error": _redact((stderr or stdout).strip() or "voidware CLI returned no JSON")}
 
 
-def _run(args: list[str], *, secret: str | None = None, timeout: int = 20) -> dict[str, Any]:
-    cmd = resolve_cli()
-    if not cmd:
-        return {"ok": False, "error": "voidware CLI not found", "errorCode": "cli_unavailable"}
+def _run_once(cmd: list[str], args: list[str], *, secret: str | None = None, timeout: int = 20) -> dict[str, Any]:
     try:
         result = subprocess.run(
             [*cmd, *args],
@@ -102,6 +100,55 @@ def _run(args: list[str], *, secret: str | None = None, timeout: int = 20) -> di
     payload = _parse_json(result.stdout, result.stderr)
     if result.returncode != 0 and payload.get("ok") is not False:
         payload = {"ok": False, "error": _redact(result.stderr.strip() or result.stdout.strip()), "errorCode": "cli_failed"}
+    return payload
+
+
+def _broker_autostart_action(args: list[str]) -> str:
+    if len(args) < 3 or args[0] != "auth" or args[1] != "broker":
+        return ""
+    return args[2] if args[2] in {"status", "request"} else ""
+
+
+def _start_broker(cmd: list[str]) -> dict[str, Any]:
+    try:
+        child = subprocess.Popen(
+            [*cmd, "auth", "broker", "start", "--app", APP_NAME, *_context_flags()],
+            cwd=ROOT,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=(os.name != "nt"),
+        )
+    except FileNotFoundError:
+        return {"ok": False, "error": "voidware CLI not found", "errorCode": "cli_unavailable"}
+    except OSError as exc:
+        return {"ok": False, "error": f"voidware broker start failed: {exc}", "errorCode": "broker_start_failed"}
+
+    deadline = time.monotonic() + 3
+    status_args = ["auth", "broker", "status", *_context_flags(), "--json"]
+    last_error = "broker did not report ready"
+    while time.monotonic() < deadline:
+        payload = _run_once(cmd, status_args, timeout=3)
+        if payload.get("ok"):
+            return payload
+        last_error = str(payload.get("error") or last_error)
+        if child.poll() is not None:
+            break
+        time.sleep(0.1)
+    return {"ok": False, "error": last_error, "errorCode": "broker_start_failed"}
+
+
+def _run(args: list[str], *, secret: str | None = None, timeout: int = 20) -> dict[str, Any]:
+    cmd = resolve_cli()
+    if not cmd:
+        return {"ok": False, "error": "voidware CLI not found", "errorCode": "cli_unavailable"}
+    payload = _run_once(cmd, args, secret=secret, timeout=timeout)
+    action = _broker_autostart_action(args)
+    if action and payload.get("errorCode") == "broker_unavailable":
+        started = _start_broker(cmd)
+        if started.get("ok"):
+            return _run_once(cmd, args, secret=secret, timeout=timeout)
+        return started
     return payload
 
 

@@ -116,7 +116,10 @@
       </nav>
 
       <section id="content-body" class="content-slot" aria-live="polite">
-        <p class="status-msg">Loading dashboard…</p>
+        <div class="status-msg loading-state" role="status" aria-label="Loading dashboard">
+          <span class="bootstrap-spinner" aria-hidden="true"></span>
+          <span class="sr-only">Loading dashboard…</span>
+        </div>
       </section>
     </section>
   </main>

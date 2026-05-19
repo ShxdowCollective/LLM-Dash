@@ -118,6 +118,30 @@ class VoidwareAuthTests(unittest.TestCase):
         self.assertEqual(provider["provider_credential_meta"]["safeCustom"], {"region": "iad"})
         self.assertNotIn("sk-selected", persisted)
 
+    def test_new_provider_key_falls_back_to_keyring_when_broker_is_unavailable(self) -> None:
+        stored: dict[str, str] = {}
+
+        def broker_unavailable(*args, **kwargs) -> None:
+            raise voidware_auth.VoidwareAuthError("auth broker unavailable", code="broker_unavailable")
+
+        with (
+            patch.object(config.voidware_auth, "write_secret", side_effect=broker_unavailable),
+            patch.object(config.voidware_auth, "read_secret", return_value=""),
+            patch.object(config, "_keyring_set", side_effect=lambda name, value: stored.setdefault(name, value) is not None),
+            patch.object(config, "_keyring_get", side_effect=lambda name: stored.get(name, "")),
+        ):
+            bundle = config.save_provider(
+                base_url="https://api.alpha.example",
+                api_key="sk-fallback",
+                default_model="alpha-chat",
+                endpoint_mode=config.ENDPOINT_MODE_APPEND_V1,
+            )
+
+        self.assertTrue(bundle.has_provider)
+        self.assertEqual(bundle.secrets.api_key, "sk-fallback")
+        self.assertEqual(stored[config.PROVIDER_KEY_NAME], "sk-fallback")
+        self.assertNotIn("sk-fallback", config.config_path().read_text(encoding="utf-8"))
+
     def test_broker_grant_cache_preserves_renewal_state(self) -> None:
         stored: dict[tuple[str, str], str] = {}
 
@@ -159,6 +183,36 @@ class VoidwareAuthTests(unittest.TestCase):
         self.assertEqual(cached["expiresAt"], "2099-01-01T00:00:00Z")
         self.assertEqual(cached["renewalWindowStartsAt"], "2098-10-01T00:00:00Z")
         self.assertIs(cached["renewalRecommended"], True)
+
+    def test_broker_request_autostarts_with_resolved_cli_command(self) -> None:
+        calls: list[tuple[list[str], list[str]]] = []
+        popen_calls: list[list[str]] = []
+
+        class FakeChild:
+            def poll(self) -> None:
+                return None
+
+        def fake_run_once(cmd: list[str], args: list[str], **kwargs) -> dict[str, object]:
+            calls.append((cmd, args))
+            if len(calls) == 1:
+                return {"ok": False, "errorCode": "broker_unavailable", "error": "missing socket"}
+            return {"ok": True, "data": {"endpoint": "sock"}}
+
+        def fake_popen(command: list[str], **kwargs) -> FakeChild:
+            popen_calls.append(command)
+            return FakeChild()
+
+        with (
+            patch.object(voidware_auth, "resolve_cli", return_value=["node", "/opt/voidware/bin.js"]),
+            patch.object(voidware_auth, "_run_once", side_effect=fake_run_once),
+            patch.object(voidware_auth.subprocess, "Popen", side_effect=fake_popen),
+        ):
+            payload = voidware_auth._run(["auth", "broker", "request", "auth:secret:read", "alpha", "--json"])
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(popen_calls[0][:6], ["node", "/opt/voidware/bin.js", "auth", "broker", "start", "--app"])
+        self.assertNotIn("--background", popen_calls[0])
+        self.assertEqual(calls[-1][1][:3], ["auth", "broker", "request"])
 
     def test_v3_encrypted_auth_file_uses_broker_instead_of_plaintext_fallback(self) -> None:
         auth_file = Path(self.tmp.name) / "auth.json"

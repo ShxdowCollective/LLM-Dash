@@ -418,13 +418,38 @@ a {
   padding: 28px 20px;
 }
 
+#app[data-booting="true"] .mobile-shell-header,
+#app[data-booting="true"] .vw-sidebar-backdrop,
+#app[data-booting="true"] .app-sidebar,
+#app[data-booting="true"] .app-page-header,
+#app[data-booting="true"] .vw-subpage-nav {
+  display: none;
+}
+
+#app[data-booting="true"] .app-content {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  place-items: center;
+}
+
 #app[data-booting="true"] .content-slot {
+  display: grid;
   width: min(420px, 100%);
+  min-height: 0;
+  place-items: center;
   text-align: center;
 }
 
 #app[data-booting="true"] .status-msg {
   margin: 0;
+  padding: 0;
 }
 
 .pill,
@@ -1257,6 +1282,16 @@ table.models tbody tr:focus-visible,
   font-family: var(--vw-font-body);
   font-size: 12px;
   text-align: center;
+}
+
+.status-msg.loading-state {
+  display: grid;
+  min-height: 160px;
+  place-items: center;
+}
+
+.status-msg.loading-state .bootstrap-spinner {
+  margin: 0;
 }
 
 .status-msg.error {
@@ -3879,6 +3914,10 @@ table.models tbody td.summary-cell {
   align-items: center;
   justify-content: center;
   padding: 40px 24px;
+}
+
+.wizard-loading .wizard-fs-center {
+  padding: 0 24px;
 }
 
 .wizard-fs-card {

@@ -3118,6 +3118,19 @@
   }
 
   function renderWizard() {
+    if (state.wizard.loading) {
+      return h("div", { class: "wizard-fullscreen wizard-loading", role: "main", "aria-label": "Preparing setup" }, [
+        h("div", { class: "wizard-fs-header" }, [
+          h("span", { class: "wizard-fs-brand" }, "LLM-Dash"),
+        ]),
+        h("div", { class: "wizard-fs-center" }, [
+          h("div", { class: "status-msg loading-state", role: "status", "aria-label": "Preparing setup" }, [
+            h("span", { class: "bootstrap-spinner", "aria-hidden": "true" }),
+            h("span", { class: "sr-only" }, "Preparing setup…"),
+          ]),
+        ]),
+      ]);
+    }
     const title = WIZARD_TITLES[state.wizard.step] || "Setup";
     const subtitle = WIZARD_SUBTITLES[state.wizard.step] || "";
     const stepLabel = "Step " + (state.wizard.step + 1) + " of " + WIZARD_STEPS.length;
@@ -5577,7 +5590,10 @@
   }
 
   function renderPlaceholder(message) {
-    return h("p", { class: "status-msg" }, message);
+    return h("div", { class: "status-msg loading-state", role: "status", "aria-label": message }, [
+      h("span", { class: "bootstrap-spinner", "aria-hidden": "true" }),
+      h("span", { class: "sr-only" }, message),
+    ]);
   }
 
   function renderError(message, hint) {
@@ -5652,7 +5668,7 @@
 
   function finishBootPaint() {
     const app = document.getElementById("app");
-    if (app) app.removeAttribute("data-booting");
+    if (app && (state.ready || state.wizard.open || state.error)) app.removeAttribute("data-booting");
   }
 
   const KEYBOARD_SHORTCUT_HELP = [
