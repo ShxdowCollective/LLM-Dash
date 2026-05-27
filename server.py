@@ -537,6 +537,13 @@ def post_voidware_broker_approval(payload: VoidwareApprovalPayload) -> dict[str,
         result = voidware_auth.approve_pending_approval(password=payload.password, secret=payload.secret)
     except voidware_auth.VoidwareAuthError as exc:
         raise _voidware_auth_http_error(exc) from exc
+    if result.get("pending"):
+        return {
+            "ok": False,
+            "code": result.get("code") or "approval_pending",
+            "operation_id": result.get("operation_id"),
+            "approval": result.get("approval") if isinstance(result.get("approval"), dict) else {},
+        }
     return {"ok": True, "grant": result.get("grant") if isinstance(result.get("grant"), dict) else {}}
 
 

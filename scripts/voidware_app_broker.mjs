@@ -18,6 +18,8 @@ let ownsBroker = false
 let pendingApproval = null
 let activeGrant = null
 
+const MAX_CHAINED_APPROVALS = 5
+
 function redact(value) {
   if (typeof value !== 'string') return value
   return value.replace(GRANT_RE, 'vwgr_***')
@@ -327,28 +329,34 @@ async function approve(payload) {
   }
   if (!activeGrant) return { ok: true }
   const grant = activeGrant
+  let chained = 0
   try {
-    const result = await Promise.race([
-      grant.promise.then((value) => ({ type: 'done', value }), (err) => ({ type: 'error', err })),
-      new Promise((resolvePending) => {
-        const tick = () => {
-          if (pendingApproval) resolvePending({ type: 'pending' })
-          else setTimeout(tick, 20)
+    while (chained < MAX_CHAINED_APPROVALS) {
+      const result = await Promise.race([
+        grant.promise.then((value) => ({ type: 'done', value }), (err) => ({ type: 'error', err })),
+        new Promise((resolvePending) => {
+          const tick = () => {
+            if (pendingApproval) resolvePending({ type: 'pending' })
+            else setTimeout(tick, 20)
+          }
+          tick()
+        }),
+      ])
+      if (result.type === 'pending') {
+        const chainedReq = pendingApproval
+        pendingApproval = null
+        for (const resolveApproval of chainedReq.waiters) {
+          resolveApproval(approvalResult)
         }
-        tick()
-      }),
-    ])
-    if (result.type === 'pending') {
-      return {
-        ok: false,
-        code: 'approval_pending',
-        operationId: grant.operationId,
-        approval: pendingApproval.approval,
+        chained += 1
+        continue
       }
+      if (result.type === 'error') throw result.err
+      if (!pendingApproval) activeGrant = null
+      return responseFromBrokerGrant(result.value, grant.operationId)
     }
-    if (result.type === 'error') throw result.err
-    const response = result.value
-    return responseFromBrokerGrant(response, activeGrant.operationId)
+    activeGrant = null
+    return { ok: false, code: 'approval_pending', message: 'Voidware requested too many sequential approvals.', operationId: grant.operationId, approval: pendingApproval ? pendingApproval.approval : null }
   } finally {
     if (!pendingApproval) activeGrant = null
   }

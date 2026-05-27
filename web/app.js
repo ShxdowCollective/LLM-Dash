@@ -4627,7 +4627,7 @@
         render();
         return;
       }
-      await fetchJson("/api/voidware/broker/approval", {
+      const approved = await fetchJson("/api/voidware/broker/approval", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -4635,6 +4635,16 @@
           secret: state.wizard.voidwareApprovalSecret || "",
         }),
       });
+      if (approved && approved.approval && approved.approval.requestId) {
+        state.wizard.voidwareGrantState = "approval";
+        state.wizard.voidwareApproval = approved.approval;
+        state.wizard.voidwareApprovalPassword = "";
+        state.wizard.voidwareApprovalSecret = "";
+        state.wizard.voidwareGrantError = "";
+        voidwareApprovalSubmitInFlight = false;
+        render();
+        return;
+      }
       state.wizard.voidwareGrantState = "success";
       state.wizard.voidwareApproval = null;
       state.wizard.voidwareApprovalContext = null;

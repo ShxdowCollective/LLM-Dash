@@ -25,7 +25,7 @@ LLMSTATS_SECRET_NAME = "llmdash.llmstats.api_key"
 # Request the longest broker grant lifetime Voidware currently accepts.
 MAX_GRANT_TTL = "120d"
 DEFAULT_BROKER_TIMEOUT = 20
-APPROVAL_BROKER_TIMEOUT = 120
+APPROVAL_BROKER_TIMEOUT = 300
 ROOT = Path(__file__).resolve().parents[1]
 LEGACY_CLIENT_GRANT_SERVICE_NAME = "llm-dash-voidware-grants"
 OFFICIAL_CLIENT_GRANT_SERVICE_NAME = "voidware-client-grants"
@@ -773,6 +773,14 @@ def approve_pending_approval(*, password: str = "", secret: str = "") -> dict[st
                 "grant": response.get("grant") if isinstance(response.get("grant"), dict) else {},
             }
         return _normalize_bridge_grant(response)
+    code = str(response.get("code") or "")
+    if code in {"approval_pending", "approval_waiting"}:
+        return {
+            "pending": True,
+            "code": code,
+            "operation_id": str(response.get("operationId") or ""),
+            "approval": response.get("approval") if isinstance(response.get("approval"), dict) else {},
+        }
     raise VoidwareAuthError(
         _redact(str(response.get("message") or "Voidware approval failed.")),
         code=str(response.get("code") or "approval_denied"),
