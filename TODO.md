@@ -7,22 +7,28 @@ Use `[ ]` only for still-open work.
 
 ## Now
 
-### BLOCKED — Voidware saved-credential / broker approval (upstream)
+### Phase 9.7 — Voidware 0.9.10 saved-credential approval (planned)
 
-**Status:** Fresh setup wizard walkthrough **aborted** (2026-05-19).
+**Status:** Upstream blocker cleared; implementation plan ready (2026-05-26).
 
-LLM-Dash cannot ship the first-run wizard flow for **saved Voidware keys** until
-Voidware provides an approval surface third-party local apps can use (not only
-Electron manager or a TTY foreground broker). See Voidware `TODO.md` **Milestone
-8 — Auth Broker Approval for Third-Party Local Apps**.
+Voidware `0.9.10` is validated locally and includes the needed app-owned
+approval surface for browser + local-server apps. The implementation plan is
+[`docs/plans/2026-05-26-voidware-0-9-10-app-approval-plan.md`](docs/plans/2026-05-26-voidware-0-9-10-app-approval-plan.md).
 
-In-repo mitigations already attempted (no headless broker autostart, grant API,
-wizard **Authorize access** UI) do not replace that product surface.
+The old upstream blocker was Voidware Milestone 8. Voidware `0.9.9` shipped
+`createAppOwnedAuthBroker()` and app-owned approval status; `0.9.10` adds Dev
+agent token flows that are useful later but not required for the wizard
+unblock.
 
-- [ ] Unblock when Voidware Milestone 8 lands; re-run wizard walkthrough from
-  Connection step with saved credentials.
-- [ ] Revisit whether LLM-Dash should keep env/keyring-only fallback for wizard
-  until embeddable approval exists (product decision).
+- [ ] Upgrade vendored Voidware CSS/docs from `0.9.8` to `0.9.10`.
+- [ ] Add the Node bridge for Voidware app-owned approval while keeping
+  LLM-Dash no-build.
+- [ ] Replace the custom `llm-dash-voidware-grants` cache with Voidware's
+  `voidware-client-grants` durable cache.
+- [ ] Re-run the fresh wizard walkthrough from the Connection step with saved
+  credentials.
+- [ ] Revisit whether env/keyring-only fallback should remain after app-owned
+  approval lands (product decision).
 
 ### Fresh Setup Wizard Walkthrough (aborted)
 
@@ -48,7 +54,8 @@ Cancelled (blocked on Voidware Milestone 8):
 
 ### CSS Fix Milestone — Wizard First-Run Polish (paused)
 
-Paused with wizard walkthrough; resume after broker approval unblock.
+Paused with wizard walkthrough; resume after Phase 9.7 saved-credential
+approval implementation.
 
 - [ ] Review the full first-run wizard at desktop and narrow widths.
 - [ ] Check loading, progress, form, footer, error, and success states for

@@ -4,6 +4,48 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 082 — 2026-05-26
+
+**Agent:** GPT-5 Codex (lumenweld, planning)
+**Cycle:** Voidware 0.9.10 validation and app-owned approval plan
+**Task:** Validate newest Voidware features and write the LLM-Dash integration plan
+
+---
+
+Validated local Voidware `0.9.10` from `/home/phxntom/Repos/voidware`.
+
+- `python3 ~/.codex/skills/voidware-spec/scripts/check_voidware_spec.py /home/phxntom/Repos/voidware` auto-synced the installed `voidware-spec` skill to `0.9.10`.
+- Voidware repo was clean on `main` at `a5c3aae` with tags `v0.9.10`, `v0.9.9`, and `v0.9.8`.
+- `npm run verify:fast` passed in the Voidware repo.
+- `npm run smoke:broker:ipc` passed in the Voidware repo.
+
+Verdict: Voidware has the features LLM-Dash needs. `0.9.9` shipped the missing
+app-owned broker approval surface for browser + local-server apps, and `0.9.10`
+adds Dev-scoped auth tokens for later agent-access work.
+
+Added reviewed implementation plan:
+`docs/plans/2026-05-26-voidware-0-9-10-app-approval-plan.md`.
+
+Pro nano-agent plan review completed through the `auto` Cursor route. Findings
+were folded into the plan, especially async approval protocol, shared
+`ServiceContext`, detached broker conflict UX, bridge status semantics, Node
+build prerequisites, shutdown cleanup, and tests.
+
+Updated `TODO.md` so the saved-key wizard issue is no longer listed as an
+upstream Voidware blocker. It is now Phase 9.7 implementation work.
+
+Residual risks:
+
+- LLM-Dash needs a small Node bridge because the app-owned broker API is
+  exported by `@shxdowcollective/voidware-cli`.
+- Existing detached brokers with `canApprove: false` can still block in-app
+  approval until the user stops or replaces them.
+- The CSS bump from `0.9.8` to `0.9.10` touches active rings, status chips,
+  selects, tooltips, and fonts, so screenshot QA is required during
+  implementation.
+
+---
+
 ## Entry 081 — 2026-05-19
 
 **Agent:** Cursor (dev-browser walkthrough)
