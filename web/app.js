@@ -98,6 +98,7 @@
 
   let voidwareApprovalPollTimer = null;
   let voidwareApprovalPollRequestId = "";
+  let voidwareApprovalSubmitInFlight = false;
   const COMPACT_NUMBER = new Intl.NumberFormat("en-US", {
     notation: "compact",
     maximumFractionDigits: 1,
@@ -335,6 +336,10 @@
       providerSaving: false,
       providerStatus: "",
       providerStatusTone: "idle",
+      brokerStopping: false,
+      brokerStopConfirm: false,
+      brokerStopStatus: "",
+      brokerStopStatusTone: "idle",
       testingConnection: false,
       connectionResult: null,
       modelsLoading: false,
@@ -1447,9 +1452,18 @@
     } catch (error) {
       const detail = error && error.payload && error.payload.detail;
       if (!opts.suppressApproval && payload.api_key && isVoidwareApprovalPending(error)) {
+        const detailApproval = detail && typeof detail === "object" && detail.approval && typeof detail.approval === "object" ? detail.approval : null;
+        const pendingApproval = detailApproval && detailApproval.requestId ? detailApproval : await loadPendingVoidwareApproval().catch(() => null);
+        if (!pendingApproval || !pendingApproval.requestId) {
+          state.wizard.voidwareGrantState = "failed";
+          state.wizard.voidwareGrantError = "Voidware approval was interrupted. Start approval again.";
+          state.wizard.saveError = state.wizard.voidwareGrantError;
+          render();
+          return false;
+        }
         state.wizard.voidwareGrantState = "approval";
         state.wizard.voidwareGrantError = "";
-        state.wizard.voidwareApproval = detail && typeof detail === "object" ? (detail.approval || {}) : {};
+        state.wizard.voidwareApproval = pendingApproval;
         state.wizard.voidwareApprovalContext = { kind: "provider-write", includeModels: Boolean(includeModels) };
         state.wizard.voidwareApprovalPassword = "";
         state.wizard.voidwareApprovalSecret = "";
@@ -4535,6 +4549,20 @@
       state.wizard.connectionTestState = "idle";
       state.wizard.connectionTestError = "";
     } catch (error) {
+      if (isVoidwareApprovalPending(error)) {
+        const detail = error && error.payload && error.payload.detail;
+        const detailApproval = detail && typeof detail === "object" && detail.approval && typeof detail.approval === "object" ? detail.approval : null;
+        const nextApproval = detailApproval && detailApproval.requestId ? detailApproval : await loadPendingVoidwareApproval().catch(() => null);
+        if (nextApproval && nextApproval.requestId) {
+          state.wizard.voidwareGrantState = "approval";
+          state.wizard.voidwareGrantError = "";
+          state.wizard.voidwareApproval = nextApproval;
+          state.wizard.voidwareApprovalPassword = "";
+          state.wizard.voidwareApprovalSecret = "";
+          render();
+          return;
+        }
+      }
       state.wizard.voidwareGrantState = "failed";
       state.wizard.voidwareGrantError = voidwareErrorMessage(error);
     }
@@ -4542,21 +4570,26 @@
   }
 
   async function approveWizardVoidwareGrant() {
+    if (voidwareApprovalSubmitInFlight || state.wizard.voidwareGrantState === "requesting") return;
+    voidwareApprovalSubmitInFlight = true;
     const approvalContext = state.wizard.voidwareApprovalContext || null;
     const modal = document.querySelector(".voidware-approval-modal");
     const submitButton = modal ? modal.querySelector("button[type='submit']") : null;
     if (state.wizard.voidwareApproval && state.wizard.voidwareApproval.passwordRequired && !state.wizard.voidwareApprovalPassword) {
+      voidwareApprovalSubmitInFlight = false;
       state.wizard.voidwareGrantError = "Enter the Voidware password to approve this access.";
       render();
       return;
     }
     if (state.wizard.voidwareApproval && state.wizard.voidwareApproval.secretRequired && !state.wizard.voidwareApprovalSecret) {
+      voidwareApprovalSubmitInFlight = false;
       state.wizard.voidwareGrantError = "Enter the new secret to approve this access.";
       render();
       return;
     }
     state.wizard.voidwareGrantState = "requesting";
     state.wizard.voidwareGrantError = "";
+    render();
     if (submitButton) {
       submitButton.disabled = true;
       submitButton.textContent = "Approving...";
@@ -4566,12 +4599,14 @@
       const pendingApproval = await loadPendingVoidwareApproval();
       const currentRequestId = state.wizard.voidwareApproval && state.wizard.voidwareApproval.requestId;
       if (!pendingApproval) {
+        voidwareApprovalSubmitInFlight = false;
         state.wizard.voidwareGrantState = "approval";
         state.wizard.voidwareGrantError = "No Voidware approval is pending. Start approval again.";
         render();
         return;
       }
       if (currentRequestId && pendingApproval.requestId && pendingApproval.requestId !== currentRequestId) {
+        voidwareApprovalSubmitInFlight = false;
         state.wizard.voidwareGrantState = "approval";
         state.wizard.voidwareApproval = pendingApproval;
         state.wizard.voidwareApprovalPassword = "";
@@ -4583,6 +4618,7 @@
       const currentTarget = voidwareApprovalTarget(state.wizard.voidwareApproval);
       const pendingTarget = voidwareApprovalTarget(pendingApproval);
       if (currentTarget && pendingTarget && currentTarget !== pendingTarget) {
+        voidwareApprovalSubmitInFlight = false;
         state.wizard.voidwareGrantState = "approval";
         state.wizard.voidwareApproval = pendingApproval;
         state.wizard.voidwareApprovalPassword = "";
@@ -4614,7 +4650,10 @@
           allowStoredKey: true,
           suppressApproval: true,
         });
-        if (!saved) return;
+        if (!saved) {
+          voidwareApprovalSubmitInFlight = false;
+          return;
+        }
         if (includeModels) {
           state.wizard.step = 2;
           render();
@@ -4624,12 +4663,14 @@
           render();
           ensureWizardModelsLoaded();
         }
+        voidwareApprovalSubmitInFlight = false;
         return;
       }
     } catch (error) {
       state.wizard.voidwareGrantState = "failed";
       state.wizard.voidwareGrantError = voidwareErrorMessage(error);
     }
+    voidwareApprovalSubmitInFlight = false;
     render();
   }
 
@@ -4649,6 +4690,7 @@
   function brokerStatusCopy(code) {
     const labels = {
       approval_required: "Approval needed",
+      broker_conflict: "Access conflict",
       grant_denied: "Grant denied",
       grant_invalidated: "Grant expired",
       cli_unavailable: "Voidware unavailable",
@@ -4698,13 +4740,19 @@
   function renderBrokerStatus() {
     const broker = state.provider.auth && state.provider.auth.broker ? state.provider.auth.broker : null;
     if (!broker) return null;
+    const s = state.settings;
     const available = Boolean(broker.available);
+    const conflict = broker.error_code === "broker_conflict";
     const summary = available
       ? "Access ready" + (broker.persistence ? " · " + broker.persistence : "")
-      : broker.cli_available ? "Access unavailable" : "Voidware unavailable";
+      : conflict
+        ? "Access conflict"
+        : broker.cli_available ? "Access unavailable" : "Voidware unavailable";
     const nextAction = available
       ? "Secrets stay in Voidware. LLM-Dash receives temporary local access only when needed."
-      : brokerStatusCopy(broker.error_code) + ". Reconnect in Voidware, then retry the save.";
+      : conflict
+        ? "A background Voidware access service is blocking in-app approval. Stop it here or reopen Voidware Manager, then retry the save."
+        : brokerStatusCopy(broker.error_code) + ". Reconnect in Voidware, then retry the save.";
     return h("div", { class: "settings-auth-broker vw-card vw-card-compact" }, [
       h("div", { class: "settings-auth-broker-head" }, [
         h("strong", null, "Voidware Access"),
@@ -4715,6 +4763,32 @@
         available ? h("span", { class: "vw-summary-chip" }, "Access up to " + (broker.grant_ttl || "120d")) : null,
         !available && broker.error_code ? h("span", { class: "vw-summary-chip" }, brokerStatusCopy(broker.error_code)) : null,
       ]),
+      conflict ? h("div", { class: "settings-actions" }, [
+        h("button", {
+          class: "vw-btn " + (s.brokerStopConfirm ? "vw-btn-danger" : "vw-btn-secondary"),
+          type: "button",
+          disabled: s.brokerStopping,
+          onclick: () => {
+            if (s.brokerStopConfirm) settingsStopBackgroundBroker();
+            else {
+              s.brokerStopConfirm = true;
+              s.brokerStopStatus = "";
+              render();
+            }
+          },
+        }, s.brokerStopping ? "Stopping..." : s.brokerStopConfirm ? "Confirm Stop Access" : "Stop Background Access"),
+        s.brokerStopConfirm ? h("button", {
+          class: "vw-btn vw-btn-tertiary",
+          type: "button",
+          disabled: s.brokerStopping,
+          onclick: () => {
+            s.brokerStopConfirm = false;
+            s.brokerStopStatus = "";
+            render();
+          },
+        }, "Cancel") : null,
+      ]) : null,
+      s.brokerStopStatus ? settingsStatusChip(s.brokerStopStatus, s.brokerStopStatusTone) : null,
     ]);
   }
 
@@ -4774,6 +4848,26 @@
       s.connectionResult = null;
     }
     render();
+  }
+
+  async function settingsStopBackgroundBroker() {
+    const s = state.settings;
+    s.brokerStopping = true;
+    s.brokerStopStatus = "";
+    render();
+    try {
+      await fetchJson("/api/voidware/broker/stop", { method: "POST" });
+      await fetchProvider();
+      s.brokerStopConfirm = false;
+      s.brokerStopStatus = "Background access stopped";
+      s.brokerStopStatusTone = "success";
+    } catch (error) {
+      s.brokerStopStatus = String(error?.message || error);
+      s.brokerStopStatusTone = "error";
+    } finally {
+      s.brokerStopping = false;
+      render();
+    }
   }
 
   async function settingsSaveProvider(formEl) {
@@ -6217,6 +6311,7 @@
       ? "LLM-Dash provider key"
       : target;
     const ttlLabel = approval.ttl === "120d" ? "120 days" : approval.ttl || "120 days";
+    const approvalWindowLabel = approval.timeoutMs ? Math.max(1, Math.round(Number(approval.timeoutMs) / 60000)) + " minutes" : "5 minutes";
     const scopeLabel = scopes
       ? (targetLabel === target ? "Only " + targetLabel : "Only this saved key")
       : "";
@@ -6234,10 +6329,7 @@
       ]),
       h("form", {
         class: "voidware-approval-form",
-        onsubmit: (event) => {
-          event.preventDefault();
-          approveWizardVoidwareGrant();
-        },
+        onsubmit: (event) => event.preventDefault(),
       }, [
         h("div", { class: "vw-modal-body" }, [
           h("div", { class: "voidware-approval-grid" }, [
@@ -6249,6 +6341,8 @@
             h("strong", null, operationLabel),
             h("span", null, "Expires"),
             h("strong", null, ttlLabel),
+            h("span", null, "Approve within"),
+            h("strong", null, approvalWindowLabel),
             scopeLabel ? h("span", null, "Limit") : null,
             scopeLabel ? h("strong", null, scopeLabel) : null,
           ]),
@@ -6287,8 +6381,9 @@
           }, "Deny"),
           h("button", {
             class: "vw-btn vw-btn-primary",
-            type: "submit",
+            type: "button",
             disabled: state.wizard.voidwareGrantState === "requesting",
+            onclick: approveWizardVoidwareGrant,
           }, state.wizard.voidwareGrantState === "requesting" ? "Approving…" : "Approve Access"),
         ]),
       ]),

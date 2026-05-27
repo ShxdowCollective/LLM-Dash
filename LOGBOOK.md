@@ -4,6 +4,64 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 089 — 2026-05-27
+
+**Agent:** GPT-5 Codex (velvetcircuit, follow-up)
+**Cycle:** Phase 9.7 follow-up
+**Task:** Finish OpenTabs approval follow-ups
+
+---
+
+Closed the remaining Settings/fallback follow-ups and pushed the final wizard
+check as far as possible before hitting a live Voidware approval lifecycle
+blocker.
+
+- Verified the wizard-owned new-key flow with OpenTabs on an isolated
+  `LLM_DASH_SHXDOW_ROOT`: real input/click reached the in-app Voidware approval
+  modal for `llmdash.provider.api_key`.
+- Captured the wizard approval prompt and Settings broker-conflict evidence
+  under `artifacts/browser-sessions/2026-05-27-opentabs-followups/`.
+- Verified Settings renewal copy with a reproducible grant fixture:
+  `Renew access`, `Renew after May 20, 2026`, `Expires Jun 5, 2026`.
+- Fixed access-conflict recovery copy so Settings avoids internal broker
+  jargon and tells the user to stop background access or reopen Voidware
+  Manager.
+- Added confirmed Settings recovery for access conflicts: the user clicks
+  `Stop Background Access`, confirms with `Confirm Stop Access`, and the app
+  calls `POST /api/voidware/broker/stop` before refreshing provider state.
+- Revisited the fallback policy: env stays first, legacy keyring reads remain
+  migration-only, and new secret writes no longer silently fall back to keyring
+  when Voidware approval/broker access is unavailable.
+- Extended the app-owned approval timeout to 5 minutes and surfaced that window
+  in the modal.
+- Added stale-pending recovery, chained-pending response handling, and
+  single-submit guards for the wizard approval modal.
+- Removed the modal's real form-submit path so approval is button-only.
+- Repeated live OpenTabs retries reached the password modal, but submitting the
+  Voidware password still returned `Finish the open approval first.` and then
+  collapsed to wizard expiry.
+
+Verification:
+
+- `node --check scripts/voidware_app_broker.mjs && node --check web/app.js`
+- `python3 -m py_compile scripts/voidware_auth.py scripts/config.py server.py tests/test_voidware_auth.py`
+- `python3 -m unittest tests.test_voidware_auth -v`
+- OpenTabs fixture confirmed `Stop Background Access` -> `Confirm Stop Access`
+  -> `Background access stopped`.
+
+Remaining blocker:
+
+- Final wizard advance remains blocked in the live password-backed approval
+  path. Evidence points to the Voidware app-owned broker issuing or retaining a
+  second pending approval inside the same operation; LLM-Dash now handles the
+  obvious stale/double-submit/chained-pending cases, but the live bridge still
+  returns `Finish the open approval first.`. Next pass should instrument
+  `scripts/voidware_app_broker.mjs` around `requestApproval()`, `approve()`,
+  `activeGrant`, and `cancelPending()` with request IDs and operation targets,
+  or reproduce directly against the Voidware service API outside the browser.
+
+---
+
 ## Entry 088 — 2026-05-27
 
 **Agent:** GPT-5 Codex (emberline, wrap-up)

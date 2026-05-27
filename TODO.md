@@ -15,10 +15,12 @@ Active follow-up tasks:
 
 - [ ] Complete one final wizard-owned new-key advance check after the OpenTabs
   input/click path is stable. Backend approval, modal recovery, expiry handling,
-  and no-raw-key config checks passed with disposable dev keys.
-- [ ] Verify Settings > Provider renewal and broker-conflict recovery copy with
-  a real grant near renewal or a reproducible broker-conflict fixture.
-- [ ] Revisit env/keyring-only fallback policy now that app-owned approval exists.
+  and no-raw-key config checks passed with disposable dev keys. Latest OpenTabs
+  runs repeatedly reached the in-app Voidware password prompt, but approving
+  returned `Finish the open approval first.` followed by wizard expiry. Patches
+  added longer approval TTL, stale-pending recovery, single-submit guards, and
+  chained-pending response handling; the live password-backed path remains
+  blocked and likely needs deeper Voidware app-broker lifecycle debugging.
 
 Reference: [`docs/plans/2026-05-26-voidware-0-9-10-app-approval-plan.md`](docs/plans/2026-05-26-voidware-0-9-10-app-approval-plan.md).
 
@@ -42,6 +44,8 @@ approval implementation.
   patterns instead of a long stacked form: consolidate saved-key selection,
   provider summary, access refresh, endpoints, and connection testing into a
   tighter task-focused layout.
+- [ ] Run a Voidware copy pass across wizard and Settings access states; replace
+  internal terms like "broker" with user-facing access/service language.
 - [ ] Confirm screenshots:
   `01-wizard-connection.png`, `02-wizard-no-nav-flash.png`,
   `03-wizard-boot-spinner.png`, `04-centered-boot-spinner.png`, and
@@ -59,6 +63,10 @@ approval implementation.
 - Phase 9.7 follow-up — Saved-key approval completed through the wizard, new-key
   write approval completed through the app-owned modal, stale/expired approval
   requests now auto-close with recovery copy, and app config stayed secret-free.
+- Phase 9.7 follow-up — Settings renewal and broker-conflict copy verified with
+  OpenTabs fixtures; confirmed stop for conflicting background access is wired;
+  legacy keyring fallback is now read/migration-only and new secret writes
+  require Voidware approval.
 - Phase 9.6 — Voidware 0.9.8 upgrade, workspace skill sync, route/drawer
   semantics, dashboard typography/layout polish, Agent wording, weighted
   scoring, read-only Changelog, portrait model cards, and compact Settings >

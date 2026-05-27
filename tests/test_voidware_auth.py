@@ -119,7 +119,7 @@ class VoidwareAuthTests(unittest.TestCase):
         self.assertEqual(provider["provider_credential_meta"]["safeCustom"], {"region": "iad"})
         self.assertNotIn("sk-selected", persisted)
 
-    def test_new_provider_key_falls_back_to_keyring_when_broker_is_unavailable(self) -> None:
+    def test_new_provider_key_does_not_fall_back_to_keyring_when_broker_is_unavailable(self) -> None:
         stored: dict[str, str] = {}
 
         def broker_unavailable(*args, **kwargs) -> None:
@@ -127,22 +127,21 @@ class VoidwareAuthTests(unittest.TestCase):
 
         with (
             patch.object(config.voidware_auth, "write_secret", side_effect=broker_unavailable),
-            patch.object(config.voidware_auth, "read_secret", return_value="") as read_secret,
+            patch.object(config.voidware_auth, "read_secret", return_value=""),
             patch.object(config, "_keyring_set", side_effect=lambda name, value: stored.setdefault(name, value) is not None),
-            patch.object(config, "_keyring_get", side_effect=lambda name: stored.get(name, "")),
         ):
-            bundle = config.save_provider(
-                base_url="https://api.alpha.example",
-                api_key="sk-fallback",
-                default_model="alpha-chat",
-                endpoint_mode=config.ENDPOINT_MODE_APPEND_V1,
-            )
+            with self.assertRaises(config.ConfigError) as ctx:
+                config.save_provider(
+                    base_url="https://api.alpha.example",
+                    api_key="sk-fallback",
+                    default_model="alpha-chat",
+                    endpoint_mode=config.ENDPOINT_MODE_APPEND_V1,
+                )
 
-        self.assertTrue(bundle.has_provider)
-        self.assertEqual(bundle.secrets.api_key, "sk-fallback")
-        self.assertEqual(stored[config.PROVIDER_KEY_NAME], "sk-fallback")
-        read_secret.assert_not_called()
-        self.assertNotIn("sk-fallback", config.config_path().read_text(encoding="utf-8"))
+        self.assertIn("broker_unavailable", str(ctx.exception))
+        self.assertEqual(stored, {})
+        persisted = config.config_path().read_text(encoding="utf-8") if config.config_path().exists() else ""
+        self.assertNotIn("sk-fallback", persisted)
 
     def test_bridge_grant_uses_official_voidware_cache_namespace(self) -> None:
         self.assertEqual(voidware_auth.OFFICIAL_CLIENT_GRANT_SERVICE_NAME, "voidware-client-grants")
@@ -165,6 +164,51 @@ class VoidwareAuthTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         popen.assert_not_called()
         self.assertEqual(calls[0][1][:3], ["auth", "broker", "request"])
+
+    def test_stop_background_broker_uses_voidware_cli_stop(self) -> None:
+        calls: list[list[str]] = []
+
+        def fake_run(args: list[str], **kwargs) -> dict[str, object]:
+            calls.append(args)
+            if args[:3] == ["auth", "broker", "status"]:
+                return {
+                    "ok": False,
+                    "errorCode": "broker_conflict",
+                    "data": {},
+                }
+            if args[:3] == ["auth", "broker", "ensure"]:
+                return {"ok": False, "errorCode": "broker_conflict", "data": {}}
+            if args[:3] == ["auth", "broker", "stop"]:
+                return {"ok": True, "data": {}}
+            return {"ok": False, "errorCode": "unexpected"}
+
+        with (
+            patch.object(voidware_auth._BRIDGE, "request", side_effect=voidware_auth.VoidwareAuthError("conflict", code="broker_conflict")),
+            patch.object(voidware_auth, "resolve_cli", return_value=["voidware"]),
+            patch.object(voidware_auth, "_run", side_effect=fake_run),
+        ):
+            result = voidware_auth.stop_background_broker()
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(any(call[:3] == ["auth", "broker", "stop"] for call in calls))
+
+    def test_stop_background_broker_refuses_app_owned_broker(self) -> None:
+        with patch.object(
+            voidware_auth._BRIDGE,
+            "request",
+            return_value={
+                "owned": True,
+                "status": {
+                    "persistence": "keyring",
+                    "approvalSurface": "app",
+                    "canApprove": True,
+                },
+            },
+        ):
+            with self.assertRaises(voidware_auth.VoidwareAuthError) as ctx:
+                voidware_auth.stop_background_broker()
+
+        self.assertEqual(ctx.exception.code, "broker_owned")
 
     def test_secret_read_requires_approval_capable_broker_without_cached_grant(self) -> None:
         def bridge_unavailable(*args, **kwargs) -> dict[str, object]:

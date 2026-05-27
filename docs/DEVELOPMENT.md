@@ -76,7 +76,7 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 | File | Responsibility |
 |---|---|
 | `server.py` | FastAPI app: static mounts, API routes, bootstrap, job management |
-| `scripts/config.py` | Provider config + credential pipeline (env → selected Voidware provider → Voidware broker → legacy keyring) |
+| `scripts/config.py` | Provider config + credential pipeline (env → selected Voidware provider → Voidware broker; legacy keyring reads are migration-only) |
 | `scripts/voidware_auth.py` | Python controller for Voidware provider discovery, app-owned approval bridge lifecycle, and broker-backed provider/Exa/LLM Stats API keys |
 | `scripts/voidware_app_broker.mjs` | Node worker that imports Voidware 0.9.10 CLI service APIs and hosts LLM-Dash-owned approval prompts |
 | `scripts/init_db.py` | First-run DB creation from `schema.sql` + 34-model seed |

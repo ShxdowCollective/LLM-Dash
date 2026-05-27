@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto'
 const ROOT = resolve(new URL('..', import.meta.url).pathname)
 const APP_NAME = 'llm-dash'
 const MAX_GRANT_TTL = '120d'
+const APPROVAL_TIMEOUT_MS = 5 * 60 * 1000
 const GRANT_RE = /vwgr_[A-Za-z0-9._-]+/g
 
 let service
@@ -107,6 +108,7 @@ function approvalSummary(request) {
     target: request.operation && request.operation.target ? request.operation.target : '',
     scopes: Array.isArray(request.scopes) ? request.scopes : [],
     ttl: request.ttlLabel || MAX_GRANT_TTL,
+    timeoutMs: request.timeoutMs || APPROVAL_TIMEOUT_MS,
     allowSecretOutput: Boolean(request.allowSecretOutput),
     passwordRequired: Boolean(request.passwordRequired),
     secretRequired: Boolean(request.secretRequired),
@@ -129,7 +131,12 @@ function requestApproval(request) {
         pendingApproval.waiters.push(resolveApproval)
       })
     }
-    return Promise.resolve({ ok: false, code: 'approval_pending', message: 'Finish the open approval first.' })
+    return Promise.resolve({
+      ok: false,
+      code: 'approval_pending',
+      message: 'Finish the open approval first.',
+      approval: pendingApproval.approval,
+    })
   }
   return new Promise((resolveApproval) => {
     pendingApproval = {
@@ -162,7 +169,7 @@ async function ensureBroker() {
         cancelPending(requestId, reason) {
           if (pendingApproval && pendingApproval.requestId === requestId) {
             for (const resolveApproval of pendingApproval.waiters) {
-              resolveApproval({ ok: false, code: 'approval_denied', message: `approval ${reason}` })
+              resolveApproval({ ok: false, code: reason === 'timeout' ? 'approval_timeout' : 'approval_denied', message: `approval ${reason}` })
             }
             pendingApproval = null
           }
@@ -195,6 +202,7 @@ function brokerPayload(operation, target, params = {}) {
     target,
     scopes: [target ? `${operation}:${target}` : operation],
     ttl: MAX_GRANT_TTL,
+    timeoutMs: APPROVAL_TIMEOUT_MS,
     allowSecretOutput: operation === 'auth:secret:read',
     ...(Object.keys(params).length ? { params } : {}),
   }
@@ -283,11 +291,13 @@ async function startBrokerRequest(operation, target, params = {}) {
 
 function responseFromBrokerGrant(response, operationId) {
   if (!response || !response.ok) {
+    const code = response && response.error ? response.error.code : 'broker_error'
     return {
       ok: false,
-      code: response && response.error ? response.error.code : 'broker_error',
+      code,
       message: response && response.error ? response.error.message : 'Voidware broker request failed',
       operationId,
+      ...((code === 'approval_pending' || code === 'approval_waiting') && pendingApproval ? { approval: pendingApproval.approval } : {}),
     }
   }
   const nested = response.data && typeof response.data === 'object' && response.data.data && typeof response.data.data === 'object'
@@ -316,11 +326,31 @@ async function approve(payload) {
     resolveApproval(approvalResult)
   }
   if (!activeGrant) return { ok: true }
+  const grant = activeGrant
   try {
-    const response = await activeGrant.promise
+    const result = await Promise.race([
+      grant.promise.then((value) => ({ type: 'done', value }), (err) => ({ type: 'error', err })),
+      new Promise((resolvePending) => {
+        const tick = () => {
+          if (pendingApproval) resolvePending({ type: 'pending' })
+          else setTimeout(tick, 20)
+        }
+        tick()
+      }),
+    ])
+    if (result.type === 'pending') {
+      return {
+        ok: false,
+        code: 'approval_pending',
+        operationId: grant.operationId,
+        approval: pendingApproval.approval,
+      }
+    }
+    if (result.type === 'error') throw result.err
+    const response = result.value
     return responseFromBrokerGrant(response, activeGrant.operationId)
   } finally {
-    activeGrant = null
+    if (!pendingApproval) activeGrant = null
   }
 }
 

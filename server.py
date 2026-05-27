@@ -495,6 +495,14 @@ def get_voidware_broker() -> dict[str, Any]:
     return voidware_auth.broker_status()
 
 
+@app.post("/api/voidware/broker/stop")
+def post_voidware_broker_stop() -> dict[str, Any]:
+    try:
+        return voidware_auth.stop_background_broker()
+    except voidware_auth.VoidwareAuthError as exc:
+        raise _voidware_auth_http_error(exc) from exc
+
+
 @app.post("/api/voidware/broker/grant")
 def post_voidware_broker_grant(payload: VoidwareGrantPayload) -> dict[str, Any]:
     name = payload.credential_name.strip()

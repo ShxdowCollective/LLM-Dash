@@ -306,13 +306,13 @@ Re-running an update for the same date upserts rather than duplicates:
 1. Environment variables
 2. Selected reusable Voidware provider credential
 3. Voidware auth broker
-4. Legacy OS keychain (via `keyring` package)
+4. Legacy OS keychain (via `keyring` package), read-only for migration
 
 ### What's stored where
 
 | Data | Location | Rationale |
 |---|---|---|
-| Provider, Exa, and LLM Stats API keys | Environment, selected Voidware provider credential, or Voidware broker; legacy keyring reads remain migration fallbacks | Secrets never in repo or API responses |
+| Provider, Exa, and LLM Stats API keys | Environment, selected Voidware provider credential, or Voidware broker; legacy keyring reads remain migration fallbacks and new writes require Voidware approval | Secrets never in repo or API responses |
 | Provider credential name, base URL, models, headers, grant renewal metadata | `shxdow.llmdash.json` | Non-secret config and renewal prompts |
 | Selected provider grant token | Voidware OS keyring service `voidware-client-grants` | Opaque broker grant reuse without writing tokens to config |
 | Exa API key | Same as provider API key | Same credential pipeline |
@@ -329,6 +329,9 @@ the 90-day renewal prompt. Opaque grant tokens are cached by Voidware's
 renewal, expiration, invalidation, denial, or durable-secret-unavailable
 responses. The old `llm-dash-voidware-grants` namespace is retained only as a
 cleanup-era compatibility detail.
+When a background Voidware access service blocks in-app approval, Settings can
+call `POST /api/voidware/broker/stop` after user confirmation to stop that
+external service and retry with the app-owned approval surface.
 
 ---
 

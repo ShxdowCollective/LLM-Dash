@@ -327,6 +327,18 @@ def broker_status() -> dict[str, Any]:
     }
 
 
+def stop_background_broker() -> dict[str, Any]:
+    status = broker_status()
+    if status.get("bridge_owned") and status.get("available"):
+        raise VoidwareAuthError("LLM-Dash owns the active Voidware broker.", code="broker_owned")
+    payload = _run(["auth", "broker", "stop", *_context_flags(), "--json"], timeout=10)
+    if not payload.get("ok"):
+        code = str(payload.get("errorCode") or "broker_stop_failed")
+        message = _redact(str(payload.get("error") or "Voidware broker stop failed."))
+        raise VoidwareAuthError(message, code=code)
+    return {"ok": True, "status": broker_status()}
+
+
 def _request_args(
     operation: str,
     *,
@@ -761,7 +773,14 @@ def approve_pending_approval(*, password: str = "", secret: str = "") -> dict[st
                 "grant": response.get("grant") if isinstance(response.get("grant"), dict) else {},
             }
         return _normalize_bridge_grant(response)
-    raise VoidwareAuthError(_redact(str(response.get("message") or "Voidware approval failed.")), code=str(response.get("code") or "approval_denied"))
+    raise VoidwareAuthError(
+        _redact(str(response.get("message") or "Voidware approval failed.")),
+        code=str(response.get("code") or "approval_denied"),
+        details={
+            "approval": response.get("approval") if isinstance(response.get("approval"), dict) else {},
+            "operation_id": str(response.get("operationId") or ""),
+        },
+    )
 
 
 def deny_pending_approval() -> None:

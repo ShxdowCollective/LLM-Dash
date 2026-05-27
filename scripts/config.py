@@ -41,7 +41,7 @@ SENSITIVE_HEADER_PARTS = ("authorization", "api-key", "apikey", "x-api-key", "to
 ENDPOINT_MODE_APPEND_V1 = "append_v1"
 ENDPOINT_MODE_ROOT = "root"
 ENDPOINT_MODES = {ENDPOINT_MODE_APPEND_V1, ENDPOINT_MODE_ROOT}
-SECRET_FALLBACK_CODES = {"broker_unavailable", "broker_timeout", "cli_unavailable"}
+SECRET_REMOVE_FALLBACK_CODES = {"broker_unavailable", "broker_timeout", "cli_unavailable"}
 
 
 class ConfigError(ValueError):
@@ -582,17 +582,14 @@ def _save_secret(
         )
         return
     except voidware_auth.VoidwareAuthError as exc:
-        if exc.code not in SECRET_FALLBACK_CODES:
-            raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
-        if not _keyring_set(keyring_name, secret):
-            raise ConfigError(f"Voidware auth {exc.code}: {exc}; secure local fallback failed.") from exc
+        raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
 
 
 def _remove_secret(broker_name: str, keyring_names: tuple[str, ...]) -> None:
     try:
         voidware_auth.delete_secret(broker_name)
     except voidware_auth.VoidwareAuthError as exc:
-        if exc.code not in SECRET_FALLBACK_CODES:
+        if exc.code not in SECRET_REMOVE_FALLBACK_CODES:
             raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
 
     for name in keyring_names:
