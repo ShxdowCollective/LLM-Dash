@@ -4312,7 +4312,8 @@
       env: "From environment",
       "voidware-provider": "Saved in Voidware",
       "voidware-broker": "Access ready",
-      "keyring-legacy": "Legacy keyring",
+      "voidware-keystore": "Saved in Voidware",
+      "keyring-legacy": "Saved in Voidware secure store",
       missing: "Not set",
     };
     return labels[source] || "Unavailable";

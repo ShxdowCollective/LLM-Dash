@@ -4,6 +4,72 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 085 — 2026-05-27
+
+**Agent:** GPT-5 Codex
+**Cycle:** Phase 9.7 follow-up
+**Task:** Functional verification and OpenTabs smoke run
+
+---
+
+Completed a focused OpenTabs verification pass for credential-source behavior and
+core provider/schedule-style API flows, with emphasis on runtime behavior over
+CSS layout.
+
+- Confirmed OpenTabs MCP/CLI is running and connected; navigated LLM-Dash at
+  `127.0.0.1:8787`.
+- Ran an isolated fallback instance on `127.0.0.1:8789` to exercise non-bridge
+  mode (`LLM_DASH_SHXDOW_ROOT` overridden, `PATH=/nonexistent`), verified:
+  - `provider.source` transitions to `voidware-keystore`
+  - UI chip text now reads `Saved in Voidware`
+  - `/api/provider/credentials` / provider/voidware endpoints return expected shapes
+- Ran provider workflow checks:
+  - `POST /api/provider` (stores fallback secret)
+  - `DELETE /api/provider/key` (removes key)
+  - `GET /api/provider`, `/api/voidware/broker`, `/api/provider/models`,
+    `/api/provider/test-connection`, `/api/provider/credentials`
+  - `GET /api/llmstats/test-connection`
+- Ran Voidware approval-path checks on full app:
+  - `POST /api/voidware/broker/grant` produced pending state
+  - `/api/voidware/broker/approval` surfaced pending payload
+  - `POST /api/voidware/broker/approval/deny` returned `approval_denied`
+- Captured proof screenshots:
+  - `/artifacts/opentabs-verify-llmdash-provider.png`
+  - `/artifacts/opentabs-settings-8787.png`
+
+Verification commands used:
+
+- `curl` checks against `/api/provider*`, `/api/voidware/broker*`, `/api/llmstats/test-connection`
+- OpenTabs page checks (`browser_get_tab_content`, `browser_list_tabs`, `browser_screenshot_tab`)
+
+---
+
+## Entry 084 — 2026-05-27
+
+**Agent:** GPT-5 Codex
+**Cycle:** Phase 9.7 follow-up
+**Task:** Clarify saved-key source wording as Voidware-managed
+
+---
+
+Adjusted credential source labeling so local keyring-backed credentials are
+presented as Voidware-managed rather than legacy.
+
+- Backend `scripts/config.py`: `_credential_source()` now reports `"voidware-keystore"`
+  instead of `"keyring-legacy"` when reading from the local keyring, keeps the
+  source precedence updated, and changes fallback-save messaging to
+  “secure local fallback failed”.
+- Frontend `web/app.js`: `authSourceLabel()` maps `"voidware-keystore"` to
+  “Saved in Voidware” and maps `"keyring-legacy"` to “Saved in Voidware secure
+  store” for compatibility with older payloads.
+
+Verification:
+
+- `python3 -m py_compile scripts/config.py scripts/voidware_auth.py`
+- `python3 -m unittest tests/test_voidware_auth.py -v`
+
+---
+
 ## Entry 083 — 2026-05-27
 
 **Agent:** GPT-5 Codex (silkforge, implementation)

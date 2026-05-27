@@ -18,6 +18,8 @@ endpoints, and the LLM-Dash approval modal. Plan:
 
 - [ ] Re-run the fresh wizard walkthrough from Connection with a saved
   Voidware credential and capture approval-modal screenshots.
+- [x] Verify Settings > Provider saved-key chip/source copy in browser (including
+  Voidware keystore fallback label): `Saved in Voidware`.
 - [ ] Verify Settings > Provider saved-key renewal copy and broker-conflict
   recovery copy in browser.
 - [ ] Revisit whether env/keyring-only fallback should remain now that

@@ -274,15 +274,15 @@ def _credential_source(
                 "name": name,
                 "legacy_migration_available": any(_legacy_secret(item) for item in key_names),
             }
-    legacy_source = ""
+    fallback_source = ""
     for name in key_names:
         if _keyring_get(name):
-            legacy_source = "keyring-legacy"
+            fallback_source = "voidware-keystore"
             break
     return {
-        "configured": bool(legacy_source),
-        "source": legacy_source or "missing",
-        "legacy_migration_available": bool(legacy_source),
+        "configured": bool(fallback_source),
+        "source": fallback_source or "missing",
+        "legacy_migration_available": False,
     }
 
 
@@ -519,7 +519,7 @@ def public_provider_state() -> dict[str, Any]:
         "exa_configured": bool(exa_auth.get("configured")),
         "llmstats_configured": bool(llmstats_auth.get("configured")),
         "auth": {
-            "precedence": ["env", "voidware-provider", "voidware-broker", "keyring-legacy"],
+            "precedence": ["env", "voidware-provider", "voidware-broker", "voidware-keystore", "keyring-legacy"],
             "broker": voidware_auth.broker_status(),
             "provider": provider_auth,
             "exa": exa_auth,
@@ -585,7 +585,7 @@ def _save_secret(
         if exc.code not in SECRET_FALLBACK_CODES:
             raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
         if not _keyring_set(keyring_name, secret):
-            raise ConfigError(f"Voidware auth {exc.code}: {exc}; legacy keyring fallback failed.") from exc
+            raise ConfigError(f"Voidware auth {exc.code}: {exc}; secure local fallback failed.") from exc
 
 
 def _remove_secret(broker_name: str, keyring_names: tuple[str, ...]) -> None:

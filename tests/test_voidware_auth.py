@@ -243,6 +243,35 @@ class VoidwareAuthTests(unittest.TestCase):
         self.assertTrue(bundle.has_provider)
         self.assertEqual(bundle.secrets.api_key, "sk-from-broker")
 
+    def test_public_provider_state_shows_voidware_keystore_source(self) -> None:
+        config.config_path().parent.mkdir(parents=True, exist_ok=True)
+        config.config_path().write_text(
+            json.dumps({
+                "provider": {
+                    "base_url": "",
+                    "default_model": "",
+                },
+            }),
+            encoding="utf-8",
+        )
+
+        with (
+            patch.object(config.voidware_auth, "discover_provider_credentials", return_value=[]),
+            patch.object(
+                config,
+                "_keyring_get",
+                side_effect=lambda name: "sk-voidware" if name in config.PROVIDER_KEY_NAMES else "",
+            ),
+            patch.object(config, "_legacy_secret", return_value=""),
+        ):
+            state = config.public_provider_state()
+
+        auth = state["auth"]
+        self.assertEqual(auth["precedence"], ["env", "voidware-provider", "voidware-broker", "voidware-keystore", "keyring-legacy"])
+        self.assertEqual(auth["provider"]["source"], "voidware-keystore")
+        self.assertFalse(auth["provider"]["legacy_migration_available"])
+        self.assertTrue(auth["provider"]["configured"])
+
 
 if __name__ == "__main__":
     unittest.main()
