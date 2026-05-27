@@ -3719,6 +3719,58 @@ table.models tbody td.summary-cell {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--vw-error) 28%, transparent);
 }
 
+.voidware-approval-modal .vw-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.voidware-approval-countdown {
+  font-family: var(--vw-font-mono);
+  font-size: 14px;
+  font-weight: var(--vw-weight-semibold);
+  color: var(--vw-muted);
+  padding: 4px 10px;
+  border-radius: var(--vw-radius-sm);
+  background: var(--vw-surface-2);
+  box-shadow: 0 0 0 1px var(--vw-border);
+  min-width: 52px;
+  text-align: center;
+}
+
+.voidware-approval-countdown.is-urgent {
+  color: var(--vw-warning, #e6a817);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--vw-warning, #e6a817) 40%, transparent);
+}
+
+.voidware-approval-countdown.is-expired {
+  color: var(--vw-error);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--vw-error) 40%, transparent);
+}
+
+.voidware-approval-modal.is-submitting {
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.voidware-approval-modal.is-submitting .vw-btn-primary::after {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-left: 8px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: vw-spin 0.6s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes vw-spin {
+  to { transform: rotate(360deg); }
+}
+
 .wizard-voidware-grant-row {
   display: flex;
   flex-wrap: wrap;

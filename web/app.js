@@ -4450,6 +4450,7 @@
 
   function expireWizardVoidwareApproval(message) {
     clearVoidwareApprovalPoll();
+    stopApprovalCountdown();
     const text = message || "Voidware approval expired. Start approval again.";
     state.wizard.voidwareGrantState = "failed";
     state.wizard.voidwareGrantError = text;
@@ -4645,6 +4646,7 @@
         render();
         return;
       }
+      stopApprovalCountdown();
       state.wizard.voidwareGrantState = "success";
       state.wizard.voidwareApproval = null;
       state.wizard.voidwareApprovalContext = null;
@@ -4685,6 +4687,7 @@
   }
 
   async function denyWizardVoidwareGrant() {
+    stopApprovalCountdown();
     try {
       await fetchJson("/api/voidware/broker/approval/deny", { method: "POST" });
     } catch (_) {}
@@ -6307,6 +6310,39 @@
     ]));
   }
 
+  let voidwareApprovalCountdownTimer = null;
+  let voidwareApprovalCountdownEnd = 0;
+
+  function startApprovalCountdown(timeoutMs) {
+    stopApprovalCountdown();
+    voidwareApprovalCountdownEnd = Date.now() + Number(timeoutMs || 300000);
+    voidwareApprovalCountdownTimer = window.setInterval(updateApprovalCountdown, 1000);
+    updateApprovalCountdown();
+  }
+
+  function stopApprovalCountdown() {
+    if (voidwareApprovalCountdownTimer) window.clearInterval(voidwareApprovalCountdownTimer);
+    voidwareApprovalCountdownTimer = null;
+    voidwareApprovalCountdownEnd = 0;
+  }
+
+  function updateApprovalCountdown() {
+    const el = document.querySelector(".voidware-approval-countdown");
+    if (!el) { stopApprovalCountdown(); return; }
+    const remaining = Math.max(0, voidwareApprovalCountdownEnd - Date.now());
+    if (remaining <= 0) {
+      el.textContent = "Expired";
+      el.classList.add("is-expired");
+      stopApprovalCountdown();
+      return;
+    }
+    const minutes = Math.floor(remaining / 60000);
+    const seconds = Math.floor((remaining % 60000) / 1000);
+    el.textContent = minutes + ":" + String(seconds).padStart(2, "0");
+    if (remaining < 60000) el.classList.add("is-urgent");
+    else el.classList.remove("is-urgent");
+  }
+
   function renderVoidwareApprovalModal() {
     const approval = state.wizard.voidwareApproval || {};
     const operation = approval.operation && approval.operation.kind ? approval.operation.kind : "auth:secret:read";
@@ -6321,25 +6357,39 @@
       ? "LLM-Dash provider key"
       : target;
     const ttlLabel = approval.ttl === "120d" ? "120 days" : approval.ttl || "120 days";
-    const approvalWindowLabel = approval.timeoutMs ? Math.max(1, Math.round(Number(approval.timeoutMs) / 60000)) + " minutes" : "5 minutes";
+    const isFailed = state.wizard.voidwareGrantState === "failed";
+    const isRequesting = state.wizard.voidwareGrantState === "requesting";
     const scopeLabel = scopes
       ? (targetLabel === target ? "Only " + targetLabel : "Only this saved key")
       : "";
+    const needsInput = approval.passwordRequired || approval.secretRequired;
+    requestAnimationFrame(() => {
+      if (approval.timeoutMs) startApprovalCountdown(approval.timeoutMs);
+      const modal = document.querySelector(".voidware-approval-modal");
+      if (modal) {
+        const autoFocus = modal.querySelector(".voidware-approval-field .vw-input");
+        if (autoFocus && !modal.classList.contains("is-submitting")) autoFocus.focus();
+      }
+    });
     return h("div", {
       class: "vw-modal-backdrop voidware-approval-backdrop",
       role: "presentation",
     }, h("div", {
-      class: "vw-modal voidware-approval-modal",
+      class: "vw-modal voidware-approval-modal" + (isRequesting ? " is-submitting" : ""),
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": "voidware-approval-title",
     }, [
       h("div", { class: "vw-modal-header" }, [
         h("h2", { id: "voidware-approval-title" }, "Approve LLM-Dash access"),
+        h("span", { class: "voidware-approval-countdown" }, "5:00"),
       ]),
       h("form", {
         class: "voidware-approval-form",
-        onsubmit: (event) => event.preventDefault(),
+        onsubmit: (event) => {
+          event.preventDefault();
+          if (!isRequesting && !isFailed) approveWizardVoidwareGrant();
+        },
       }, [
         h("div", { class: "vw-modal-body" }, [
           h("div", { class: "voidware-approval-grid" }, [
@@ -6351,8 +6401,6 @@
             h("strong", null, operationLabel),
             h("span", null, "Expires"),
             h("strong", null, ttlLabel),
-            h("span", null, "Approve within"),
-            h("strong", null, approvalWindowLabel),
             scopeLabel ? h("span", null, "Limit") : null,
             scopeLabel ? h("strong", null, scopeLabel) : null,
           ]),
@@ -6380,7 +6428,7 @@
             }),
           ]) : null,
           state.wizard.voidwareGrantError
-            ? h("p", { class: "wizard-error voidware-approval-error", "aria-live": "polite" }, state.wizard.voidwareGrantError)
+            ? h("p", { class: "wizard-error voidware-approval-error", role: "alert", "aria-live": "assertive" }, state.wizard.voidwareGrantError)
             : null,
         ]),
         h("div", { class: "vw-modal-footer" }, [
@@ -6389,12 +6437,23 @@
             type: "button",
             onclick: denyWizardVoidwareGrant,
           }, "Deny"),
-          h("button", {
+          isFailed ? h("button", {
             class: "vw-btn vw-btn-primary",
             type: "button",
-            disabled: state.wizard.voidwareGrantState === "requesting",
-            onclick: approveWizardVoidwareGrant,
-          }, state.wizard.voidwareGrantState === "requesting" ? "Approving…" : "Approve Access"),
+            onclick: () => {
+              state.wizard.voidwareGrantState = "idle";
+              state.wizard.voidwareGrantError = "";
+              render();
+            },
+          }, "Try Again") : h("button", {
+            class: "vw-btn vw-btn-primary",
+            type: "submit",
+            disabled: isRequesting,
+            onclick: (event) => {
+              event.preventDefault();
+              approveWizardVoidwareGrant();
+            },
+          }, isRequesting ? "Approving…" : "Approve Access"),
         ]),
       ]),
     ]));

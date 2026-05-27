@@ -230,16 +230,7 @@ async function startGrant(target, forceRefresh = false) {
     ),
   )
   activeGrant = { operationId, target, promise }
-  const result = await Promise.race([
-    promise.then((value) => ({ type: 'done', value }), (err) => ({ type: 'error', err })),
-    new Promise((resolvePending) => {
-      const tick = () => {
-        if (pendingApproval) resolvePending({ type: 'pending' })
-        else setTimeout(tick, 20)
-      }
-      tick()
-    }),
-  ])
+  const result = await raceForPending(promise)
   if (result.type === 'pending') {
     return {
       ok: false,
@@ -249,7 +240,7 @@ async function startGrant(target, forceRefresh = false) {
     }
   }
   if (result.type === 'error') throw result.err
-  return responseFromBrokerGrant(result.value, operationId)
+  return responseFromBrokerGrant(result.value, operationId, target)
 }
 
 async function startBrokerRequest(operation, target, params = {}) {
@@ -268,16 +259,7 @@ async function startBrokerRequest(operation, target, params = {}) {
     api.createLocalAuthBrokerClient(context()).request(brokerPayload(operation, target, params)),
   )
   activeGrant = { operationId, target, promise }
-  const result = await Promise.race([
-    promise.then((value) => ({ type: 'done', value }), (err) => ({ type: 'error', err })),
-    new Promise((resolvePending) => {
-      const tick = () => {
-        if (pendingApproval) resolvePending({ type: 'pending' })
-        else setTimeout(tick, 20)
-      }
-      tick()
-    }),
-  ])
+  const result = await raceForPending(promise)
   if (result.type === 'pending') {
     return {
       ok: false,
@@ -288,10 +270,10 @@ async function startBrokerRequest(operation, target, params = {}) {
   }
   if (result.type === 'error') throw result.err
   activeGrant = null
-  return responseFromBrokerGrant(result.value, operationId)
+  return responseFromBrokerGrant(result.value, operationId, target)
 }
 
-function responseFromBrokerGrant(response, operationId) {
+function responseFromBrokerGrant(response, operationId, target) {
   if (!response || !response.ok) {
     const code = response && response.error ? response.error.code : 'broker_error'
     return {
@@ -308,10 +290,32 @@ function responseFromBrokerGrant(response, operationId) {
   return {
     ok: true,
     operationId,
-    target: activeGrant && activeGrant.target ? activeGrant.target : undefined,
+    target: target || (activeGrant && activeGrant.target ? activeGrant.target : undefined),
     grant: grantMetadata(response.data || {}),
     ...(typeof nested.secret === 'string' ? { secret: nested.secret } : {}),
   }
+}
+
+function raceForPending(promise) {
+  return Promise.race([
+    promise.then((value) => ({ type: 'done', value }), (err) => ({ type: 'error', err })),
+    new Promise((resolvePending) => {
+      const tick = () => {
+        if (pendingApproval) resolvePending({ type: 'pending' })
+        else setTimeout(tick, 20)
+      }
+      tick()
+    }),
+  ])
+}
+
+function chainedApprovalCompatible(chainedReq, originalResult) {
+  if (!chainedReq || !chainedReq.approval) return false
+  const approval = chainedReq.approval
+  if (approval.passwordRequired && !originalResult.password) return false
+  if (approval.secretRequired && !originalResult.secret) return false
+  if (!approval.passwordRequired && !approval.secretRequired) return true
+  return true
 }
 
 async function approve(payload) {
@@ -329,21 +333,21 @@ async function approve(payload) {
   }
   if (!activeGrant) return { ok: true }
   const grant = activeGrant
+  const grantTarget = grant.target
   let chained = 0
   try {
     while (chained < MAX_CHAINED_APPROVALS) {
-      const result = await Promise.race([
-        grant.promise.then((value) => ({ type: 'done', value }), (err) => ({ type: 'error', err })),
-        new Promise((resolvePending) => {
-          const tick = () => {
-            if (pendingApproval) resolvePending({ type: 'pending' })
-            else setTimeout(tick, 20)
-          }
-          tick()
-        }),
-      ])
+      const result = await raceForPending(grant.promise)
       if (result.type === 'pending') {
         const chainedReq = pendingApproval
+        if (!chainedApprovalCompatible(chainedReq, approvalResult)) {
+          return {
+            ok: false,
+            code: 'approval_pending',
+            operationId: grant.operationId,
+            approval: chainedReq ? chainedReq.approval : null,
+          }
+        }
         pendingApproval = null
         for (const resolveApproval of chainedReq.waiters) {
           resolveApproval(approvalResult)
@@ -353,7 +357,7 @@ async function approve(payload) {
       }
       if (result.type === 'error') throw result.err
       if (!pendingApproval) activeGrant = null
-      return responseFromBrokerGrant(result.value, grant.operationId)
+      return responseFromBrokerGrant(result.value, grant.operationId, grantTarget)
     }
     activeGrant = null
     return { ok: false, code: 'approval_pending', message: 'Voidware requested too many sequential approvals.', operationId: grant.operationId, approval: pendingApproval ? pendingApproval.approval : null }

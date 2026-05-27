@@ -4,6 +4,54 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 090 — 2026-05-27
+
+**Agent:** Kilo (auth workflow review and optimization)
+**Cycle:** Phase 9.7 follow-up
+**Task:** Validate last commit, optimize and enhance the entire auth workflow
+
+---
+
+Reviewed Entry 089 and commit `b121bd2` (chained approval handling, 5-minute
+timeout, chained-pending response passthrough). Validated all 13 existing
+tests pass and the backend/frontend syntax checks are clean.
+
+Identified and fixed three broker correctness issues:
+
+- Chained approval auto-resolve now checks credential compatibility before
+  reusing the original password/secret. If the chained approval requires a
+  different credential type (e.g., `secretRequired` when only a password was
+  provided), the broker surfaces it to the frontend instead of silently
+  failing.
+- `responseFromBrokerGrant` now accepts an explicit `target` parameter
+  instead of reading `activeGrant.target` after the caller may have set
+  `activeGrant = null`.
+- Extracted a shared `raceForPending` helper from the duplicated
+  `Promise.race` patterns in `startGrant` and `startBrokerRequest`.
+
+Enhanced the approval modal UX:
+
+- Added a live countdown timer that ticks from the approval timeout (default
+  5 minutes), turns amber under 60 seconds, and shows "Expired" at zero.
+- Password/secret input auto-focuses when the modal opens.
+- Enter key submits the approval form.
+- `is-submitting` state dims the modal and adds a spinner to the approve
+  button.
+- Failed approvals now show a "Try Again" button instead of only a dead-end
+  error message.
+- Error messages use `role="alert"` and `aria-live="assertive"` for
+  immediate screen-reader announcement.
+- Countdown timer is cleaned up on deny, expiry, and success paths.
+
+Verification:
+
+- `node --check scripts/voidware_app_broker.mjs && node --check web/app.js`
+- `python3 -m py_compile scripts/voidware_auth.py scripts/config.py server.py tests/test_voidware_auth.py`
+- `python3 -m unittest discover -v` — 13/13 pass
+- `git diff --check` — clean
+
+---
+
 ## Entry 089 — 2026-05-27
 
 **Agent:** GPT-5 Codex (velvetcircuit, follow-up)

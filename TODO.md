@@ -9,18 +9,15 @@ Use `[ ]` only for still-open work.
 
 ### Phase 9.7 follow-up — approval walkthrough
 
-**Status:** Implementation done; now in verification-only mode.
+**Status:** Implementation done; auth workflow optimized; in verification-only mode.
 
 Active follow-up tasks:
 
 - [ ] Complete one final wizard-owned new-key advance check after the OpenTabs
   input/click path is stable. Backend approval, modal recovery, expiry handling,
-  and no-raw-key config checks passed with disposable dev keys. Latest OpenTabs
-  runs repeatedly reached the in-app Voidware password prompt, but approving
-  returned `Finish the open approval first.` followed by wizard expiry. Patches
-  added longer approval TTL, stale-pending recovery, single-submit guards, and
-  chained-pending response handling; the live password-backed path remains
-  blocked and likely needs deeper Voidware app-broker lifecycle debugging.
+  chained-approval compatibility guards, and no-raw-key config checks passed.
+  The approval modal now has a live countdown, auto-focus, Enter-key submit,
+  spinner feedback, retry on failure, and assertive ARIA errors.
 
 Reference: [`docs/plans/2026-05-26-voidware-0-9-10-app-approval-plan.md`](docs/plans/2026-05-26-voidware-0-9-10-app-approval-plan.md).
 
@@ -54,6 +51,10 @@ approval implementation.
 
 ## Recent Completed
 
+- Phase 9.7 follow-up — Auth workflow optimization: chained-approval
+  compatibility guard, shared pending-detection helper, target-safe grant
+  responses, approval modal countdown/auto-focus/Enter-key/spinner/retry,
+  assertive ARIA errors, and is-submitting visual feedback.
 - Phase 9.7 — Voidware 0.9.10 app-owned saved-credential approval bridge,
   official durable grant cache, approval modal, docs, and backend tests.
 - Phase 9.7 follow-up — New-key provider saves now surface app-owned Voidware
