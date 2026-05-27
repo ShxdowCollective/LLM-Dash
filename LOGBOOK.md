@@ -4,6 +4,25 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 086 — 2026-05-27
+
+**Agent:** GPT-5 Codex
+**Cycle:** Phase 9.7 follow-up
+**Task:** Task board cleanup and follow-up status update
+
+---
+
+Condensed and restructured `TODO.md` for the remaining Phase 9.7 follow-up work.
+
+- Reduced the 9.7 follow-up block to verification-only tasks.
+- Updated the active checklist to three concrete items: saved-key wizard capture,
+  Settings renewal/recovery copy checks, and fallback-policy revisit.
+- Reframed the historical aborted walkthrough notes into a short evidence note.
+
+No code or runtime behavior changed in this pass.
+
+---
+
 ## Entry 085 — 2026-05-27
 
 **Agent:** GPT-5 Codex

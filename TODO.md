@@ -9,43 +9,25 @@ Use `[ ]` only for still-open work.
 
 ### Phase 9.7 follow-up — saved-key walkthrough
 
-**Status:** Implementation landed; needs one headed fake/real saved-key pass.
+**Status:** Implementation done; now in verification-only mode.
 
-Phase 9.7 added the Voidware `0.9.10` CSS/vendor bump, Node app-owned broker
-bridge, official `voidware-client-grants` durable grant path, FastAPI approval
-endpoints, and the LLM-Dash approval modal. Plan:
-[`docs/plans/2026-05-26-voidware-0-9-10-app-approval-plan.md`](docs/plans/2026-05-26-voidware-0-9-10-app-approval-plan.md).
+Active follow-up tasks:
 
-- [ ] Re-run the fresh wizard walkthrough from Connection with a saved
-  Voidware credential and capture approval-modal screenshots.
-- [x] Verify Settings > Provider saved-key chip/source copy in browser (including
-  Voidware keystore fallback label): `Saved in Voidware`.
-- [ ] Verify Settings > Provider saved-key renewal copy and broker-conflict
-  recovery copy in browser.
-- [ ] Revisit whether env/keyring-only fallback should remain now that
-  app-owned approval is available.
+- [ ] Re-run the Connection wizard with a saved Voidware credential (fake + real)
+  and capture approval-modal screenshots.
+- [ ] Verify Settings > Provider in-browser copy for saved-key renewal and
+  broker-conflict recovery.
+- [ ] Revisit env/keyring-only fallback policy now that app-owned approval exists.
+
+Reference: [`docs/plans/2026-05-26-voidware-0-9-10-app-approval-plan.md`](docs/plans/2026-05-26-voidware-0-9-10-app-approval-plan.md).
 
 ### Fresh Setup Wizard Walkthrough (aborted)
 
-Was: active headed-browser walkthrough on `http://127.0.0.1:8787`.
-
-Done before abort: reset local state, broker autostart fix (later revised),
-keyring fallback, wizard loading polish, service/credential UX fixes, voidware
-grant endpoint/UI experiment.
-
-Screenshot sets:
-
-- `artifacts/browser-sessions/2026-05-18-fresh-wizard/`
-- `artifacts/browser-sessions/2026-05-19-wizard-walkthrough/`
-
-Cancelled (blocked on Voidware Milestone 8):
-
-- ~~Finish manual wizard walkthrough through provider, model, Exa, LLM Stats,
-  schedule, and summary steps.~~
-- ~~Run a refresh from the configured wizard flow and verify update overlay
-  behavior.~~
-- ~~Capture final walkthrough screenshots and add refs to `LOGBOOK.md`.~~
-- ~~Archive/split `LOGBOOK.md` after the active walkthrough.~~
+Walkthrough was started on `http://127.0.0.1:8787` and paused at the
+Voidware broker approval gap (later fixed in app-owned approval).  
+Evidence is in:
+`artifacts/browser-sessions/2026-05-18-fresh-wizard/`,
+`artifacts/browser-sessions/2026-05-19-wizard-walkthrough/`.
 
 ### CSS Fix Milestone — Wizard First-Run Polish (paused)
 
