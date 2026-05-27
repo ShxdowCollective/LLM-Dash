@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import platform
+import re
 import shlex
 import sqlite3
 import subprocess
@@ -25,8 +26,8 @@ from scripts.config import (
     ProviderConfig,
     ProviderSecrets,
     build_auth_headers,
-    load_exa_api_key,
     load_llmstats_api_key,
+    load_provider_config,
     load_provider_bundle,
     discover_provider_credentials,
     normalize_base_url,
@@ -134,30 +135,11 @@ def _safe_tail(path: Path, max_chars: int = 4000) -> str:
 
 
 def _redact_known_secrets(text: str) -> str:
-    secrets: list[str] = []
-    try:
-        bundle = load_provider_bundle()
-        if bundle.secrets.api_key:
-            secrets.append(bundle.secrets.api_key)
-    except Exception:
-        pass
-    try:
-        exa_key = load_exa_api_key()
-        if exa_key:
-            secrets.append(exa_key)
-    except Exception:
-        pass
-    try:
-        llmstats_key = load_llmstats_api_key()
-        if llmstats_key:
-            secrets.append(llmstats_key)
-    except Exception:
-        pass
-    redacted = text
-    for secret in secrets:
-        if secret:
-            redacted = redacted.replace(secret, "***")
-    return voidware_auth.GRANT_RE.sub("vwgr_***", redacted)
+    redacted = voidware_auth.GRANT_RE.sub("vwgr_***", text)
+    redacted = re.sub(r"\bsk-[A-Za-z0-9._-]{8,}\b", "sk-***", redacted)
+    redacted = re.sub(r"\bxai-[A-Za-z0-9._-]{8,}\b", "xai-***", redacted)
+    redacted = re.sub(r"\bAIza[A-Za-z0-9._-]{8,}\b", "AIza***", redacted)
+    return redacted
 
 
 def _http_error(exc: Exception, status_code: int = 400) -> HTTPException:
@@ -497,7 +479,7 @@ def post_provider(payload: ProviderPayload) -> dict[str, Any]:
             default_model=payload.default_model,
             backup_model=payload.backup_model,
             endpoint_mode=payload.endpoint_mode,
-            request_headers=payload.request_headers if payload.request_headers is not None else load_provider_bundle().config.request_headers,
+            request_headers=payload.request_headers if payload.request_headers is not None else load_provider_config().request_headers,
             provider_credential_name=payload.provider_credential_name,
             provider_credential_meta=payload.provider_credential_meta,
         )

@@ -152,6 +152,7 @@ class _BridgeController:
 
 
 _BRIDGE = _BridgeController()
+_APPROVED_SECRET_CACHE: dict[str, dict[str, Any]] = {}
 atexit.register(_BRIDGE.stop)
 
 
@@ -622,6 +623,12 @@ def request_credential_access_grant(name: str) -> dict[str, Any]:
 
 
 def read_secret_with_grant(name: str, *, require_fresh_grant: bool = False) -> dict[str, Any]:
+    cached_approval = _APPROVED_SECRET_CACHE.get(name)
+    if cached_approval and not require_fresh_grant:
+        return {
+            "secret": str(cached_approval.get("secret") or ""),
+            "grant": cached_approval.get("grant") if isinstance(cached_approval.get("grant"), dict) else {},
+        }
     try:
         bridge_result = _bridge_read_grant(name, force_refresh=require_fresh_grant, timeout=5 if not require_fresh_grant else APPROVAL_BROKER_TIMEOUT)
         if bridge_result.get("pending"):
@@ -746,6 +753,13 @@ def approve_pending_approval(*, password: str = "", secret: str = "") -> dict[st
     response = _BRIDGE.request("approve", {"password": password, "secret": secret}, timeout=APPROVAL_BROKER_TIMEOUT)
     if response.get("ok"):
         _clear_legacy_grant_cache()
+        target = str(response.get("target") or "")
+        approved_secret = str(response.get("secret") or "")
+        if target and approved_secret:
+            _APPROVED_SECRET_CACHE[target] = {
+                "secret": approved_secret,
+                "grant": response.get("grant") if isinstance(response.get("grant"), dict) else {},
+            }
         return _normalize_bridge_grant(response)
     raise VoidwareAuthError(_redact(str(response.get("message") or "Voidware approval failed.")), code=str(response.get("code") or "approval_denied"))
 

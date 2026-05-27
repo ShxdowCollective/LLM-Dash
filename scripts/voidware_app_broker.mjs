@@ -113,15 +113,29 @@ function approvalSummary(request) {
   }
 }
 
+function sameApprovalRequest(left, right) {
+  if (!left || !right) return false
+  const leftOperation = left.operation && left.operation.kind ? left.operation.kind : ''
+  const rightOperation = right.operation && right.operation.kind ? right.operation.kind : ''
+  const leftTarget = left.operation && left.operation.target ? left.operation.target : ''
+  const rightTarget = right.operation && right.operation.target ? right.operation.target : ''
+  return leftOperation === rightOperation && leftTarget === rightTarget
+}
+
 function requestApproval(request) {
   if (pendingApproval) {
-    return Promise.resolve({ ok: false, code: 'approval_denied', message: 'another approval is already pending' })
+    if (sameApprovalRequest(pendingApproval.approval, request)) {
+      return new Promise((resolveApproval) => {
+        pendingApproval.waiters.push(resolveApproval)
+      })
+    }
+    return Promise.resolve({ ok: false, code: 'approval_pending', message: 'Finish the open approval first.' })
   }
   return new Promise((resolveApproval) => {
     pendingApproval = {
       requestId: request.requestId,
       approval: approvalSummary(request),
-      resolve: resolveApproval,
+      waiters: [resolveApproval],
       createdAt: Date.now(),
     }
   })
@@ -147,7 +161,9 @@ async function ensureBroker() {
         requestApproval,
         cancelPending(requestId, reason) {
           if (pendingApproval && pendingApproval.requestId === requestId) {
-            pendingApproval.resolve({ ok: false, code: 'approval_denied', message: `approval ${reason}` })
+            for (const resolveApproval of pendingApproval.waiters) {
+              resolveApproval({ ok: false, code: 'approval_denied', message: `approval ${reason}` })
+            }
             pendingApproval = null
           }
         },
@@ -187,11 +203,21 @@ function brokerPayload(operation, target, params = {}) {
 async function startGrant(target, forceRefresh = false) {
   const api = await loadService()
   await ensureBroker()
+  if (pendingApproval && sameApprovalRequest(pendingApproval.approval, { operation: { kind: 'auth:secret:read', target } })) {
+    return {
+      ok: false,
+      code: 'approval_pending',
+      operationId: activeGrant && activeGrant.operationId ? activeGrant.operationId : randomUUID(),
+      approval: pendingApproval.approval,
+    }
+  }
   const operationId = randomUUID()
-  const promise = api.requestDurableVoidwareAuthGrant(
-    brokerPayload('auth:secret:read', target),
-    context(),
-    { forceRefresh },
+  const promise = Promise.resolve().then(() =>
+    api.requestDurableVoidwareAuthGrant(
+      brokerPayload('auth:secret:read', target),
+      context(),
+      { forceRefresh },
+    ),
   )
   activeGrant = { operationId, target, promise }
   const result = await Promise.race([
@@ -219,8 +245,18 @@ async function startGrant(target, forceRefresh = false) {
 async function startBrokerRequest(operation, target, params = {}) {
   const api = await loadService()
   await ensureBroker()
+  if (pendingApproval && sameApprovalRequest(pendingApproval.approval, { operation: { kind: operation, target } })) {
+    return {
+      ok: false,
+      code: 'approval_pending',
+      operationId: activeGrant && activeGrant.operationId ? activeGrant.operationId : randomUUID(),
+      approval: pendingApproval.approval,
+    }
+  }
   const operationId = randomUUID()
-  const promise = api.createLocalAuthBrokerClient(context()).request(brokerPayload(operation, target, params))
+  const promise = Promise.resolve().then(() =>
+    api.createLocalAuthBrokerClient(context()).request(brokerPayload(operation, target, params)),
+  )
   activeGrant = { operationId, target, promise }
   const result = await Promise.race([
     promise.then((value) => ({ type: 'done', value }), (err) => ({ type: 'error', err })),
@@ -260,6 +296,7 @@ function responseFromBrokerGrant(response, operationId) {
   return {
     ok: true,
     operationId,
+    target: activeGrant && activeGrant.target ? activeGrant.target : undefined,
     grant: grantMetadata(response.data || {}),
     ...(typeof nested.secret === 'string' ? { secret: nested.secret } : {}),
   }
@@ -269,12 +306,15 @@ async function approve(payload) {
   if (!pendingApproval) return { ok: false, code: 'approval_not_found', message: 'No Voidware approval is pending.' }
   const current = pendingApproval
   pendingApproval = null
-  current.resolve({
+  const approvalResult = {
     ok: true,
     ...(payload && typeof payload.password === 'string' && payload.password ? { password: payload.password } : {}),
     ...(payload && typeof payload.secret === 'string' && payload.secret ? { secret: payload.secret } : {}),
     ttl: MAX_GRANT_TTL,
-  })
+  }
+  for (const resolveApproval of current.waiters) {
+    resolveApproval(approvalResult)
+  }
   if (!activeGrant) return { ok: true }
   try {
     const response = await activeGrant.promise
@@ -286,7 +326,9 @@ async function approve(payload) {
 
 function deny() {
   if (!pendingApproval) return { ok: false, code: 'approval_not_found', message: 'No Voidware approval is pending.' }
-  pendingApproval.resolve({ ok: false, code: 'approval_denied', message: 'Access denied in LLM-Dash.' })
+  for (const resolveApproval of pendingApproval.waiters) {
+    resolveApproval({ ok: false, code: 'approval_denied', message: 'Access denied in LLM-Dash.' })
+  }
   pendingApproval = null
   activeGrant = null
   return { ok: false, code: 'approval_denied', message: 'Access denied.' }

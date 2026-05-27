@@ -629,6 +629,7 @@ def save_provider(
     selected_name = current.provider_credential_name if provider_credential_name is None else str(provider_credential_name or "").strip()
     selected_meta = current.provider_credential_meta or {}
     selected_grant = current.provider_credential_grant or {}
+    resolved_secret = str(api_key or "").strip()
     if api_key:
         selected_name = ""
         selected_meta = {}
@@ -640,6 +641,7 @@ def save_provider(
             raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
         if not secret_info.get("secret"):
             raise ConfigError("Selected Voidware credential did not return a secret.")
+        resolved_secret = str(secret_info.get("secret") or "")
         selected_meta = _safe_provider_credential_meta({"name": selected_name, **(provider_credential_meta or selected_meta)})
         selected_grant = secret_info.get("grant") if isinstance(secret_info.get("grant"), dict) else {}
     normalized = ProviderConfig(
@@ -677,7 +679,7 @@ def save_provider(
         "provider_credential_grant": normalized.provider_credential_grant or {},
     }
     _atomic_write_json(config_path(), data)
-    return load_provider_bundle()
+    return ProviderBundle(config=normalized, secrets=ProviderSecrets(api_key=resolved_secret))
 
 
 def save_provider_api_key(api_key: str) -> None:

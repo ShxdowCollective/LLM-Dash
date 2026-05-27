@@ -31,6 +31,7 @@ class VoidwareAuthTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
+        voidware_auth._APPROVED_SECRET_CACHE.clear()
         env = {key: "" for key in ENV_KEYS}
         env[config.SHXDOW_ROOT_ENV] = self.tmp.name
         patcher = patch.dict(os.environ, env, clear=False)
@@ -126,7 +127,7 @@ class VoidwareAuthTests(unittest.TestCase):
 
         with (
             patch.object(config.voidware_auth, "write_secret", side_effect=broker_unavailable),
-            patch.object(config.voidware_auth, "read_secret", return_value=""),
+            patch.object(config.voidware_auth, "read_secret", return_value="") as read_secret,
             patch.object(config, "_keyring_set", side_effect=lambda name, value: stored.setdefault(name, value) is not None),
             patch.object(config, "_keyring_get", side_effect=lambda name: stored.get(name, "")),
         ):
@@ -140,6 +141,7 @@ class VoidwareAuthTests(unittest.TestCase):
         self.assertTrue(bundle.has_provider)
         self.assertEqual(bundle.secrets.api_key, "sk-fallback")
         self.assertEqual(stored[config.PROVIDER_KEY_NAME], "sk-fallback")
+        read_secret.assert_not_called()
         self.assertNotIn("sk-fallback", config.config_path().read_text(encoding="utf-8"))
 
     def test_bridge_grant_uses_official_voidware_cache_namespace(self) -> None:
@@ -209,6 +211,25 @@ class VoidwareAuthTests(unittest.TestCase):
         self.assertEqual(result["operation_id"], "op-1")
         self.assertNotIn("grantToken", json.dumps(result))
         self.assertNotIn("secret", json.dumps(result))
+
+    def test_approved_secret_is_reused_for_same_server_flow(self) -> None:
+        grant = {"expiresAt": "2099-01-01T00:00:00Z"}
+        with patch.object(
+            voidware_auth._BRIDGE,
+            "request",
+            return_value={
+                "ok": True,
+                "target": "alpha",
+                "secret": "sk-approved",
+                "grant": grant,
+            },
+        ) as bridge_request:
+            approved = voidware_auth.approve_pending_approval(password="pw")
+            reused = voidware_auth.read_secret_with_grant("alpha")
+
+        self.assertEqual(approved["grant"], grant)
+        self.assertEqual(reused, {"secret": "sk-approved", "grant": grant})
+        bridge_request.assert_called_once()
 
     def test_bridge_denied_write_does_not_look_saved(self) -> None:
         with patch.object(

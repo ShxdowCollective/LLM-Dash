@@ -7,16 +7,17 @@ Use `[ ]` only for still-open work.
 
 ## Now
 
-### Phase 9.7 follow-up — saved-key walkthrough
+### Phase 9.7 follow-up — approval walkthrough
 
 **Status:** Implementation done; now in verification-only mode.
 
 Active follow-up tasks:
 
-- [ ] Re-run the Connection wizard with a saved Voidware credential (fake + real)
-  and capture approval-modal screenshots.
-- [ ] Verify Settings > Provider in-browser copy for saved-key renewal and
-  broker-conflict recovery.
+- [ ] Complete one final wizard-owned new-key advance check after the OpenTabs
+  input/click path is stable. Backend approval, modal recovery, expiry handling,
+  and no-raw-key config checks passed with disposable dev keys.
+- [ ] Verify Settings > Provider renewal and broker-conflict recovery copy with
+  a real grant near renewal or a reproducible broker-conflict fixture.
 - [ ] Revisit env/keyring-only fallback policy now that app-owned approval exists.
 
 Reference: [`docs/plans/2026-05-26-voidware-0-9-10-app-approval-plan.md`](docs/plans/2026-05-26-voidware-0-9-10-app-approval-plan.md).
@@ -37,17 +38,15 @@ approval implementation.
 - [ ] Review the full first-run wizard at desktop and narrow widths.
 - [ ] Check loading, progress, form, footer, error, and success states for
   jumps, mis-centering, clipped controls, and text overflow.
+- [ ] Restructure the Connection wizard step to match Voidware app/spec
+  patterns instead of a long stacked form: consolidate saved-key selection,
+  provider summary, access refresh, endpoints, and connection testing into a
+  tighter task-focused layout.
 - [ ] Confirm screenshots:
   `01-wizard-connection.png`, `02-wizard-no-nav-flash.png`,
   `03-wizard-boot-spinner.png`, `04-centered-boot-spinner.png`, and
   `05-wizard-stable-step1-load.png`.
 - [ ] Promote any remaining CSS-only findings into a focused fix pass.
-- [ ] **Copy pass (includes status chips):** map raw credential metadata to
-  user-facing labels on wizard/settings credential cards. Example: saved-key
-  chip shows `user-file` instead of something readable (e.g. “Saved in
-  Voidware” / “From your machine”). Same pass should cover `api_format`,
-  `reusability`, and broker chips — no internal slugs in the UI.
-  Evidence: `artifacts/browser-sessions/2026-05-19-wizard-walkthrough/06-credential-chip-user-file.png`.
 
 ## Recent Completed
 
@@ -55,6 +54,11 @@ approval implementation.
   official durable grant cache, approval modal, docs, and backend tests.
 - Phase 9.7 follow-up — New-key provider saves now surface app-owned Voidware
   approval instead of false success, then resume config save after approval.
+- Phase 9.7 follow-up — OpenTabs screenshots captured for saved-key and new-key
+  approval modals; wizard/settings credential chips now use user-facing labels.
+- Phase 9.7 follow-up — Saved-key approval completed through the wizard, new-key
+  write approval completed through the app-owned modal, stale/expired approval
+  requests now auto-close with recovery copy, and app config stayed secret-free.
 - Phase 9.6 — Voidware 0.9.8 upgrade, workspace skill sync, route/drawer
   semantics, dashboard typography/layout polish, Agent wording, weighted
   scoring, read-only Changelog, portrait model cards, and compact Settings >

@@ -4,6 +4,36 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 088 — 2026-05-27
+
+**Agent:** GPT-5 Codex (emberline, wrap-up)
+**Cycle:** Phase 9.7 follow-up
+**Task:** Finalize Voidware approval polish and handoff
+
+---
+
+Wrapped the OpenTabs/password-backed approval pass and cleaned up the final UX
+findings before handoff.
+
+- Changed the saved-key granted action to `Refresh access`.
+- Added the larger Connection-step Voidware-spec restructure to the wizard CSS
+  polish backlog.
+- Added post-save confirmation for new keys: `Saved in Voidware`, with copy
+  clarifying that LLM-Dash only stored connection settings.
+- Verified stale/expired approval recovery closes the modal and shows wizard
+  recovery copy.
+- Confirmed saved-key approval reaches the provider and new-key write approval
+  leaves config secret-free.
+
+Verification:
+
+- `node --check scripts/voidware_app_broker.mjs && node --check web/app.js`
+- `python3 -m py_compile scripts/voidware_auth.py scripts/config.py server.py tests/test_voidware_auth.py`
+- `python3 -m unittest tests.test_voidware_auth -v`
+- `git diff --check`
+
+---
+
 ## Entry 087 — 2026-05-27
 
 **Agent:** GPT-5 Codex (emberline, verification)
@@ -30,6 +60,32 @@ storage assumption with disposable fake keys.
   and continues to the next step.
 - Re-ran the live API path after restart; encrypted Voidware auth now returns a
   structured `approval_pending` payload instead of silent success.
+- Fixed fullscreen wizard approval rendering: the wizard hides `#overlay-root`,
+  so the approval modal now renders inside `#wizard-page` while setup is open.
+- Replaced raw credential chips (`keyring`, `responses`, `reusable`,
+  `user-file`) with user-facing labels in the wizard and Settings provider card.
+- Captured OpenTabs evidence for saved OpenAI/Kilo key approval, new-key
+  approval, Settings chip copy, and narrow wizard/modal layout.
+- Completed the saved-key approval path with the Voidware password: the wizard
+  reached the provider, got the expected sandbox-key HTTP 401, and persisted
+  only `provider_credential_name`/grant metadata.
+- Completed the new-key write path through the app-owned approval modal with a
+  disposable fake key. The fake key was saved through Voidware but never written
+  to `~/.shxdow/config/shxdow.llmdash.json`.
+- Fixed approval lifecycle rough edges found during the live pass:
+  - approval modal copy now uses human labels instead of `Operation`, `TTL`,
+    raw scopes, and internal target strings;
+  - the modal submits on Enter without rebuilding/flashing the whole wizard;
+  - stale/expired approvals auto-close and show recovery copy in the wizard;
+  - unrelated pending approvals no longer hijack saved-key/new-key flows;
+  - server error redaction no longer reads Voidware secrets just to sanitize
+    an error;
+  - new-key saves no longer reread the freshly written provider secret before
+    returning.
+- Added a `Saved in Voidware` confirmation card for successful new-key saves.
+- Changed the saved-key granted-state action from `Approve Access` to
+  `Refresh access`, and logged the larger Connection-step restructure under
+  the wizard CSS polish milestone.
 
 Verification:
 
@@ -38,6 +94,19 @@ Verification:
 - `python3 -m unittest tests.test_voidware_auth -v`
 - Live `/api/provider` fake-key write returned `403` with Voidware approval
   metadata; `~/.shxdow/config/shxdow.llmdash.json` did not contain the fake key.
+- OpenTabs screenshots under
+  `artifacts/browser-sessions/2026-05-27-opentabs-todo/`.
+- Live saved-key approval completed with `OPENAI_API_KEY`; test connection
+  returned HTTP 401 from the provider, not another Voidware approval error.
+- Live new-key write approval completed; config contained no `api_key`, no
+  fake `sk-llmdash-approved-new-key-20260527`, and no `sk-` marker.
+
+Residual follow-up:
+
+- Re-run the wizard-owned new-key advance path once OpenTabs input/click
+  handling is stable enough to keep the API key field populated through
+  rerenders. Backend save, approval, expiry recovery, and config safety are
+  covered.
 
 ---
 

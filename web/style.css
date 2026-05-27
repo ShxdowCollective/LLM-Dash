@@ -3653,6 +3653,32 @@ table.models tbody td.summary-cell {
 
 .voidware-approval-modal {
   width: min(640px, 100%);
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.voidware-approval-form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.voidware-approval-modal .vw-modal-body {
+  display: grid;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.voidware-approval-modal .vw-modal-footer {
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--vw-border);
+  background: var(--vw-surface-1);
 }
 
 .voidware-approval-grid {
@@ -3674,6 +3700,46 @@ table.models tbody td.summary-cell {
   min-width: 0;
   overflow-wrap: anywhere;
   font-size: 13px;
+}
+
+.voidware-approval-field {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.voidware-approval-field .vw-input {
+  width: 100%;
+}
+
+.voidware-approval-error {
+  padding: 10px 12px;
+  border-radius: var(--vw-radius-md);
+  background: color-mix(in srgb, var(--vw-error) 12%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--vw-error) 28%, transparent);
+}
+
+.wizard-voidware-grant-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.wizard-voidware-grant-row .vw-status-chip {
+  margin-left: 2px;
+}
+
+.wizard-voidware-save-confirmation {
+  display: grid;
+  gap: 8px;
+  background: var(--vw-success-bg);
+  box-shadow: 0 0 0 1px var(--vw-success-border);
+}
+
+.wizard-voidware-save-confirmation .vw-hint {
+  margin: 0;
+  color: var(--vw-text-muted);
 }
 
 .vw-wizard-progress {
