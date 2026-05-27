@@ -6,13 +6,17 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import queue
 import re
 import shlex
 import shutil
 import subprocess
+import threading
 import time
+import atexit
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 APP_NAME = "llm-dash"
 PROVIDER_SECRET_NAME = "llmdash.provider.api_key"
@@ -23,7 +27,10 @@ MAX_GRANT_TTL = "120d"
 DEFAULT_BROKER_TIMEOUT = 20
 APPROVAL_BROKER_TIMEOUT = 120
 ROOT = Path(__file__).resolve().parents[1]
-CLIENT_GRANT_SERVICE_NAME = "llm-dash-voidware-grants"
+LEGACY_CLIENT_GRANT_SERVICE_NAME = "llm-dash-voidware-grants"
+OFFICIAL_CLIENT_GRANT_SERVICE_NAME = "voidware-client-grants"
+CLIENT_GRANT_SERVICE_NAME = LEGACY_CLIENT_GRANT_SERVICE_NAME
+BRIDGE_PATH = ROOT / "scripts" / "voidware_app_broker.mjs"
 
 GRANT_RE = re.compile(r"vwgr_[A-Za-z0-9._-]+")
 FRESH_GRANT_CODES = {
@@ -40,6 +47,112 @@ class VoidwareAuthError(RuntimeError):
         super().__init__(message)
         self.code = code
         self.details = details or {}
+
+
+class _BridgeController:
+    def __init__(self) -> None:
+        self.process: subprocess.Popen[str] | None = None
+        self.lock = threading.Lock()
+        self.responses: dict[str, queue.Queue[dict[str, Any]]] = {}
+        self.stderr: list[str] = []
+
+    def _start_locked(self) -> None:
+        if self.process and self.process.poll() is None:
+            return
+        if not BRIDGE_PATH.exists():
+            raise VoidwareAuthError("Voidware app approval bridge is missing.", code="bridge_unavailable")
+        self.responses.clear()
+        self.stderr.clear()
+        try:
+            self.process = subprocess.Popen(
+                ["node", str(BRIDGE_PATH)],
+                cwd=ROOT,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+        except FileNotFoundError as exc:
+            raise VoidwareAuthError("Node is required for Voidware app-owned approval.", code="node_unavailable") from exc
+        threading.Thread(target=self._read_stdout, daemon=True).start()
+        threading.Thread(target=self._read_stderr, daemon=True).start()
+
+    def _read_stdout(self) -> None:
+        proc = self.process
+        if not proc or not proc.stdout:
+            return
+        for line in proc.stdout:
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(payload, dict):
+                continue
+            response_id = str(payload.get("id") or "")
+            q = self.responses.get(response_id)
+            if q:
+                q.put(payload)
+
+    def _read_stderr(self) -> None:
+        proc = self.process
+        if not proc or not proc.stderr:
+            return
+        for line in proc.stderr:
+            redacted = _redact(line.strip())
+            if redacted:
+                self.stderr.append(redacted[-500:])
+                self.stderr[:] = self.stderr[-20:]
+
+    def request(self, command: str, payload: dict[str, Any] | None = None, *, timeout: int = DEFAULT_BROKER_TIMEOUT) -> dict[str, Any]:
+        request_id = uuid4().hex
+        q: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=1)
+        with self.lock:
+            self._start_locked()
+            if not self.process or not self.process.stdin:
+                raise VoidwareAuthError("Voidware app approval bridge failed to start.", code="bridge_unavailable")
+            self.responses[request_id] = q
+            try:
+                self.process.stdin.write(json.dumps({"id": request_id, "command": command, "payload": payload or {}}) + "\n")
+                self.process.stdin.flush()
+            except BrokenPipeError as exc:
+                self.responses.pop(request_id, None)
+                self.stop()
+                raise VoidwareAuthError("Voidware app approval bridge exited.", code="bridge_unavailable") from exc
+        try:
+            response = q.get(timeout=timeout)
+        except queue.Empty as exc:
+            raise VoidwareAuthError("Voidware app approval bridge timed out.", code="bridge_timeout") from exc
+        finally:
+            self.responses.pop(request_id, None)
+        if response.get("ok") is False and response.get("code") not in {"approval_pending", "approval_waiting", "approval_denied"}:
+            raise VoidwareAuthError(
+                _redact(str(response.get("message") or "Voidware app approval bridge failed.")),
+                code=str(response.get("code") or "bridge_error"),
+                details={"bridge": _bridge_error_details(response)},
+            )
+        return response
+
+    def stop(self) -> None:
+        proc = self.process
+        self.process = None
+        if not proc:
+            return
+        try:
+            if proc.poll() is None and proc.stdin:
+                proc.stdin.write(json.dumps({"id": uuid4().hex, "command": "stop", "payload": {}}) + "\n")
+                proc.stdin.flush()
+                proc.terminate()
+                proc.wait(timeout=5)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+
+
+_BRIDGE = _BridgeController()
+atexit.register(_BRIDGE.stop)
 
 
 def _local_cli() -> Path:
@@ -68,6 +181,11 @@ def resolve_cli() -> list[str] | None:
 
 def _redact(value: str) -> str:
     return GRANT_RE.sub("vwgr_***", value)
+
+
+def _bridge_error_details(response: dict[str, Any]) -> dict[str, Any]:
+    details = response.get("details") if isinstance(response.get("details"), dict) else {}
+    return {key: value for key, value in details.items() if key not in {"secret", "grantToken", "password"}}
 
 
 def _parse_json(stdout: str, stderr: str) -> dict[str, Any]:
@@ -152,11 +270,36 @@ def _run(args: list[str], *, secret: str | None = None, timeout: int = DEFAULT_B
 
 
 def broker_status() -> dict[str, Any]:
+    try:
+        response = _BRIDGE.request("status", timeout=8)
+        status = response.get("status") if isinstance(response.get("status"), dict) else {}
+        return {
+            "available": bool(status),
+            "cli_available": True,
+            "bridge_available": True,
+            "bridge_owned": bool(response.get("owned")),
+            "service_module": str(response.get("serviceModule") or ""),
+            "persistence": str(status.get("persistence") or ""),
+            "approval_surface": str(status.get("approvalSurface") or ""),
+            "can_approve": bool(status.get("canApprove")),
+            "durable_grants": bool(status.get("durableGrants")),
+            "durable_secrets": bool(status.get("durableSecrets")),
+            "error_code": "",
+            "grant_ttl": MAX_GRANT_TTL,
+            "bootstrap_actions": [],
+        }
+    except VoidwareAuthError as bridge_exc:
+        bridge_error = {
+            "bridge_available": False,
+            "bridge_error_code": bridge_exc.code,
+            "bridge_error": str(bridge_exc),
+        }
     cmd = resolve_cli()
     if not cmd:
         return {
             "available": False,
             "cli_available": False,
+            **bridge_error,
             "persistence": "",
             "approval_surface": "",
             "can_approve": False,
@@ -171,6 +314,7 @@ def broker_status() -> dict[str, Any]:
     return {
         "available": bool(status["ok"] or ensure.get("running")),
         "cli_available": True,
+        **bridge_error,
         "persistence": str(broker_data.get("persistence") or ""),
         "approval_surface": str(broker_data.get("approvalSurface") or ""),
         "can_approve": bool(broker_data.get("canApprove")),
@@ -442,12 +586,55 @@ def _run_cached_request(
     return payload, {}
 
 
+def _normalize_bridge_grant(response: dict[str, Any]) -> dict[str, Any]:
+    grant = response.get("grant") if isinstance(response.get("grant"), dict) else {}
+    result: dict[str, Any] = {"grant": grant}
+    if response.get("operationId"):
+        result["operation_id"] = str(response.get("operationId"))
+    return result
+
+
+def _bridge_read_grant(name: str, *, force_refresh: bool = False, timeout: int = APPROVAL_BROKER_TIMEOUT) -> dict[str, Any]:
+    response = _BRIDGE.request(
+        "readSecretGrant",
+        {"name": name, "forceRefresh": force_refresh},
+        timeout=timeout,
+    )
+    if response.get("ok"):
+        result = _normalize_bridge_grant(response)
+        result["secret"] = str(response.get("secret") or "")
+        _clear_legacy_grant_cache()
+        return result
+    code = str(response.get("code") or "broker_error")
+    if code in {"approval_pending", "approval_waiting"}:
+        return {
+            "pending": True,
+            "code": code,
+            "operation_id": str(response.get("operationId") or ""),
+            "approval": response.get("approval") if isinstance(response.get("approval"), dict) else {},
+        }
+    raise VoidwareAuthError(_redact(str(response.get("message") or "Voidware approval failed.")), code=code)
+
+
 def request_credential_access_grant(name: str) -> dict[str, Any]:
-    """Request (or renew) broker access for a saved Voidware credential; may block for user approval."""
-    return read_secret_with_grant(name, require_fresh_grant=True)
+    """Request (or renew) broker access for a saved Voidware credential."""
+    return _bridge_read_grant(name, force_refresh=True)
 
 
 def read_secret_with_grant(name: str, *, require_fresh_grant: bool = False) -> dict[str, Any]:
+    try:
+        bridge_result = _bridge_read_grant(name, force_refresh=require_fresh_grant, timeout=5 if not require_fresh_grant else APPROVAL_BROKER_TIMEOUT)
+        if bridge_result.get("pending"):
+            raise VoidwareAuthError(
+                "Voidware needs your approval in LLM-Dash before this saved key can be used.",
+                code=str(bridge_result.get("code") or "approval_pending"),
+                details={"approval": bridge_result.get("approval"), "operation_id": bridge_result.get("operation_id")},
+            )
+        grant = bridge_result.get("grant") if isinstance(bridge_result.get("grant"), dict) else {}
+        return {"secret": str(bridge_result.get("secret") or ""), "grant": grant}
+    except VoidwareAuthError as exc:
+        if exc.code not in {"bridge_unavailable", "node_unavailable", "node_unsupported"}:
+            raise
     scope = f"auth:secret:read:{name}"
     payload, cached_grant = _run_cached_request(
         "auth:secret:read",
@@ -470,6 +657,14 @@ def read_secret(name: str) -> str:
 
 
 def discover_provider_credentials(*, reusable_only: bool = True) -> list[dict[str, Any]]:
+    try:
+        response = _BRIDGE.request("discoverProviders", {"reusableOnly": reusable_only}, timeout=12)
+        data = response.get("data")
+        if isinstance(data, list):
+            return [item for item in data if isinstance(item, dict)]
+    except VoidwareAuthError as exc:
+        if exc.code not in {"bridge_unavailable", "node_unavailable", "node_unsupported"}:
+            raise
     args = [
         "auth",
         "providers",
@@ -489,6 +684,16 @@ def discover_provider_credentials(*, reusable_only: bool = True) -> list[dict[st
 
 
 def write_secret(name: str, secret: str, *, metadata: dict[str, Any] | None = None, custom: dict[str, Any] | None = None) -> None:
+    try:
+        _BRIDGE.request(
+            "writeSecret",
+            {"name": name, "secret": secret, "metadata": metadata or {}, "custom": custom or {}},
+            timeout=APPROVAL_BROKER_TIMEOUT,
+        )
+        return
+    except VoidwareAuthError as exc:
+        if exc.code not in {"bridge_unavailable", "node_unavailable", "node_unsupported"}:
+            raise
     _unwrap_or_raise(_run(_request_args(
         "auth:secret:write",
         target=name,
@@ -501,8 +706,44 @@ def write_secret(name: str, secret: str, *, metadata: dict[str, Any] | None = No
 
 
 def delete_secret(name: str) -> None:
+    try:
+        _BRIDGE.request("deleteSecret", {"name": name}, timeout=APPROVAL_BROKER_TIMEOUT)
+        return
+    except VoidwareAuthError as exc:
+        if exc.code not in {"bridge_unavailable", "node_unavailable", "node_unsupported"}:
+            raise
     _unwrap_or_raise(_run(_request_args(
         "auth:secret:delete",
         target=name,
         scope=f"auth:secret:delete:{name}",
     )))
+
+
+def pending_approval() -> dict[str, Any]:
+    response = _BRIDGE.request("pendingApproval", timeout=5)
+    return {"pending": response.get("pending") if isinstance(response.get("pending"), dict) else None}
+
+
+def approve_pending_approval(*, password: str = "", secret: str = "") -> dict[str, Any]:
+    response = _BRIDGE.request("approve", {"password": password, "secret": secret}, timeout=APPROVAL_BROKER_TIMEOUT)
+    if response.get("ok"):
+        _clear_legacy_grant_cache()
+        return _normalize_bridge_grant(response)
+    raise VoidwareAuthError(_redact(str(response.get("message") or "Voidware approval failed.")), code=str(response.get("code") or "approval_denied"))
+
+
+def deny_pending_approval() -> None:
+    response = _BRIDGE.request("deny", timeout=8)
+    if response.get("code") == "approval_denied":
+        raise VoidwareAuthError("Voidware approval was denied.", code="approval_denied")
+    if response.get("ok") is False:
+        raise VoidwareAuthError(str(response.get("message") or "Voidware approval denial failed."), code=str(response.get("code") or "approval_not_found"))
+
+
+def shutdown_bridge() -> None:
+    _BRIDGE.stop()
+
+
+def _clear_legacy_grant_cache() -> None:
+    # Legacy entries are account-hashed; avoid probing secret material. Best effort only.
+    return None

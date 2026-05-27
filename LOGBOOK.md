@@ -4,6 +4,58 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 083 — 2026-05-27
+
+**Agent:** GPT-5 Codex (silkforge, implementation)
+**Cycle:** Phase 9.7 Voidware app-owned approval
+**Task:** Implement saved-credential approval bridge and modal
+
+---
+
+Implemented Phase 9.7 from
+`docs/plans/2026-05-26-voidware-0-9-10-app-approval-plan.md`.
+
+- Vendored Voidware CSS from local `0.9.10` source at commit `a5c3aae` and
+  updated `web/vendor/voidware/VERSION.md`.
+- Added `scripts/voidware_app_broker.mjs`, a Node JSON worker that imports the
+  built Voidware CLI service module, starts an app-owned broker when possible,
+  exposes pending approvals, and routes saved-key grant requests through
+  Voidware's official `voidware-client-grants` durable cache.
+- Added the Python bridge controller in `scripts/voidware_auth.py`, FastAPI
+  approval endpoints, bridge shutdown cleanup, and metadata-only grant API
+  responses.
+- Replaced the old wizard “approve elsewhere” flow with an LLM-Dash approval
+  modal for saved Voidware credentials.
+- Updated README, architecture, development docs, and condensed `TODO.md`.
+
+Verification:
+
+- `node --check scripts/voidware_app_broker.mjs`
+- `node --check web/app.js`
+- `python3 -m py_compile server.py scripts/*.py tests/*.py`
+- `python3 -m unittest tests.test_voidware_auth -v`
+- `python3 -m unittest discover -v`
+- Temp-root bridge smoke with `LLM_DASH_VOIDWARE_SKIP_KEYRING=1` confirmed
+  `approvalSurface: "app"` and `canApprove: true`.
+- Headed `agent-browser` probe on `http://127.0.0.1:8787` confirmed the wizard
+  saved-key selection renders the new `Approve Access` card without console
+  errors. Screenshot:
+  `artifacts/browser-sessions/2026-05-27-phase-9-7/saved-key-connection.png`.
+
+Pro nano-agent review completed via Cursor `auto`. It flagged two actionable
+items, both fixed: `approval_waiting` can no longer be treated as success, and
+the approval modal now supports `secretRequired` challenges as well as
+password-required approvals.
+
+Residual follow-up:
+
+- Run the headed saved-key wizard walkthrough with fake/temp credentials and
+  capture approval-modal screenshots.
+- Browser-check Settings > Provider renewal/conflict copy.
+- Decide whether the env/keyring-only fallback should stay long term.
+
+---
+
 ## Entry 082 — 2026-05-26
 
 **Agent:** GPT-5 Codex (lumenweld, planning)

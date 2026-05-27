@@ -57,6 +57,11 @@ CHANGELOGS_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(title="LLM-Dash")
 
+
+@app.on_event("shutdown")
+def shutdown_voidware_bridge() -> None:
+    voidware_auth.shutdown_bridge()
+
 _bootstrap_lock = threading.Lock()
 _bootstrap_thread: threading.Thread | None = None
 _bootstrap_state = {
@@ -94,6 +99,11 @@ class LLMStatsPayload(BaseModel):
 
 class VoidwareGrantPayload(BaseModel):
     credential_name: str
+
+
+class VoidwareApprovalPayload(BaseModel):
+    password: str = ""
+    secret: str = ""
 
 
 class SchedulePayload(BaseModel):
@@ -510,8 +520,43 @@ def post_voidware_broker_grant(payload: VoidwareGrantPayload) -> dict[str, Any]:
         result = voidware_auth.request_credential_access_grant(name)
     except voidware_auth.VoidwareAuthError as exc:
         raise _voidware_auth_http_error(exc) from exc
+    if result.get("pending"):
+        return {
+            "ok": False,
+            "code": result.get("code") or "approval_pending",
+            "operation_id": result.get("operation_id"),
+            "approval": result.get("approval") if isinstance(result.get("approval"), dict) else {},
+        }
     grant = result.get("grant") if isinstance(result.get("grant"), dict) else {}
-    return {"ok": bool(result.get("secret")), "grant": grant}
+    return {"ok": True, "grant": grant}
+
+
+@app.get("/api/voidware/broker/approval")
+def get_voidware_broker_approval() -> dict[str, Any]:
+    try:
+        return voidware_auth.pending_approval()
+    except voidware_auth.VoidwareAuthError as exc:
+        raise _voidware_auth_http_error(exc) from exc
+
+
+@app.post("/api/voidware/broker/approval")
+def post_voidware_broker_approval(payload: VoidwareApprovalPayload) -> dict[str, Any]:
+    try:
+        result = voidware_auth.approve_pending_approval(password=payload.password, secret=payload.secret)
+    except voidware_auth.VoidwareAuthError as exc:
+        raise _voidware_auth_http_error(exc) from exc
+    return {"ok": True, "grant": result.get("grant") if isinstance(result.get("grant"), dict) else {}}
+
+
+@app.post("/api/voidware/broker/approval/deny")
+def post_voidware_broker_approval_deny() -> dict[str, Any]:
+    try:
+        voidware_auth.deny_pending_approval()
+    except voidware_auth.VoidwareAuthError as exc:
+        if exc.code == "approval_denied":
+            return {"ok": False, "code": exc.code, "message": str(exc)}
+        raise _voidware_auth_http_error(exc) from exc
+    return {"ok": True}
 
 
 @app.get("/api/provider/test-connection")

@@ -132,6 +132,12 @@
 .vw-btn-generating {
   position: relative;
   isolation: isolate;
+  box-shadow: none;
+}
+
+.vw-btn-active:hover:not(:disabled):not([disabled]),
+.vw-btn-generating:hover:not(:disabled):not([disabled]) {
+  box-shadow: none;
 }
 
 .vw-btn-active .vw-svg-outline,

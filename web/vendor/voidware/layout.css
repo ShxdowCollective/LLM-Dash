@@ -57,7 +57,8 @@
   padding-inline: 24px;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  background: transparent;
+  background: color-mix(in srgb, var(--vw-bg-soft) 88%, transparent);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--vw-border) 80%, transparent);
   transition:
     background-color var(--vw-transition),
     box-shadow var(--vw-transition);
@@ -65,8 +66,96 @@
 
 .vw-header.scrolled,
 .vw-header[data-vw-scrolled="true"] {
-  background: color-mix(in srgb, var(--vw-bg) 80%, transparent);
-  box-shadow: 0 0 0 1px var(--vw-border);
+  background: color-mix(in srgb, var(--vw-bg-soft) 94%, transparent);
+  box-shadow: inset 0 -1px 0 var(--vw-border), 0 14px 38px rgba(0, 0, 0, 0.24);
+}
+
+.vw-project-nav {
+  width: min(var(--vw-content-max), calc(100% - 48px));
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: clamp(18px, 3vw, 34px);
+}
+
+.vw-project-nav-brand,
+.vw-project-nav-links,
+.vw-project-nav-actions {
+  display: inline-flex;
+  align-items: center;
+}
+
+.vw-project-nav-brand {
+  gap: 10px;
+  color: var(--vw-text);
+  font-family: var(--vw-font-display);
+  font-size: 20px;
+  font-weight: var(--vw-weight-semibold);
+  text-decoration: none;
+}
+
+.vw-project-nav-links {
+  justify-content: center;
+  gap: 14px;
+}
+
+.vw-project-nav-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding-inline: 10px;
+  border-radius: var(--vw-radius-sm);
+  color: var(--vw-text-muted);
+  font-size: 14px;
+  font-weight: var(--vw-weight-medium);
+  text-decoration: none;
+  transition: color var(--vw-transition-fast), background var(--vw-transition-fast), box-shadow var(--vw-transition-fast);
+}
+
+.vw-project-nav-link:hover,
+.vw-project-nav-link:focus-visible {
+  color: var(--vw-text);
+  background: color-mix(in srgb, var(--vw-accent) 10%, var(--vw-surface-2));
+}
+
+.vw-project-nav-link[aria-current="page"] {
+  color: var(--vw-text);
+  background: color-mix(in srgb, var(--vw-accent) 12%, var(--vw-surface-2));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vw-accent) 28%, var(--vw-border));
+}
+
+.vw-project-nav-actions {
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.vw-project-nav-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: var(--vw-radius-sm);
+  color: var(--vw-text);
+  font-size: 13px;
+  font-weight: var(--vw-weight-semibold);
+  text-decoration: none;
+  background: color-mix(in srgb, var(--vw-surface-2) 76%, transparent);
+  box-shadow: inset 0 0 0 1px var(--vw-border-mid);
+}
+
+@media (max-width: 860px) {
+  .vw-project-nav {
+    width: min(100%, calc(100% - 32px));
+    grid-template-columns: auto auto;
+  }
+
+  .vw-project-nav-links {
+    display: none;
+  }
 }
 
 .vw-prefooter {
@@ -408,9 +497,13 @@
 .vw-summary-chip {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
   gap: 6px;
+  width: fit-content;
+  max-width: 100%;
   min-height: 28px;
-  padding: 5px 9px;
+  padding: 5px 10px;
   border-radius: 9999px;
   color: var(--vw-text-soft);
   background: color-mix(in srgb, var(--vw-surface-2) 88%, var(--vw-page-accent, var(--vw-accent)) 12%);
@@ -418,6 +511,8 @@
   font-size: 12px;
   font-weight: var(--vw-weight-medium);
   line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .vw-display-row,
@@ -504,14 +599,19 @@
 .vw-provenance-badge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
   gap: 6px;
   width: fit-content;
+  max-width: 100%;
   min-height: 24px;
-  padding: 4px 8px;
+  padding: 4px 9px;
   border-radius: 9999px;
   font-size: 11px;
   font-weight: var(--vw-weight-semibold);
   line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .vw-dirty-badge {
@@ -539,8 +639,10 @@
   scrollbar-gutter: stable;
 }
 
-/* ── Tooltip Trigger ────────────────────────────────────── */
+/* ── Tooltip triggers: hint (?) hover, info (i) toggle ─── */
 
+.vw-tooltip-hint,
+.vw-tooltip-info,
 .vw-tooltip-trigger {
   display: inline-flex;
   align-items: center;
@@ -558,7 +660,6 @@
   line-height: 1;
   color: var(--vw-text-faint);
   background: var(--vw-surface-2);
-  cursor: help;
   vertical-align: middle;
   margin-inline-start: 4px;
   flex-shrink: 0;
@@ -579,6 +680,18 @@
     outline: 2px solid var(--vw-border-focus);
     outline-offset: 2px;
   }
+}
+
+.vw-tooltip-hint,
+.vw-tooltip-trigger {
+  cursor: help;
+}
+
+.vw-tooltip-info {
+  cursor: pointer;
+  font-style: italic;
+  font-size: 10px;
+  font-weight: var(--vw-weight-semibold);
 }
 
 /* ── Spinner ─────────────────────────────────────────────── */

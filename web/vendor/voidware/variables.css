@@ -62,8 +62,8 @@
 
   /* ── Typography ────────────────────────────────────────── */
   --vw-font-mono: "JetBrains Mono", "Cascadia Code", "Fira Code", monospace;
-  --vw-font-body: "SUSE", "Roboto", system-ui, sans-serif;
-  --vw-font-display: "Roboto", "SUSE", system-ui, sans-serif;
+  --vw-font-body: "Inter", "SUSE", system-ui, sans-serif;
+  --vw-font-display: "Inter", "SUSE", system-ui, sans-serif;
   --vw-weight-thin: 100;
   --vw-weight-extralight: 200;
   --vw-weight-light: 300;

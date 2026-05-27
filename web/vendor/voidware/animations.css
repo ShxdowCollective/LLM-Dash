@@ -199,8 +199,8 @@
   /* Ring sits ON the host's edge (inset: 0, padding carves the inner cutout).
      Both outer and inner curves share the host's border-radius, so the ring
      is always concentric — no host-radius guesswork, works on any shape. */
-  inset: 0;
-  border-radius: inherit;
+  inset: var(--vw-outline-inset, 0);
+  border-radius: var(--vw-outline-radius, inherit);
   padding: var(--vw-outline-width, 1.5px);
   background: var(--vw-outline-gradient, conic-gradient(from var(--vw-orbit-angle), transparent 0deg 90deg, var(--vw-active-outline) 270deg, transparent 360deg));
   pointer-events: none;
@@ -219,11 +219,10 @@
   mask-composite: exclude;
 }
 
-/* 75% arc — generic emphasis + status chips */
+/* Accent emphasis — generic hosts keep the traveling arc. */
 .vw-emphasis-accent::before,
 [data-vw-emphasis="accent"]::before,
-.vw-animated-outline-active::before,
-.vw-status-active::before {
+.vw-animated-outline-active::before {
   background: conic-gradient(
     from var(--vw-orbit-angle),
     transparent 0deg 90deg,
@@ -234,16 +233,11 @@
   );
 }
 
-/* Full 360° — buttons */
-.vw-btn-active::before {
-  background: conic-gradient(
-    from var(--vw-orbit-angle),
-    color-mix(in srgb, var(--vw-active-outline) 46%, white 54%) 0deg,
-    var(--vw-active-outline) 90deg,
-    color-mix(in srgb, var(--vw-active-outline) 68%, white 32%) 180deg,
-    var(--vw-active-outline) 270deg,
-    color-mix(in srgb, var(--vw-active-outline) 46%, white 54%) 360deg
-  );
+/* Active pills/buttons use one clean pulsing ring; travel is reserved for generating. */
+.vw-btn-active::before,
+.vw-status-active::before {
+  background: color-mix(in srgb, var(--vw-active-outline) 68%, white 32%);
+  animation: vw-outline-pulse var(--vw-outline-pulse-duration, 5.0s) ease-in-out infinite;
 }
 
 /* 75% arc — cards + generic iridescent emphasis */
@@ -414,6 +408,8 @@
 .vw-btn-generating {
   --vw-outline-duration: 3.2s;
   --vw-outline-pulse-duration: 4.4s;
+  --vw-outline-inset: -1.5px;
+  --vw-outline-radius: 9999px;
   --vw-outline-width: 1.5px;
 }
 
@@ -425,12 +421,16 @@
 .vw-status-active {
   --vw-outline-duration: 4.0s;
   --vw-outline-pulse-duration: 5.4s;
+  --vw-outline-inset: -1.25px;
+  --vw-outline-radius: 9999px;
   --vw-outline-width: 1.25px;
 }
 
 .vw-status-generating {
   --vw-outline-duration: 2.8s;
   --vw-outline-pulse-duration: 4.2s;
+  --vw-outline-inset: -1.25px;
+  --vw-outline-radius: 9999px;
   --vw-outline-width: 1.25px;
 }
 

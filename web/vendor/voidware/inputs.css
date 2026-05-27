@@ -63,12 +63,14 @@
 .vw-select {
   display: block;
   width: 100%;
+  box-sizing: border-box;
   background: var(--vw-surface-2);
   border: 1px solid var(--vw-border);
   border-radius: var(--vw-radius-sm);
   padding: 10px 32px 10px 12px;
   font-family: var(--vw-font-body);
   font-size: 13px;
+  line-height: 1.25;
   color: var(--vw-text);
   appearance: none;
   cursor: pointer;

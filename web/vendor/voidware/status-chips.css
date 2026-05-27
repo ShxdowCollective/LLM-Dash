@@ -5,14 +5,20 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   gap: 6px;
   position: relative;
-  padding: 5px 12px;
+  box-sizing: border-box;
+  padding-inline: 12px;
+  padding-block: 0;
+  min-height: 28px;
   border-radius: 9999px;
   font-family: var(--vw-font-body);
   font-size: 12px;
   font-weight: 500;
-  line-height: 1;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
   border: none;
   background: transparent;
   color: var(--vw-text-muted);
@@ -34,12 +40,34 @@
   }
 }
 
+button.vw-status-chip {
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+button.vw-status-chip > span {
+  display: inline-block;
+  line-height: inherit;
+}
+
+@supports (text-box-trim: trim-both) {
+  .vw-status-chip {
+    text-box-trim: trim-both;
+    text-box-edge: cap alphabetic;
+  }
+}
+
 /* Status chip with animated active/generating outline — pure CSS, adapts to any width */
 .vw-status-active,
 .vw-status-generating {
   position: relative;
   isolation: isolate;
   overflow: visible;
+  box-shadow: none;
 }
 
 /* Semantic status variants */
@@ -58,35 +86,18 @@
   box-shadow: 0 0 0 1px var(--vw-warning);
 }
 
-/* Generating/in-progress status — use subtle accent highlight */
+/* Generating/in-progress status — use subtle accent highlight with the shared single perimeter ring */
 .vw-status-generating {
   color: var(--vw-text);
   box-shadow: none;
   background: color-mix(in srgb, var(--vw-accent-dim) 50%, var(--vw-bg) 50%);
 }
 
-/* Active — pulsing accent ring that stretches with content */
+/* Badge rings keep their tighter local geometry; chip rings come from animations.css. */
 @keyframes vw-active-pulse {
   0%, 100% { opacity: 0.9; }
   50% { opacity: 0.25; }
 }
-.vw-status-active::before {
-  content: "";
-  position: absolute;
-  inset: -2px;
-  border-radius: 9999px;
-  padding: 1.5px;
-  background: var(--vw-accent);
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask-composite: exclude;
-  animation: vw-active-pulse 2s ease-in-out infinite;
-  pointer-events: none;
-}
-
-/* Generating — rotating accent arc, stretches with content */
 @property --vw-gen-angle {
   syntax: '<angle>';
   inherits: false;
@@ -95,35 +106,21 @@
 @keyframes vw-gen-spin {
   to { --vw-gen-angle: 360deg; }
 }
-.vw-status-generating::before {
-  content: "";
-  position: absolute;
-  inset: -2px;
-  border-radius: 9999px;
-  padding: 1.5px;
-  background: conic-gradient(
-    from var(--vw-gen-angle),
-    transparent 0%,
-    color-mix(in srgb, var(--vw-accent) 80%, white 20%) 30%,
-    transparent 60%
-  );
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask-composite: exclude;
-  animation: vw-gen-spin 2.5s linear infinite;
-  pointer-events: none;
-}
 
 /* Status badge (smaller, badge-like) — use for module tags or quick status */
 .vw-status-badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
   padding: 3px 8px;
+  min-height: 20px;
   border-radius: 9999px;
   font-size: 11px;
   font-weight: 500;
   line-height: 1;
+  text-align: center;
+  white-space: nowrap;
   background: var(--vw-surface-2);
   color: var(--vw-text-soft);
   box-shadow: 0 0 0 1px var(--vw-border);

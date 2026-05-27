@@ -71,9 +71,9 @@ in-progress update. Killing the agent doesn't affect the dashboard.
 | Local server | FastAPI + uvicorn | Needed for API routes; bare `http.server` can't do `/api/*` |
 | Agent execution | OpenAI Agents SDK | BYOK-compatible; runs against any OpenAI-compatible endpoint |
 | Research | Exa (preferred) | Structured search + content fetch with citation control |
-| Credential storage | Env → Voidware provider credential → Voidware broker → legacy keyring | Secrets stay outside repo/API responses; selected provider credentials use broker grants with renewal metadata |
+| Credential storage | Env → Voidware provider credential → Voidware app broker → legacy keyring | Secrets stay outside repo/API responses; selected provider credentials use broker grants with renewal metadata |
 | Scheduling | OS-native jobs | systemd timer (Linux/WSL), launchd (macOS), Task Scheduler (Windows) |
-| Design system | Voidware v0.9.8 | Sidebar app shell, dark-native surfaces, and iridescent accent system |
+| Design system | Voidware v0.9.10 | Sidebar app shell, dark-native surfaces, and iridescent accent system |
 
 ---
 
@@ -314,21 +314,25 @@ Re-running an update for the same date upserts rather than duplicates:
 |---|---|---|
 | Provider, Exa, and LLM Stats API keys | Environment, selected Voidware provider credential, or Voidware broker; legacy keyring reads remain migration fallbacks | Secrets never in repo or API responses |
 | Provider credential name, base URL, models, headers, grant renewal metadata | `shxdow.llmdash.json` | Non-secret config and renewal prompts |
-| Selected provider grant token | OS keyring service `llm-dash-voidware-grants` | Opaque broker grant reuse without writing tokens to config |
+| Selected provider grant token | Voidware OS keyring service `voidware-client-grants` | Opaque broker grant reuse without writing tokens to config |
 | Exa API key | Same as provider API key | Same credential pipeline |
 | LLM Stats API key | Same as provider API key | Optional enrichment credential |
 
 API keys are **never** returned in API responses, logged, or written to any
 on-disk trace outside the credential store. Provider discovery returns redacted
-Voidware metadata only. Selected credentials are read through the broker with
-the longest supported grant lifetime (`120d`), and the returned renewal window
-metadata drives the 90-day renewal prompt. The opaque grant token is cached in
-the OS keyring only and is cleared/re-requested on Voidware renewal,
-expiration, invalidation, denial, or durable-secret-unavailable responses.
+Voidware metadata only. Selected credentials are read through the app-owned
+Node bridge in `scripts/voidware_app_broker.mjs`, which hosts Voidware 0.9.10's
+approval surface for the FastAPI/browser app. Grants request the longest
+supported lifetime (`120d`), and the returned renewal window metadata drives
+the 90-day renewal prompt. Opaque grant tokens are cached by Voidware's
+`voidware-client-grants` keyring helper and are cleared/re-requested on
+renewal, expiration, invalidation, denial, or durable-secret-unavailable
+responses. The old `llm-dash-voidware-grants` namespace is retained only as a
+cleanup-era compatibility detail.
 
 ---
 
-## Design System — Voidware v0.9.8
+## Design System — Voidware v0.9.10
 
 The UI follows the Voidware design specification:
 

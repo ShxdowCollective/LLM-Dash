@@ -269,6 +269,9 @@
       connectionTestSkipped: false,
       voidwareGrantState: "idle",
       voidwareGrantError: "",
+      voidwareApproval: null,
+      voidwareApprovalPassword: "",
+      voidwareApprovalSecret: "",
       availableModels: [],
       modelsLoading: false,
       modelsError: "",
@@ -1186,12 +1189,18 @@
       state.wizard.connectionTestSkipped = false;
       state.wizard.voidwareGrantState = "idle";
       state.wizard.voidwareGrantError = "";
+      state.wizard.voidwareApproval = null;
+      state.wizard.voidwareApprovalPassword = "";
+      state.wizard.voidwareApprovalSecret = "";
       state.wizard.availableModels = [];
       state.wizard.modelsError = "";
     } else {
       setWizardPresetMetadata("");
       state.wizard.voidwareGrantState = "idle";
       state.wizard.voidwareGrantError = "";
+      state.wizard.voidwareApproval = null;
+      state.wizard.voidwareApprovalPassword = "";
+      state.wizard.voidwareApprovalSecret = "";
     }
     if (shouldRender !== false) render();
   }
@@ -1294,6 +1303,9 @@
       connectionTestSkipped: false,
       voidwareGrantState: "idle",
       voidwareGrantError: "",
+      voidwareApproval: null,
+      voidwareApprovalPassword: "",
+      voidwareApprovalSecret: "",
       availableModels: [],
       modelsLoading: false,
       modelsError: "",
@@ -2825,14 +2837,14 @@
         ]),
       ]) : null,
       state.wizard.selectedCredentialName ? h("div", { class: "wizard-voidware-grant vw-card vw-card-compact" }, [
-        h("p", { class: "vw-hint" }, "Authorize LLM-Dash to read this saved key through the Voidware auth broker. Approve the prompt in Voidware manager or your broker terminal."),
+        h("p", { class: "vw-hint" }, "Authorize LLM-Dash to read this saved key. If Voidware needs a password, approval opens here in the dashboard."),
         h("div", { class: "wizard-voidware-grant-row" }, [
           h("button", {
-            class: "vw-btn vw-btn-secondary",
+            class: "vw-btn vw-btn-primary",
             type: "button",
             disabled: state.wizard.voidwareGrantState === "requesting",
             onclick: requestWizardVoidwareGrant,
-          }, state.wizard.voidwareGrantState === "requesting" ? "Waiting for approval…" : "Authorize access"),
+          }, state.wizard.voidwareGrantState === "requesting" ? "Waiting…" : "Approve Access"),
           state.wizard.voidwareGrantState === "success"
             ? wizardStatusChip("success", "Access granted")
             : null,
@@ -3407,6 +3419,7 @@
     if (state.bootstrap.state === "initializing") nodes.push(renderBootstrapOverlay());
     else if (state.runUpdate.active) nodes.push(renderRunUpdateOverlay());
     else if (state.manualRefreshModal.open) nodes.push(renderManualRefreshModal());
+    if (state.wizard.voidwareApproval) nodes.push(renderVoidwareApprovalModal());
     if (state.helpModal.open) {
       const helpNode = renderHelpModal();
       if (helpNode) nodes.push(helpNode);
@@ -4320,13 +4333,22 @@
     if (!state.wizard.selectedCredentialName) return;
     state.wizard.voidwareGrantState = "requesting";
     state.wizard.voidwareGrantError = "";
+    state.wizard.voidwareApproval = null;
+    state.wizard.voidwareApprovalPassword = "";
+    state.wizard.voidwareApprovalSecret = "";
     render();
     try {
-      await fetchJson("/api/voidware/broker/grant", {
+      const result = await fetchJson("/api/voidware/broker/grant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ credential_name: state.wizard.selectedCredentialName }),
       });
+      if (result && (result.code === "approval_pending" || result.code === "approval_waiting")) {
+        state.wizard.voidwareGrantState = "approval";
+        state.wizard.voidwareApproval = result.approval || {};
+        render();
+        return;
+      }
       state.wizard.voidwareGrantState = "success";
       state.wizard.connectionTestState = "idle";
       state.wizard.connectionTestError = "";
@@ -4334,6 +4356,54 @@
       state.wizard.voidwareGrantState = "failed";
       state.wizard.voidwareGrantError = voidwareErrorMessage(error);
     }
+    render();
+  }
+
+  async function approveWizardVoidwareGrant() {
+    if (state.wizard.voidwareApproval && state.wizard.voidwareApproval.passwordRequired && !state.wizard.voidwareApprovalPassword) {
+      state.wizard.voidwareGrantError = "Enter the Voidware password to approve this access.";
+      render();
+      return;
+    }
+    if (state.wizard.voidwareApproval && state.wizard.voidwareApproval.secretRequired && !state.wizard.voidwareApprovalSecret) {
+      state.wizard.voidwareGrantError = "Enter the new secret to approve this access.";
+      render();
+      return;
+    }
+    state.wizard.voidwareGrantState = "requesting";
+    state.wizard.voidwareGrantError = "";
+    render();
+    try {
+      await fetchJson("/api/voidware/broker/approval", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          password: state.wizard.voidwareApprovalPassword || "",
+          secret: state.wizard.voidwareApprovalSecret || "",
+        }),
+      });
+      state.wizard.voidwareGrantState = "success";
+      state.wizard.voidwareApproval = null;
+      state.wizard.voidwareApprovalPassword = "";
+      state.wizard.voidwareApprovalSecret = "";
+      state.wizard.connectionTestState = "idle";
+      state.wizard.connectionTestError = "";
+    } catch (error) {
+      state.wizard.voidwareGrantState = "failed";
+      state.wizard.voidwareGrantError = voidwareErrorMessage(error);
+    }
+    render();
+  }
+
+  async function denyWizardVoidwareGrant() {
+    try {
+      await fetchJson("/api/voidware/broker/approval/deny", { method: "POST" });
+    } catch (_) {}
+    state.wizard.voidwareGrantState = "failed";
+    state.wizard.voidwareGrantError = "Voidware access was denied. You can approve it again without losing this setup.";
+    state.wizard.voidwareApproval = null;
+    state.wizard.voidwareApprovalPassword = "";
+    state.wizard.voidwareApprovalSecret = "";
     render();
   }
 
@@ -5895,6 +5965,75 @@
           h("span", { class: "help-label" }, entry.label),
         ])
       ))),
+    ]));
+  }
+
+  function renderVoidwareApprovalModal() {
+    const approval = state.wizard.voidwareApproval || {};
+    const operation = approval.operation && approval.operation.kind ? approval.operation.kind : "auth:secret:read";
+    const target = approval.target || (approval.operation && approval.operation.target) || state.wizard.selectedCredentialName || "saved key";
+    const scopes = Array.isArray(approval.scopes) ? approval.scopes.join(", ") : "";
+    return h("div", {
+      class: "vw-modal-backdrop voidware-approval-backdrop",
+      role: "presentation",
+    }, h("div", {
+      class: "vw-modal voidware-approval-modal",
+      role: "dialog",
+      "aria-modal": "true",
+      "aria-labelledby": "voidware-approval-title",
+    }, [
+      h("div", { class: "vw-modal-header" }, [
+        h("h2", { id: "voidware-approval-title" }, "Approve Voidware Access"),
+      ]),
+      h("div", { class: "vw-modal-body" }, [
+        h("div", { class: "voidware-approval-grid" }, [
+          h("span", null, "App"),
+          h("strong", null, approval.app || "llm-dash"),
+          h("span", null, "Saved key"),
+          h("strong", null, target),
+          h("span", null, "Operation"),
+          h("strong", null, operation),
+          h("span", null, "TTL"),
+          h("strong", null, approval.ttl || "120d"),
+          scopes ? h("span", null, "Scope") : null,
+          scopes ? h("strong", null, scopes) : null,
+        ]),
+        approval.allowSecretOutput ? h("p", { class: "vw-hint" }, "This lets LLM-Dash read the saved key locally for provider requests. The key is not stored in dashboard config or returned to the browser.") : null,
+        approval.passwordRequired ? h("label", { class: "settings-field" }, [
+          h("span", null, "Voidware password"),
+          h("input", {
+            class: "vw-input",
+            type: "password",
+            value: state.wizard.voidwareApprovalPassword || "",
+            autocomplete: "current-password",
+            oninput: (event) => { state.wizard.voidwareApprovalPassword = event.target.value; },
+          }),
+        ]) : null,
+        approval.secretRequired ? h("label", { class: "settings-field" }, [
+          h("span", null, "New secret"),
+          h("input", {
+            class: "vw-input",
+            type: "password",
+            value: state.wizard.voidwareApprovalSecret || "",
+            autocomplete: "off",
+            oninput: (event) => { state.wizard.voidwareApprovalSecret = event.target.value; },
+          }),
+        ]) : null,
+        h("p", { class: "wizard-error", "aria-live": "polite" }, state.wizard.voidwareGrantError || ""),
+      ]),
+      h("div", { class: "vw-modal-footer" }, [
+        h("button", {
+          class: "vw-btn vw-btn-secondary",
+          type: "button",
+          onclick: denyWizardVoidwareGrant,
+        }, "Deny"),
+        h("button", {
+          class: "vw-btn vw-btn-primary",
+          type: "button",
+          disabled: state.wizard.voidwareGrantState === "requesting",
+          onclick: approveWizardVoidwareGrant,
+        }, state.wizard.voidwareGrantState === "requesting" ? "Approving…" : "Approve Access"),
+      ]),
     ]));
   }
 

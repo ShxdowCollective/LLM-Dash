@@ -3651,6 +3651,31 @@ table.models tbody td.summary-cell {
   padding: 0 20px 20px;
 }
 
+.voidware-approval-modal {
+  width: min(640px, 100%);
+}
+
+.voidware-approval-grid {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.34fr) minmax(0, 1fr);
+  gap: 10px 14px;
+  padding: 12px;
+  border-radius: var(--vw-radius-md);
+  background: var(--vw-surface-2);
+  box-shadow: 0 0 0 1px var(--vw-border);
+}
+
+.voidware-approval-grid span {
+  color: var(--vw-muted);
+  font-size: 12px;
+}
+
+.voidware-approval-grid strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
 .vw-wizard-progress {
   display: flex;
   align-items: center;

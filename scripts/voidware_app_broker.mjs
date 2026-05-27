@@ -1,0 +1,380 @@
+#!/usr/bin/env node
+import { createInterface } from 'node:readline'
+import { pathToFileURL } from 'node:url'
+import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { randomUUID } from 'node:crypto'
+
+const ROOT = resolve(new URL('..', import.meta.url).pathname)
+const APP_NAME = 'llm-dash'
+const MAX_GRANT_TTL = '120d'
+const GRANT_RE = /vwgr_[A-Za-z0-9._-]+/g
+
+let service
+let broker
+let ownsBroker = false
+let pendingApproval = null
+let activeGrant = null
+
+function redact(value) {
+  if (typeof value !== 'string') return value
+  return value.replace(GRANT_RE, 'vwgr_***')
+}
+
+function redactedClone(value) {
+  if (value === null || value === undefined) return value
+  return JSON.parse(JSON.stringify(value, (key, item) => {
+    if (typeof item !== 'string') return item
+    if (key === 'password') return '***'
+    if (key === 'secret') return item
+    if (item.startsWith('vwgr_')) return 'vwgr_***'
+    if (/^(sk-|xai-|AIza|eyJ)/.test(item)) return '***'
+    return redact(item)
+  }))
+}
+
+function write(payload) {
+  process.stdout.write(`${JSON.stringify(redactedClone(payload))}\n`)
+}
+
+function errorPayload(err, fallback = 'bridge_error') {
+  const code = err && typeof err === 'object' && 'code' in err ? String(err.code) : fallback
+  const message = err instanceof Error ? err.message : String(err || 'Voidware bridge failed')
+  return {
+    ok: false,
+    code,
+    message: redact(message),
+    details: err && typeof err === 'object' && 'details' in err ? redactedClone(err.details) : undefined,
+  }
+}
+
+function context() {
+  const ctx = {
+    appName: APP_NAME,
+    repoPath: ROOT,
+  }
+  if (process.env.LLM_DASH_SHXDOW_ROOT) ctx.shxdowDir = resolve(process.env.LLM_DASH_SHXDOW_ROOT)
+  if (process.env.VOIDWARE_AUTH_OVERRIDE_PATH) ctx.authOverridePath = resolve(process.env.VOIDWARE_AUTH_OVERRIDE_PATH)
+  if (process.env.LLM_DASH_VOIDWARE_SKIP_KEYRING === '1') ctx.skipKeyring = true
+  return ctx
+}
+
+function resolveServiceModule() {
+  const candidates = [
+    process.env.VOIDWARE_CLI_SERVICE_MODULE,
+    join(homedir(), 'Repos', 'voidware', 'packages', 'cli', 'dist', 'service', 'index.js'),
+  ].filter(Boolean)
+  for (const candidate of candidates) {
+    const absolute = resolve(String(candidate))
+    if (existsSync(absolute)) return absolute
+  }
+  throw Object.assign(
+    new Error('Voidware 0.9.10 CLI bridge unavailable. Build /home/phxntom/Repos/voidware/packages/cli or set VOIDWARE_CLI_SERVICE_MODULE.'),
+    { code: 'bridge_unavailable' },
+  )
+}
+
+async function loadService() {
+  if (service) return service
+  const major = Number.parseInt(process.versions.node.split('.')[0], 10)
+  if (!Number.isFinite(major) || major < 20) {
+    throw Object.assign(new Error('Voidware app approval bridge requires Node >=20.'), { code: 'node_unsupported' })
+  }
+  const modulePath = resolveServiceModule()
+  const loaded = await import(pathToFileURL(modulePath).href)
+  const required = [
+    'createAppOwnedAuthBroker',
+    'detectLocalAuthBroker',
+    'createLocalAuthBrokerClient',
+    'requestDurableVoidwareAuthGrant',
+    'BrokerRequestError',
+    'AuthService',
+  ]
+  for (const key of required) {
+    if (!(key in loaded)) throw Object.assign(new Error(`Voidware service module is missing ${key}. Rebuild Voidware 0.9.10.`), { code: 'bridge_unavailable' })
+  }
+  service = { ...loaded, modulePath }
+  return service
+}
+
+function approvalSummary(request) {
+  return {
+    requestId: request.requestId,
+    app: request.app || APP_NAME,
+    repoPath: request.repoPath || ROOT,
+    operation: request.operation,
+    target: request.operation && request.operation.target ? request.operation.target : '',
+    scopes: Array.isArray(request.scopes) ? request.scopes : [],
+    ttl: request.ttlLabel || MAX_GRANT_TTL,
+    allowSecretOutput: Boolean(request.allowSecretOutput),
+    passwordRequired: Boolean(request.passwordRequired),
+    secretRequired: Boolean(request.secretRequired),
+  }
+}
+
+function requestApproval(request) {
+  if (pendingApproval) {
+    return Promise.resolve({ ok: false, code: 'approval_denied', message: 'another approval is already pending' })
+  }
+  return new Promise((resolveApproval) => {
+    pendingApproval = {
+      requestId: request.requestId,
+      approval: approvalSummary(request),
+      resolve: resolveApproval,
+      createdAt: Date.now(),
+    }
+  })
+}
+
+async function ensureBroker() {
+  const api = await loadService()
+  const ctx = context()
+  const existing = await api.detectLocalAuthBroker(ctx)
+  if (existing) {
+    if (existing.canApprove) {
+      return { status: existing, owned: false }
+    }
+    throw Object.assign(new Error('A background Voidware auth broker is already running without an approval surface.'), {
+      code: 'broker_conflict',
+      details: { status: existing },
+    })
+  }
+  if (!broker) {
+    broker = api.createAppOwnedAuthBroker({
+      approvalSurface: {
+        kind: 'app',
+        requestApproval,
+        cancelPending(requestId, reason) {
+          if (pendingApproval && pendingApproval.requestId === requestId) {
+            pendingApproval.resolve({ ok: false, code: 'approval_denied', message: `approval ${reason}` })
+            pendingApproval = null
+          }
+        },
+      },
+    })
+    await broker.start(ctx)
+    ownsBroker = true
+  }
+  const status = await api.detectLocalAuthBroker(ctx)
+  return { status, owned: true }
+}
+
+function grantMetadata(data) {
+  const source = data && typeof data === 'object' ? data : {}
+  const grant = source.grant && typeof source.grant === 'object' ? source.grant : {}
+  const out = {}
+  for (const key of ['expiresAt', 'ttlMs', 'recommendedTtlMs', 'maxTtlMs', 'renewAfter', 'renewalWindowStartsAt', 'renewalRecommended']) {
+    if (grant[key] !== undefined) out[key] = grant[key]
+    else if (source[key] !== undefined) out[key] = source[key]
+  }
+  return out
+}
+
+function brokerPayload(operation, target, params = {}) {
+  return {
+    app: APP_NAME,
+    repoPath: ROOT,
+    operation,
+    target,
+    scopes: [target ? `${operation}:${target}` : operation],
+    ttl: MAX_GRANT_TTL,
+    allowSecretOutput: operation === 'auth:secret:read',
+    ...(Object.keys(params).length ? { params } : {}),
+  }
+}
+
+async function startGrant(target, forceRefresh = false) {
+  const api = await loadService()
+  await ensureBroker()
+  const operationId = randomUUID()
+  const promise = api.requestDurableVoidwareAuthGrant(
+    brokerPayload('auth:secret:read', target),
+    context(),
+    { forceRefresh },
+  )
+  activeGrant = { operationId, target, promise }
+  const result = await Promise.race([
+    promise.then((value) => ({ type: 'done', value }), (err) => ({ type: 'error', err })),
+    new Promise((resolvePending) => {
+      const tick = () => {
+        if (pendingApproval) resolvePending({ type: 'pending' })
+        else setTimeout(tick, 20)
+      }
+      tick()
+    }),
+  ])
+  if (result.type === 'pending') {
+    return {
+      ok: false,
+      code: 'approval_pending',
+      operationId,
+      approval: pendingApproval.approval,
+    }
+  }
+  if (result.type === 'error') throw result.err
+  return responseFromBrokerGrant(result.value, operationId)
+}
+
+function responseFromBrokerGrant(response, operationId) {
+  if (!response || !response.ok) {
+    return {
+      ok: false,
+      code: response && response.error ? response.error.code : 'broker_error',
+      message: response && response.error ? response.error.message : 'Voidware broker request failed',
+      operationId,
+    }
+  }
+  const nested = response.data && typeof response.data === 'object' && response.data.data && typeof response.data.data === 'object'
+    ? response.data.data
+    : {}
+  return {
+    ok: true,
+    operationId,
+    grant: grantMetadata(response.data || {}),
+    ...(typeof nested.secret === 'string' ? { secret: nested.secret } : {}),
+  }
+}
+
+async function approve(payload) {
+  if (!pendingApproval) return { ok: false, code: 'approval_not_found', message: 'No Voidware approval is pending.' }
+  const current = pendingApproval
+  pendingApproval = null
+  current.resolve({
+    ok: true,
+    ...(payload && typeof payload.password === 'string' && payload.password ? { password: payload.password } : {}),
+    ...(payload && typeof payload.secret === 'string' && payload.secret ? { secret: payload.secret } : {}),
+    ttl: MAX_GRANT_TTL,
+  })
+  if (!activeGrant) return { ok: true }
+  try {
+    const response = await activeGrant.promise
+    return responseFromBrokerGrant(response, activeGrant.operationId)
+  } finally {
+    activeGrant = null
+  }
+}
+
+function deny() {
+  if (!pendingApproval) return { ok: false, code: 'approval_not_found', message: 'No Voidware approval is pending.' }
+  pendingApproval.resolve({ ok: false, code: 'approval_denied', message: 'Access denied in LLM-Dash.' })
+  pendingApproval = null
+  activeGrant = null
+  return { ok: false, code: 'approval_denied', message: 'Access denied.' }
+}
+
+async function status() {
+  const api = await loadService()
+  const detected = await api.detectLocalAuthBroker(context())
+  if (detected) return { ok: true, status: detected, owned: ownsBroker && detected.approvalSurface === 'app' }
+  const started = await ensureBroker()
+  return { ok: true, status: started.status, owned: started.owned, serviceModule: service.modulePath }
+}
+
+async function discoverProviders(payload = {}) {
+  await loadService()
+  const auth = new service.AuthService(context())
+  const data = await auth.discoverProviders({
+    filter: {
+      reusability: payload.reusableOnly === false ? undefined : 'reusable',
+      hasSecret: payload.hasSecret === false ? undefined : true,
+    },
+  })
+  return { ok: true, data }
+}
+
+async function writeSecret(payload = {}) {
+  const api = await loadService()
+  await ensureBroker()
+  const response = await api.createLocalAuthBrokerClient(context()).request(brokerPayload('auth:secret:write', payload.name, {
+    secret: payload.secret,
+    template: 'custom-http',
+    metadata: payload.metadata || {},
+    custom: payload.custom || {},
+  }))
+  return responseFromBrokerGrant(response)
+}
+
+async function deleteSecret(payload = {}) {
+  const api = await loadService()
+  await ensureBroker()
+  const response = await api.createLocalAuthBrokerClient(context()).request(brokerPayload('auth:secret:delete', payload.name))
+  return responseFromBrokerGrant(response)
+}
+
+async function stop() {
+  if (broker && ownsBroker) await broker.stop().catch(() => undefined)
+  broker = null
+  ownsBroker = false
+  return { ok: true }
+}
+
+async function handle(message) {
+  switch (message.command) {
+    case 'status':
+    case 'start':
+      return await status()
+    case 'stop':
+      return await stop()
+    case 'pendingApproval':
+      return { ok: true, pending: pendingApproval ? pendingApproval.approval : null }
+    case 'approve':
+      return await approve(message.payload || {})
+    case 'deny':
+      return deny()
+    case 'discoverProviders':
+      return await discoverProviders(message.payload || {})
+    case 'readSecretGrant':
+      return await startGrant(String(message.payload?.name || ''), Boolean(message.payload?.forceRefresh))
+    case 'writeSecret':
+      return await writeSecret(message.payload || {})
+    case 'deleteSecret':
+      return await deleteSecret(message.payload || {})
+    default:
+      return { ok: false, code: 'invalid_request', message: `Unknown bridge command: ${message.command}` }
+  }
+}
+
+const rl = createInterface({ input: process.stdin })
+let inFlightCommands = 0
+let stdinClosed = false
+rl.on('line', async (line) => {
+  inFlightCommands += 1
+  let message
+  try {
+    message = JSON.parse(line)
+  } catch {
+    write({ id: null, ok: false, code: 'invalid_json', message: 'Invalid JSON command.' })
+    inFlightCommands -= 1
+    return
+  }
+  try {
+    const result = await handle(message)
+    write({ id: message.id, ...result })
+  } catch (err) {
+    const payload = errorPayload(err)
+    write({ id: message.id, ...payload })
+  } finally {
+    inFlightCommands -= 1
+    if (stdinClosed && inFlightCommands === 0) {
+      await stop()
+      process.exit(0)
+    }
+  }
+})
+rl.on('close', async () => {
+  stdinClosed = true
+  if (inFlightCommands === 0) {
+    await stop()
+    process.exit(0)
+  }
+})
+
+process.on('SIGTERM', async () => {
+  await stop()
+  process.exit(0)
+})
+process.on('SIGINT', async () => {
+  await stop()
+  process.exit(0)
+})

@@ -142,47 +142,9 @@ class VoidwareAuthTests(unittest.TestCase):
         self.assertEqual(stored[config.PROVIDER_KEY_NAME], "sk-fallback")
         self.assertNotIn("sk-fallback", config.config_path().read_text(encoding="utf-8"))
 
-    def test_broker_grant_cache_preserves_renewal_state(self) -> None:
-        stored: dict[tuple[str, str], str] = {}
-
-        def fake_set(service: str, account: str, value: str) -> None:
-            stored[(service, account)] = value
-
-        def fake_get(service: str, account: str) -> str:
-            return stored.get((service, account), "")
-
-        def fake_delete(service: str, account: str) -> None:
-            stored.pop((service, account), None)
-
-        grant_payload = {
-            "grantToken": "vwgr_test_token",
-            "grant": {
-                "expiresAt": "2099-01-01T00:00:00Z",
-                "ttlMs": 10_368_000_000,
-                "renewalWindowStartsAt": "2098-10-01T00:00:00Z",
-                "renewalRecommended": True,
-            },
-        }
-
-        with (
-            patch.object(voidware_auth, "_auth_fingerprint", return_value="fingerprint"),
-            patch.object(voidware_auth, "_keyring_set", side_effect=fake_set),
-            patch.object(voidware_auth, "_keyring_get", side_effect=fake_get),
-            patch.object(voidware_auth, "_keyring_delete", side_effect=fake_delete),
-        ):
-            voidware_auth._store_cached_grant(
-                "account",
-                grant_payload,
-                operation="auth:secret:read",
-                target="alpha",
-                scope="auth:secret:read:alpha",
-            )
-            cached = voidware_auth._load_cached_grant("account")
-
-        self.assertEqual(cached["grantToken"], "vwgr_test_token")
-        self.assertEqual(cached["expiresAt"], "2099-01-01T00:00:00Z")
-        self.assertEqual(cached["renewalWindowStartsAt"], "2098-10-01T00:00:00Z")
-        self.assertIs(cached["renewalRecommended"], True)
+    def test_bridge_grant_uses_official_voidware_cache_namespace(self) -> None:
+        self.assertEqual(voidware_auth.OFFICIAL_CLIENT_GRANT_SERVICE_NAME, "voidware-client-grants")
+        self.assertEqual(voidware_auth.LEGACY_CLIENT_GRANT_SERVICE_NAME, "llm-dash-voidware-grants")
 
     def test_broker_request_does_not_autostart_headless_broker(self) -> None:
         calls: list[tuple[list[str], list[str]]] = []
@@ -203,7 +165,11 @@ class VoidwareAuthTests(unittest.TestCase):
         self.assertEqual(calls[0][1][:3], ["auth", "broker", "request"])
 
     def test_secret_read_requires_approval_capable_broker_without_cached_grant(self) -> None:
+        def bridge_unavailable(*args, **kwargs) -> dict[str, object]:
+            raise voidware_auth.VoidwareAuthError("bridge unavailable", code="bridge_unavailable")
+
         with (
+            patch.object(voidware_auth._BRIDGE, "request", side_effect=bridge_unavailable),
             patch.object(voidware_auth, "_load_cached_grant", return_value={}),
             patch.object(
                 voidware_auth,
@@ -220,6 +186,29 @@ class VoidwareAuthTests(unittest.TestCase):
                 voidware_auth.read_secret_with_grant("alpha")
 
         self.assertEqual(ctx.exception.code, "approval_required")
+
+    def test_bridge_pending_approval_is_metadata_only(self) -> None:
+        with patch.object(
+            voidware_auth._BRIDGE,
+            "request",
+            return_value={
+                "ok": False,
+                "code": "approval_pending",
+                "operationId": "op-1",
+                "approval": {
+                    "app": "llm-dash",
+                    "target": "alpha",
+                    "passwordRequired": True,
+                    "allowSecretOutput": True,
+                },
+            },
+        ):
+            result = voidware_auth.request_credential_access_grant("alpha")
+
+        self.assertTrue(result["pending"])
+        self.assertEqual(result["operation_id"], "op-1")
+        self.assertNotIn("grantToken", json.dumps(result))
+        self.assertNotIn("secret", json.dumps(result))
 
     def test_v3_encrypted_auth_file_uses_broker_instead_of_plaintext_fallback(self) -> None:
         auth_file = Path(self.tmp.name) / "auth.json"

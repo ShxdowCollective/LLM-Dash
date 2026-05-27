@@ -7,28 +7,21 @@ Use `[ ]` only for still-open work.
 
 ## Now
 
-### Phase 9.7 — Voidware 0.9.10 saved-credential approval (planned)
+### Phase 9.7 follow-up — saved-key walkthrough
 
-**Status:** Upstream blocker cleared; implementation plan ready (2026-05-26).
+**Status:** Implementation landed; needs one headed fake/real saved-key pass.
 
-Voidware `0.9.10` is validated locally and includes the needed app-owned
-approval surface for browser + local-server apps. The implementation plan is
+Phase 9.7 added the Voidware `0.9.10` CSS/vendor bump, Node app-owned broker
+bridge, official `voidware-client-grants` durable grant path, FastAPI approval
+endpoints, and the LLM-Dash approval modal. Plan:
 [`docs/plans/2026-05-26-voidware-0-9-10-app-approval-plan.md`](docs/plans/2026-05-26-voidware-0-9-10-app-approval-plan.md).
 
-The old upstream blocker was Voidware Milestone 8. Voidware `0.9.9` shipped
-`createAppOwnedAuthBroker()` and app-owned approval status; `0.9.10` adds Dev
-agent token flows that are useful later but not required for the wizard
-unblock.
-
-- [ ] Upgrade vendored Voidware CSS/docs from `0.9.8` to `0.9.10`.
-- [ ] Add the Node bridge for Voidware app-owned approval while keeping
-  LLM-Dash no-build.
-- [ ] Replace the custom `llm-dash-voidware-grants` cache with Voidware's
-  `voidware-client-grants` durable cache.
-- [ ] Re-run the fresh wizard walkthrough from the Connection step with saved
-  credentials.
-- [ ] Revisit whether env/keyring-only fallback should remain after app-owned
-  approval lands (product decision).
+- [ ] Re-run the fresh wizard walkthrough from Connection with a saved
+  Voidware credential and capture approval-modal screenshots.
+- [ ] Verify Settings > Provider saved-key renewal copy and broker-conflict
+  recovery copy in browser.
+- [ ] Revisit whether env/keyring-only fallback should remain now that
+  app-owned approval is available.
 
 ### Fresh Setup Wizard Walkthrough (aborted)
 
@@ -74,6 +67,8 @@ approval implementation.
 
 ## Recent Completed
 
+- Phase 9.7 — Voidware 0.9.10 app-owned saved-credential approval bridge,
+  official durable grant cache, approval modal, docs, and backend tests.
 - Phase 9.6 — Voidware 0.9.8 upgrade, workspace skill sync, route/drawer
   semantics, dashboard typography/layout polish, Agent wording, weighted
   scoring, read-only Changelog, portrait model cards, and compact Settings >
@@ -108,3 +103,4 @@ approval implementation.
 - Phase 9.4 — Voidware provider reuse and full app e2e screenshots.
 - Phase 9.5 — SaaS UI/UX polish and final visual review gates.
 - Phase 9.6 — Voidware 0.9.8 upgrade and workspace skill sync.
+- Phase 9.7 — Voidware 0.9.10 app-owned approval bridge.
