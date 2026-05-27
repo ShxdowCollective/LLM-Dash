@@ -270,6 +270,7 @@
       voidwareGrantState: "idle",
       voidwareGrantError: "",
       voidwareApproval: null,
+      voidwareApprovalContext: null,
       voidwareApprovalPassword: "",
       voidwareApprovalSecret: "",
       availableModels: [],
@@ -1190,6 +1191,7 @@
       state.wizard.voidwareGrantState = "idle";
       state.wizard.voidwareGrantError = "";
       state.wizard.voidwareApproval = null;
+      state.wizard.voidwareApprovalContext = null;
       state.wizard.voidwareApprovalPassword = "";
       state.wizard.voidwareApprovalSecret = "";
       state.wizard.availableModels = [];
@@ -1199,6 +1201,7 @@
       state.wizard.voidwareGrantState = "idle";
       state.wizard.voidwareGrantError = "";
       state.wizard.voidwareApproval = null;
+      state.wizard.voidwareApprovalContext = null;
       state.wizard.voidwareApprovalPassword = "";
       state.wizard.voidwareApprovalSecret = "";
     }
@@ -1304,6 +1307,7 @@
       voidwareGrantState: "idle",
       voidwareGrantError: "",
       voidwareApproval: null,
+      voidwareApprovalContext: null,
       voidwareApprovalPassword: "",
       voidwareApprovalSecret: "",
       availableModels: [],
@@ -1407,17 +1411,41 @@
     render();
   }
 
-  async function saveProviderFromWizard(includeModels) {
+  function isVoidwareApprovalPending(error) {
+    const code = voidwareErrorCode(error);
+    return code === "approval_pending" || code === "approval_waiting";
+  }
+
+  async function saveProviderFromWizard(includeModels, options) {
+    const opts = options || {};
     const payload = wizardPayload(includeModels);
+    if (opts.omitApiKey) payload.api_key = null;
     if (!payload.base_url) throw new Error("Base URL is required.");
-    if (!state.provider.has_provider && !payload.api_key && !payload.provider_credential_name) throw new Error("Choose a saved Voidware key or enter an API key.");
+    if (!state.provider.has_provider && !opts.allowStoredKey && !payload.api_key && !payload.provider_credential_name) throw new Error("Choose a saved Voidware key or enter an API key.");
     if (includeModels && !payload.default_model) throw new Error("Default model is required.");
-    const saved = await fetchJson("/api/provider", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    let saved;
+    try {
+      saved = await fetchJson("/api/provider", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      const detail = error && error.payload && error.payload.detail;
+      if (!opts.suppressApproval && payload.api_key && isVoidwareApprovalPending(error)) {
+        state.wizard.voidwareGrantState = "approval";
+        state.wizard.voidwareGrantError = "";
+        state.wizard.voidwareApproval = detail && typeof detail === "object" ? (detail.approval || {}) : {};
+        state.wizard.voidwareApprovalContext = { kind: "provider-write", includeModels: Boolean(includeModels) };
+        state.wizard.voidwareApprovalPassword = "";
+        state.wizard.voidwareApprovalSecret = "";
+        render();
+        return false;
+      }
+      throw error;
+    }
     Object.assign(state.provider, saved, { loaded: true });
+    return true;
   }
 
   async function ensureWizardModelsLoaded() {
@@ -1528,7 +1556,7 @@
     render();
     try {
       if (state.wizard.step === 0) {
-        await saveProviderFromWizard(false);
+        if (!await saveProviderFromWizard(false)) return;
         state.wizard.step = 1;
         render();
         ensureWizardModelsLoaded();
@@ -1545,7 +1573,7 @@
           render();
           return;
         }
-        await saveProviderFromWizard(true);
+        if (!await saveProviderFromWizard(true)) return;
         state.wizard.step = 2;
         render();
         runWizardModelTests();
@@ -4361,6 +4389,7 @@
   }
 
   async function approveWizardVoidwareGrant() {
+    const approvalContext = state.wizard.voidwareApprovalContext || null;
     if (state.wizard.voidwareApproval && state.wizard.voidwareApproval.passwordRequired && !state.wizard.voidwareApprovalPassword) {
       state.wizard.voidwareGrantError = "Enter the Voidware password to approve this access.";
       render();
@@ -4385,10 +4414,30 @@
       });
       state.wizard.voidwareGrantState = "success";
       state.wizard.voidwareApproval = null;
+      state.wizard.voidwareApprovalContext = null;
       state.wizard.voidwareApprovalPassword = "";
       state.wizard.voidwareApprovalSecret = "";
       state.wizard.connectionTestState = "idle";
       state.wizard.connectionTestError = "";
+      if (approvalContext && approvalContext.kind === "provider-write") {
+        const includeModels = Boolean(approvalContext.includeModels);
+        const saved = await saveProviderFromWizard(includeModels, {
+          omitApiKey: true,
+          allowStoredKey: true,
+          suppressApproval: true,
+        });
+        if (!saved) return;
+        if (includeModels) {
+          state.wizard.step = 2;
+          render();
+          runWizardModelTests();
+        } else {
+          state.wizard.step = 1;
+          render();
+          ensureWizardModelsLoaded();
+        }
+        return;
+      }
     } catch (error) {
       state.wizard.voidwareGrantState = "failed";
       state.wizard.voidwareGrantError = voidwareErrorMessage(error);
@@ -4403,6 +4452,7 @@
     state.wizard.voidwareGrantState = "failed";
     state.wizard.voidwareGrantError = "Voidware access was denied. You can approve it again without losing this setup.";
     state.wizard.voidwareApproval = null;
+    state.wizard.voidwareApprovalContext = null;
     state.wizard.voidwareApprovalPassword = "";
     state.wizard.voidwareApprovalSecret = "";
     render();
@@ -5999,7 +6049,9 @@
           scopes ? h("span", null, "Scope") : null,
           scopes ? h("strong", null, scopes) : null,
         ]),
-        approval.allowSecretOutput ? h("p", { class: "vw-hint" }, "This lets LLM-Dash read the saved key locally for provider requests. The key is not stored in dashboard config or returned to the browser.") : null,
+        operation === "auth:secret:write"
+          ? h("p", { class: "vw-hint" }, "This lets LLM-Dash save the new key in Voidware. The dashboard config stores only connection settings.")
+          : approval.allowSecretOutput ? h("p", { class: "vw-hint" }, "This lets LLM-Dash read the saved key locally for provider requests. The key is not stored in dashboard config or returned to the browser.") : null,
         approval.passwordRequired ? h("label", { class: "settings-field" }, [
           h("span", null, "Voidware password"),
           h("input", {

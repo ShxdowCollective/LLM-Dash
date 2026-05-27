@@ -210,6 +210,28 @@ class VoidwareAuthTests(unittest.TestCase):
         self.assertNotIn("grantToken", json.dumps(result))
         self.assertNotIn("secret", json.dumps(result))
 
+    def test_bridge_denied_write_does_not_look_saved(self) -> None:
+        with patch.object(
+            voidware_auth._BRIDGE,
+            "request",
+            return_value={
+                "ok": False,
+                "code": "approval_denied",
+                "message": "Access denied in LLM-Dash.",
+            },
+        ):
+            with self.assertRaises(config.ConfigError) as ctx:
+                config.save_provider(
+                    base_url="https://api.alpha.example",
+                    api_key="sk-denied",
+                    default_model="alpha-chat",
+                    endpoint_mode=config.ENDPOINT_MODE_APPEND_V1,
+                )
+
+        self.assertIn("approval_denied", str(ctx.exception))
+        persisted = config.config_path().read_text(encoding="utf-8") if config.config_path().exists() else ""
+        self.assertNotIn("sk-denied", persisted)
+
     def test_v3_encrypted_auth_file_uses_broker_instead_of_plaintext_fallback(self) -> None:
         auth_file = Path(self.tmp.name) / "auth.json"
         auth_file.write_text(

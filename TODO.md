@@ -53,6 +53,8 @@ approval implementation.
 
 - Phase 9.7 — Voidware 0.9.10 app-owned saved-credential approval bridge,
   official durable grant cache, approval modal, docs, and backend tests.
+- Phase 9.7 follow-up — New-key provider saves now surface app-owned Voidware
+  approval instead of false success, then resume config save after approval.
 - Phase 9.6 — Voidware 0.9.8 upgrade, workspace skill sync, route/drawer
   semantics, dashboard typography/layout polish, Agent wording, weighted
   scoring, read-only Changelog, portrait model cards, and compact Settings >

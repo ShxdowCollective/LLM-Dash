@@ -503,6 +503,8 @@ def post_provider(payload: ProviderPayload) -> dict[str, Any]:
         )
         return public_provider_state()
     except ConfigError as exc:
+        if isinstance(exc.__cause__, voidware_auth.VoidwareAuthError):
+            raise _voidware_auth_http_error(exc.__cause__) from exc
         raise _http_error(exc)
 
 

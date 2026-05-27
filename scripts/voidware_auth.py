@@ -125,7 +125,7 @@ class _BridgeController:
             raise VoidwareAuthError("Voidware app approval bridge timed out.", code="bridge_timeout") from exc
         finally:
             self.responses.pop(request_id, None)
-        if response.get("ok") is False and response.get("code") not in {"approval_pending", "approval_waiting", "approval_denied"}:
+        if response.get("ok") is False and response.get("code") not in {"approval_pending", "approval_waiting"}:
             raise VoidwareAuthError(
                 _redact(str(response.get("message") or "Voidware app approval bridge failed.")),
                 code=str(response.get("code") or "bridge_error"),
@@ -685,11 +685,20 @@ def discover_provider_credentials(*, reusable_only: bool = True) -> list[dict[st
 
 def write_secret(name: str, secret: str, *, metadata: dict[str, Any] | None = None, custom: dict[str, Any] | None = None) -> None:
     try:
-        _BRIDGE.request(
+        response = _BRIDGE.request(
             "writeSecret",
             {"name": name, "secret": secret, "metadata": metadata or {}, "custom": custom or {}},
             timeout=APPROVAL_BROKER_TIMEOUT,
         )
+        if response.get("ok") is False:
+            raise VoidwareAuthError(
+                _redact(str(response.get("message") or "Voidware secret write failed.")),
+                code=str(response.get("code") or "bridge_error"),
+                details={
+                    "approval": response.get("approval") if isinstance(response.get("approval"), dict) else {},
+                    "operation_id": str(response.get("operationId") or ""),
+                },
+            )
         return
     except VoidwareAuthError as exc:
         if exc.code not in {"bridge_unavailable", "node_unavailable", "node_unsupported"}:
@@ -707,7 +716,16 @@ def write_secret(name: str, secret: str, *, metadata: dict[str, Any] | None = No
 
 def delete_secret(name: str) -> None:
     try:
-        _BRIDGE.request("deleteSecret", {"name": name}, timeout=APPROVAL_BROKER_TIMEOUT)
+        response = _BRIDGE.request("deleteSecret", {"name": name}, timeout=APPROVAL_BROKER_TIMEOUT)
+        if response.get("ok") is False:
+            raise VoidwareAuthError(
+                _redact(str(response.get("message") or "Voidware secret delete failed.")),
+                code=str(response.get("code") or "bridge_error"),
+                details={
+                    "approval": response.get("approval") if isinstance(response.get("approval"), dict) else {},
+                    "operation_id": str(response.get("operationId") or ""),
+                },
+            )
         return
     except VoidwareAuthError as exc:
         if exc.code not in {"bridge_unavailable", "node_unavailable", "node_unsupported"}:

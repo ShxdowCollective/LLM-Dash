@@ -216,6 +216,35 @@ async function startGrant(target, forceRefresh = false) {
   return responseFromBrokerGrant(result.value, operationId)
 }
 
+async function startBrokerRequest(operation, target, params = {}) {
+  const api = await loadService()
+  await ensureBroker()
+  const operationId = randomUUID()
+  const promise = api.createLocalAuthBrokerClient(context()).request(brokerPayload(operation, target, params))
+  activeGrant = { operationId, target, promise }
+  const result = await Promise.race([
+    promise.then((value) => ({ type: 'done', value }), (err) => ({ type: 'error', err })),
+    new Promise((resolvePending) => {
+      const tick = () => {
+        if (pendingApproval) resolvePending({ type: 'pending' })
+        else setTimeout(tick, 20)
+      }
+      tick()
+    }),
+  ])
+  if (result.type === 'pending') {
+    return {
+      ok: false,
+      code: 'approval_pending',
+      operationId,
+      approval: pendingApproval.approval,
+    }
+  }
+  if (result.type === 'error') throw result.err
+  activeGrant = null
+  return responseFromBrokerGrant(result.value, operationId)
+}
+
 function responseFromBrokerGrant(response, operationId) {
   if (!response || !response.ok) {
     return {
@@ -284,22 +313,16 @@ async function discoverProviders(payload = {}) {
 }
 
 async function writeSecret(payload = {}) {
-  const api = await loadService()
-  await ensureBroker()
-  const response = await api.createLocalAuthBrokerClient(context()).request(brokerPayload('auth:secret:write', payload.name, {
+  return await startBrokerRequest('auth:secret:write', payload.name, {
     secret: payload.secret,
     template: 'custom-http',
     metadata: payload.metadata || {},
     custom: payload.custom || {},
-  }))
-  return responseFromBrokerGrant(response)
+  })
 }
 
 async function deleteSecret(payload = {}) {
-  const api = await loadService()
-  await ensureBroker()
-  const response = await api.createLocalAuthBrokerClient(context()).request(brokerPayload('auth:secret:delete', payload.name))
-  return responseFromBrokerGrant(response)
+  return await startBrokerRequest('auth:secret:delete', payload.name)
 }
 
 async function stop() {

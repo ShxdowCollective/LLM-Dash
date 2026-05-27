@@ -4,6 +4,43 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 087 — 2026-05-27
+
+**Agent:** GPT-5 Codex (emberline, verification)
+**Cycle:** Phase 9.7 follow-up
+**Task:** Implement new-key Voidware approval recovery
+
+---
+
+Started the OpenTabs wizard verification pass and tested the “Use a new key”
+storage assumption with disposable fake keys.
+
+- Confirmed OpenTabs and the LLM-Dash dev server are running and opened the
+  setup wizard at `127.0.0.1:8787`.
+- Proved the app config does not persist entered API key material.
+- Found a real bridge bug: denied/failed Voidware bridge write/delete responses
+  could be treated as successful by `scripts/voidware_auth.py`.
+- Fixed the false-success path so `approval_denied` now raises instead of
+  letting `/api/provider` report a saved provider.
+- Added regression coverage in `tests/test_voidware_auth.py`.
+- Added pending write/delete handling in `scripts/voidware_app_broker.mjs`.
+- Added wizard recovery for new-key saves: when `/api/provider` returns
+  Voidware `approval_pending`, the existing approval modal opens; after approval,
+  the wizard saves the non-secret provider config without resubmitting the key
+  and continues to the next step.
+- Re-ran the live API path after restart; encrypted Voidware auth now returns a
+  structured `approval_pending` payload instead of silent success.
+
+Verification:
+
+- `node --check scripts/voidware_app_broker.mjs && node --check web/app.js`
+- `python3 -m py_compile scripts/voidware_auth.py scripts/config.py server.py tests/test_voidware_auth.py`
+- `python3 -m unittest tests.test_voidware_auth -v`
+- Live `/api/provider` fake-key write returned `403` with Voidware approval
+  metadata; `~/.shxdow/config/shxdow.llmdash.json` did not contain the fake key.
+
+---
+
 ## Entry 086 — 2026-05-27
 
 **Agent:** GPT-5 Codex
