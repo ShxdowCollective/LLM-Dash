@@ -4,6 +4,61 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 091 — 2026-05-27
+
+**Agent:** Composer (Cursor)
+**Cycle:** Phase 9.7 follow-up
+**Task:** OpenTabs wizard new-key advance check (paused on user request)
+
+---
+
+Resumed the remaining TODO item: final wizard-owned new-key advance via OpenTabs
+after the input/click path stabilizes. User asked to pause before completing
+live Voidware password approval.
+
+Work done before pause:
+
+- Started OpenTabs MCP (`opentabs start --background`); extension connected.
+- Confirmed LLM-Dash was on `http://127.0.0.1:8787` (prior process used
+  `LLM_DASH_SHXDOW_ROOT=/tmp/llm-dash-test-HCLnY3`).
+- Ran headed wizard step 0 with OpenTabs `browser_type_text` on `#wizard-api-key`,
+  connection test (expected HTTP 401 on disposable key), and Skip. API key text
+  stayed populated through test failure (screenshot evidence).
+- Observed approval modal showing **Read saved key** (`auth:secret:read`) in
+  several runs instead of **Save new key** (`auth:secret:write`), likely because
+  an existing Voidware secret or connection-test grant path surfaced read
+  approval while step 0 save had not yet completed (`has_provider` still false).
+- Direct `POST /api/provider` with a fresh disposable key returned expected
+  `403` / `approval_pending` with `auth:secret:write`.
+- Restarted uvicorn with a fresh isolated root
+  (`LLM_DASH_SHXDOW_ROOT=/tmp/llm-dash-opentabs-1779931606`) and
+  `scripts/reset_local_state.py`; browser rerun still showed read approval on
+  Skip — follow-up should reconcile wizard save payload vs. connection-test
+  pending grants before password entry.
+- `browser_execute_script` calls failed locally with OpenTabs adapter load errors;
+  used `browser_select_option`, `browser_type_text`, and `browser_click_element`
+  instead.
+
+Evidence:
+
+- `artifacts/browser-sessions/2026-05-27-opentabs-new-key-advance/`
+  (`01`–`07` screenshots).
+
+Stopped on request:
+
+- `opentabs stop`
+- Killed `uvicorn server:app` on `127.0.0.1:8787` (no dashboard server left
+  running after this entry).
+
+Remaining:
+
+- `TODO.md` — Phase 9.7 final wizard new-key advance check still `[ ]`.
+- Resume with OpenTabs + restarted `./run.sh` (or uvicorn with chosen
+  `LLM_DASH_SHXDOW_ROOT`), fresh wizard, write approval modal, then user
+  Voidware password when the modal shows **Save new key** / write operation.
+
+---
+
 ## Entry 090 — 2026-05-27
 
 **Agent:** Kilo (auth workflow review and optimization)
