@@ -4,6 +4,47 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 092 — 2026-05-29
+
+**Agent:** GPT-5 Codex (nightbloom, planning)
+**Cycle:** Milestone 10
+**Task:** Import Voidware 1.0.1 and plan full CSS rebuild
+
+---
+
+Started Milestone 10 as the new top-level work queue, replacing the Phase 9.7
+approval follow-up and paused wizard CSS polish queue.
+
+- Added `@shxdowcollective/voidware@1.0.1` as a pinned npm dependency with a
+  committed package lock.
+- Added `node_modules/` to `.gitignore`.
+- Verified the installed package exports CSS plus `auth`, `auth-templates`,
+  `config`, `paths`, `logging`, `themes`, `types`, `mui`, and `tailwind`.
+- Confirmed package CSS currently matches the vendored CSS files, aside from
+  `VERSION.md` and the package-only `theme-template.css`; the milestone still
+  needs a package-based vendor refresh and 1.0.1 provenance update.
+- Wrote the detailed Milestone 10 implementation plan covering package source
+  of truth, runtime API audit, full `web/style.css` rebuild, settings/wizard
+  recomposition, approval modal QA, screenshot matrix, and verification gates.
+- Updated `TODO.md` so Milestone 10 is the sole active queue and old follow-up
+  items are no longer pending.
+- Updated README/development/architecture docs to reference Voidware 1.0.1 and
+  the new npm package dependency.
+
+Verification:
+
+- `npm ci`
+- `node --check web/app.js`
+- `node --check scripts/voidware_app_broker.mjs`
+- `python3 -m py_compile server.py scripts/*.py tests/*.py`
+- `python3 -m unittest discover -v`
+- `git diff --check`
+- `npm install`
+- `npm view @shxdowcollective/voidware@1.0.1 version dist.tarball exports --json`
+- `python3 ~/.codex/skills/voidware-spec/scripts/check_voidware_spec.py /home/phxntom/Repos/LLM-Dash`
+
+---
+
 ## Entry 091 — 2026-05-27
 
 **Agent:** Composer (Cursor)

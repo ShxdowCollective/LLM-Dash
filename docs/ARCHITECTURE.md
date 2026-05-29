@@ -73,7 +73,7 @@ in-progress update. Killing the agent doesn't affect the dashboard.
 | Research | Exa (preferred) | Structured search + content fetch with citation control |
 | Credential storage | Env → Voidware provider credential → Voidware app broker → legacy keyring | Secrets stay outside repo/API responses; selected provider credentials use broker grants with renewal metadata |
 | Scheduling | OS-native jobs | systemd timer (Linux/WSL), launchd (macOS), Task Scheduler (Windows) |
-| Design system | Voidware v0.9.10 | Sidebar app shell, dark-native surfaces, and iridescent accent system |
+| Design system | Voidware v1.0.1 | Package-pinned dark-native surfaces, sidebar app shell, and iridescent accent system |
 
 ---
 
@@ -321,7 +321,7 @@ Re-running an update for the same date upserts rather than duplicates:
 API keys are **never** returned in API responses, logged, or written to any
 on-disk trace outside the credential store. Provider discovery returns redacted
 Voidware metadata only. Selected credentials are read through the app-owned
-Node bridge in `scripts/voidware_app_broker.mjs`, which hosts Voidware 0.9.10's
+Node bridge in `scripts/voidware_app_broker.mjs`, which hosts Voidware 1.0.1's
 approval surface for the FastAPI/browser app. Grants request the longest
 supported lifetime (`120d`), and the returned renewal window metadata drives
 the 90-day renewal prompt. Opaque grant tokens are cached by Voidware's
@@ -335,7 +335,7 @@ external service and retry with the app-owned approval surface.
 
 ---
 
-## Design System — Voidware v0.9.10
+## Design System — Voidware v1.0.1
 
 The UI follows the Voidware design specification:
 
@@ -348,6 +348,11 @@ The UI follows the Voidware design specification:
 - **Focus pattern** — `outline` with `outline-offset`, not box-shadow focus rings
 
 CSS custom properties on `:root` make the entire theme overridable.
+
+Milestone 10 moves Voidware from an implicit local CSS snapshot to an explicit
+`@shxdowcollective/voidware@1.0.1` dependency. LLM-Dash still serves committed
+static CSS at runtime; the package is the source for vendoring, runtime API
+audits, and the planned ground-up app CSS rebuild.
 
 ---
 

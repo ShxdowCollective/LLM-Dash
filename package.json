@@ -1,0 +1,8 @@
+{
+  "name": "llm-dash",
+  "private": true,
+  "description": "Local LLM benchmark dashboard with AI-driven daily changelog updates.",
+  "dependencies": {
+    "@shxdowcollective/voidware": "1.0.1"
+  }
+}

@@ -10,8 +10,8 @@
 
 - **Python 3.10+** — the server and all scripts target 3.10 minimum
 - **Git** — for version control and logbook workflow
-- **Node 20+** — required for the Voidware app-owned approval bridge when using
-  saved Voidware credentials
+- **Node 20+ / npm 10+** — required for the Voidware package import and the
+  app-owned approval bridge when using saved Voidware credentials
 - A modern browser (Chrome, Firefox, Edge, Safari) for the dashboard
 
 Optional:
@@ -29,6 +29,9 @@ git clone <repo-url> && cd LLM-Dash
 python3 -m venv .venv
 source .venv/bin/activate    # or .venv\Scripts\activate on Windows
 pip install -r requirements.txt
+
+# Install package assets used by Voidware refresh/migration work
+npm ci
 
 # Launch the dashboard
 ./run.sh                     # or run.bat on Windows
@@ -78,7 +81,7 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 | `server.py` | FastAPI app: static mounts, API routes, bootstrap, job management |
 | `scripts/config.py` | Provider config + credential pipeline (env → selected Voidware provider → Voidware broker; legacy keyring reads are migration-only) |
 | `scripts/voidware_auth.py` | Python controller for Voidware provider discovery, app-owned approval bridge lifecycle, and broker-backed provider/Exa/LLM Stats API keys |
-| `scripts/voidware_app_broker.mjs` | Node worker that imports Voidware 0.9.10 CLI service APIs and hosts LLM-Dash-owned approval prompts |
+| `scripts/voidware_app_broker.mjs` | Node worker that imports Voidware 1.0.1 package/CLI service APIs and hosts LLM-Dash-owned approval prompts |
 | `scripts/init_db.py` | First-run DB creation from `schema.sql` + 34-model seed |
 | `scripts/run_update.py` | Agent Provider update executor (OpenAI Agents SDK) |
 | `scripts/export_metrics_csv.py` | Regenerates `data/run_metrics.csv` from SQLite |
@@ -92,7 +95,7 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 | File | Responsibility |
 |---|---|
 | `web/index.html` | App shell, font imports, mount points |
-| `web/style.css` | App-specific Voidware 0.9.10 overrides and component styles |
+| `web/style.css` | App-specific Voidware 1.0.1 app layer and component styles |
 | `web/app.js` | sql.js bootstrap, route state, area renderers, wizard, overlays |
 | `web/provider-presets.json` | Static catalog of provider presets for the setup wizard |
 | `web/vendor/` | Vendored libraries (sql-wasm, marked.js, uPlot) — committed, not installed |
@@ -142,8 +145,9 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 
 ### CSS
 
-- Voidware v0.9.10 CSS is vendored under `web/vendor/voidware/`; keep
-  provenance current in `web/vendor/voidware/VERSION.md`
+- Voidware v1.0.1 is pinned in `package.json`; committed runtime CSS is still
+  vendored under `web/vendor/voidware/` for the zero-build launcher contract.
+  Keep provenance current in `web/vendor/voidware/VERSION.md`
 - Shadow-as-border: `box-shadow: 0 0 0 1px var(--vw-border)` instead of `border`
 - Focus: `outline` with `outline-offset`, not box-shadow
 - Typography: `--vw-font-body` (Inter) for prose, `--vw-font-mono`

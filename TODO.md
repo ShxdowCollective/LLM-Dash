@@ -7,50 +7,34 @@ Use `[ ]` only for still-open work.
 
 ## Now
 
-### Phase 9.7 follow-up — approval walkthrough
+### Milestone 10 — Voidware 1.0.1 package import and CSS rebuild
 
-**Status:** Implementation done; auth workflow optimized; in verification-only mode.
+**Status:** Planned; supersedes the Phase 9.7 follow-up and paused wizard CSS
+polish queue.
 
-Active follow-up tasks:
+Active tasks:
 
-- [ ] Complete one final wizard-owned new-key advance check after the OpenTabs
-  input/click path is stable. Backend approval, modal recovery, expiry handling,
-  chained-approval compatibility guards, and no-raw-key config checks passed.
-  The approval modal now has a live countdown, auto-focus, Enter-key submit,
-  spinner feedback, retry on failure, and assertive ARIA errors.
+- [ ] Refresh vendored Voidware CSS from `@shxdowcollective/voidware@1.0.1`
+  using a repeatable package-based script and update provenance.
+- [ ] Audit the Voidware runtime bridge against the 1.0.1 package exports and
+  keep the app-owned approval flow working while documenting any CLI-package
+  boundary.
+- [ ] Rebuild `web/style.css` from the ground up as a sectioned Voidware 1.0.1
+  app layer.
+- [ ] Recompose dashboard, Settings, wizard, approval modal, dense tables,
+  charts, changelog reader, loading, empty, error, and mobile drawer states.
+- [ ] Run the full Milestone 10 screenshot matrix at `1280x800`, `768x600`,
+  `1280x640`, and mobile/drawer widths with before/after evidence for P0/P1
+  fixes.
+- [ ] Complete package, syntax, Python, unit, and browser verification gates.
 
-Reference: [`docs/plans/2026-05-26-voidware-0-9-10-app-approval-plan.md`](docs/plans/2026-05-26-voidware-0-9-10-app-approval-plan.md).
-
-### Fresh Setup Wizard Walkthrough (aborted)
-
-Walkthrough was started on `http://127.0.0.1:8787` and paused at the
-Voidware broker approval gap (later fixed in app-owned approval).  
-Evidence is in:
-`artifacts/browser-sessions/2026-05-18-fresh-wizard/`,
-`artifacts/browser-sessions/2026-05-19-wizard-walkthrough/`.
-
-### CSS Fix Milestone — Wizard First-Run Polish (paused)
-
-Paused with wizard walkthrough; resume after Phase 9.7 saved-credential
-approval implementation.
-
-- [ ] Review the full first-run wizard at desktop and narrow widths.
-- [ ] Check loading, progress, form, footer, error, and success states for
-  jumps, mis-centering, clipped controls, and text overflow.
-- [ ] Restructure the Connection wizard step to match Voidware app/spec
-  patterns instead of a long stacked form: consolidate saved-key selection,
-  provider summary, access refresh, endpoints, and connection testing into a
-  tighter task-focused layout.
-- [ ] Run a Voidware copy pass across wizard and Settings access states; replace
-  internal terms like "broker" with user-facing access/service language.
-- [ ] Confirm screenshots:
-  `01-wizard-connection.png`, `02-wizard-no-nav-flash.png`,
-  `03-wizard-boot-spinner.png`, `04-centered-boot-spinner.png`, and
-  `05-wizard-stable-step1-load.png`.
-- [ ] Promote any remaining CSS-only findings into a focused fix pass.
+Reference: [`docs/plans/2026-05-29-milestone-10-voidware-1-0-1-rebuild.md`](docs/plans/2026-05-29-milestone-10-voidware-1-0-1-rebuild.md).
 
 ## Recent Completed
 
+- Milestone 10 planning — imported `@shxdowcollective/voidware@1.0.1`,
+  documented the package-source migration and full CSS rebuild plan, and
+  replaced the old follow-up/CSS polish queue.
 - Phase 9.7 follow-up — Auth workflow optimization: chained-approval
   compatibility guard, shared pending-detection helper, target-safe grant
   responses, approval modal countdown/auto-focus/Enter-key/spinner/retry,

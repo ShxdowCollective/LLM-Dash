@@ -14,7 +14,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org)
 [![sql.js](https://img.shields.io/badge/sql.js-WASM-4B32C3)](https://sql.js.org)
-[![voidware](https://img.shields.io/badge/voidware-v0.9.10-7c5cc4)](https://github.com/shxdow)
+[![voidware](https://img.shields.io/badge/voidware-v1.0.1-7c5cc4)](https://github.com/shxdow)
 [![License: MIT](https://img.shields.io/badge/license-MIT-a6f17b)](LICENSE)
 [![OpenAI Agents SDK](https://img.shields.io/badge/OpenAI_Agents-SDK-412991?logo=openai&logoColor=white)](https://github.com/openai/openai-agents-python)
 <a href="https://buymeacoffee.com/shxdowenby">
@@ -49,8 +49,8 @@
   in under two minutes.
 - **Agent-agnostic updates** — any AI agent (Claude, Codex, Gemini, etc.)
   follows `skill/SKILL.md` to research, score, and commit new data.
-- **Zero build step** — vanilla HTML/CSS/JS served by a tiny FastAPI server.
-  No npm, no bundler, no node_modules.
+- **Zero build runtime** — vanilla HTML/CSS/JS served by a tiny FastAPI server.
+  npm is only used for package-pinned Voidware asset refresh work.
 - **Works offline** — once launched, the dashboard runs entirely from local
   SQLite + WASM. Internet is only needed for update runs.
 
@@ -114,7 +114,7 @@ run logs, restarts from the bootstrap seed, and opens the setup wizard.
 Historical `changelogs/*.md`, Voidware broker grants/secrets, legacy
 `~/.shxdow/auth.json`, and keyring/keystore secrets are left alone.
 
-Saved Voidware credentials use the local Voidware 0.9.10 CLI service bridge.
+Saved Voidware credentials use the local Voidware 1.0.1 package and CLI service bridge.
 For source-tree testing, keep `/home/phxntom/Repos/voidware/packages/cli/dist`
 built or set `VOIDWARE_CLI_SERVICE_MODULE` to the built service entry.
 
@@ -173,7 +173,7 @@ LLM-Dash/
 │
 ├── web/                   # Static frontend (vanilla HTML/CSS/JS)
 │   ├── index.html
-│   ├── style.css          # App-specific Voidware 0.9.10 overrides
+│   ├── style.css          # App-specific Voidware 1.0.1 app layer
 │   ├── app.js             # sql.js bootstrap, state, rendering
 │   └── vendor/            # Vendored libs (sql-wasm, marked, uPlot)
 │

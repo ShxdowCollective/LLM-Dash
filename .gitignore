@@ -1,6 +1,7 @@
 .venv/
 __pycache__/
 *.pyc
+node_modules/
 logs/
 .shxdow/
 
@@ -12,6 +13,7 @@ docs/plans/*
 !docs/plans/2026-05-17-phase-9-6-voidware-0-9-8-upgrade.md
 !docs/plans/2026-05-18-dashboard-mobile-nav-refresh.md
 !docs/plans/2026-05-26-voidware-0-9-10-app-approval-plan.md
+!docs/plans/2026-05-29-milestone-10-voidware-1-0-1-rebuild.md
 docs/logbooks/
 
 # Generated data (recreated on first launch)
