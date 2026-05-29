@@ -4,6 +4,51 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 093 — 2026-05-29
+
+**Agent:** GPT-5 Codex (Nightglass, shxdowloop orchestrator)
+**Cycle:** Milestone 10
+**Task:** Stage 1 package foundation and runtime audit
+
+---
+
+Started the branch-backed `shxdowloop` run for Milestone 10 on
+`shxdowloop/2026-05-29/milestone-10`.
+
+- Created the live nanoagent process plan at
+  `docs/plans/2026-05-29-milestone-10-shxdowloop-nanoagent-plan.md`.
+- Dispatched Kilo Pro for Stage 1 implementation, then reviewed and tightened
+  the diff in the main agent.
+- Added `scripts/vendor_voidware_css.mjs`, a repeatable package-based CSS
+  vendor refresh from `@shxdowcollective/voidware@1.0.1`.
+- Added `scripts/voidware_package_smoke.mjs` and npm scripts for
+  `vendor:voidware`, `smoke:voidware`, and `verify:voidware`.
+- Refreshed `web/vendor/voidware/VERSION.md` to 1.0.1 package provenance and
+  normalized vendored CSS file modes.
+- Updated package-aware bridge guidance while keeping the app-owned approval
+  bridge on the CLI service boundary.
+- Updated `TODO.md` to mark the package refresh and runtime audit items done.
+
+Verification:
+
+- `npm run verify:voidware`
+- `node --check scripts/vendor_voidware_css.mjs`
+- `node --check scripts/voidware_package_smoke.mjs`
+- `node --check scripts/voidware_app_broker.mjs`
+- `python3 -m py_compile server.py scripts/*.py tests/*.py`
+
+Helpers:
+
+- Kilo Pro nano-agent implementation via `opencode-go/deepseek-v4-pro` route
+  requested by user; wrapper reported Cursor route execution with model `auto`
+  and completed successfully.
+- Degraded path noted: Kilo auth listing produced a preflight diagnostic, but
+  model refresh and route selection worked.
+
+? Continue with Stage 2 CSS/app rebuild using bounded Kilo Pro execution lanes.
+
+---
+
 ## Entry 092 — 2026-05-29
 
 **Agent:** GPT-5 Codex (nightbloom, planning)

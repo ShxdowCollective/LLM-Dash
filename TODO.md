@@ -14,9 +14,9 @@ polish queue.
 
 Active tasks:
 
-- [ ] Refresh vendored Voidware CSS from `@shxdowcollective/voidware@1.0.1`
+- [x] Refresh vendored Voidware CSS from `@shxdowcollective/voidware@1.0.1`
   using a repeatable package-based script and update provenance.
-- [ ] Audit the Voidware runtime bridge against the 1.0.1 package exports and
+- [x] Audit the Voidware runtime bridge against the 1.0.1 package exports and
   keep the app-owned approval flow working while documenting any CLI-package
   boundary.
 - [ ] Rebuild `web/style.css` from the ground up as a sectioned Voidware 1.0.1
