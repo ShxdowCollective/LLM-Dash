@@ -4,6 +4,7 @@ __pycache__/
 node_modules/
 logs/
 .shxdow/
+.env
 
 # Local-only docs (kept on disk, not in repo)
 LOGBOOK.md
