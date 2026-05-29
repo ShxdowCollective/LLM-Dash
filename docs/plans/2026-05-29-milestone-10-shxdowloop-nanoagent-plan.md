@@ -67,7 +67,7 @@ Reference plan:
   or error text where needed.
 **Helpers:** Kilo Pro implementation; main-agent integration.  
 **Verification:** `npm run verify:voidware`; `node --check scripts/vendor_voidware_css.mjs scripts/voidware_package_smoke.mjs scripts/voidware_app_broker.mjs`; `python3 -m py_compile server.py scripts/*.py tests/*.py`.  
-**Checkpoint:** `ba7a522` pushed to `origin/shxdowloop/2026-05-29/milestone-10`.  
+**Checkpoint:** `3bdb9b7` pushed to `origin/shxdowloop/2026-05-29/milestone-10`.  
 **Notes:** Kilo Pro implemented Stage 1. Main-agent review added stale CSS cleanup to the vendor script and removed a no-op smoke block. Static runtime contract preserved; no secrets exposed.
 
 ## Stage 2 — CSS/App Layer Rebuild
@@ -148,7 +148,7 @@ wizard/settings walkthrough.
 | Stage | Commit | Push | Notes |
 |---|---|---|---|
 | Preflight/branch | none | pushed branch | No code changes before proceed. |
-| 1 — Package Foundation And Runtime Audit | `ba7a522` | Pushed | Kilo Pro implementation reviewed and locally verified. |
+| 1 — Package Foundation And Runtime Audit | `3bdb9b7` | Pushed | Kilo Pro implementation reviewed and locally verified. |
 
 ## Open Risks
 
