@@ -82,6 +82,8 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 | `scripts/config.py` | Provider config + credential pipeline (env → selected Voidware provider → Voidware broker; legacy keyring reads are migration-only) |
 | `scripts/voidware_auth.py` | Python controller for Voidware provider discovery, app-owned approval bridge lifecycle, and broker-backed provider/Exa/LLM Stats API keys |
 | `scripts/voidware_app_broker.mjs` | Node worker that imports Voidware 1.0.1 package/CLI service APIs and hosts LLM-Dash-owned approval prompts |
+| `scripts/vendor_voidware_css.mjs` | Copies `@shxdowcollective/voidware` CSS into `web/vendor/voidware/` and refreshes provenance |
+| `scripts/voidware_package_smoke.mjs` | Verifies package CSS sources and runtime exports (`auth`, `auth-templates`, `logging`) |
 | `scripts/init_db.py` | First-run DB creation from `schema.sql` + 34-model seed |
 | `scripts/run_update.py` | Agent Provider update executor (OpenAI Agents SDK) |
 | `scripts/export_metrics_csv.py` | Regenerates `data/run_metrics.csv` from SQLite |
@@ -147,7 +149,17 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 
 - Voidware v1.0.1 is pinned in `package.json`; committed runtime CSS is still
   vendored under `web/vendor/voidware/` for the zero-build launcher contract.
-  Keep provenance current in `web/vendor/voidware/VERSION.md`
+  Refresh it from the installed package with:
+
+  ```bash
+  npm ci
+  npm run vendor:voidware
+  ```
+
+  Keep provenance current in `web/vendor/voidware/VERSION.md`. The refresh
+  script excludes `theme-template.css` and verifies the `index.css` import
+  chain after copy. Run `npm run smoke:voidware` to confirm package CSS sources
+  and runtime exports, or `npm run verify:voidware` for refresh + smoke together.
 - Shadow-as-border: `box-shadow: 0 0 0 1px var(--vw-border)` instead of `border`
 - Focus: `outline` with `outline-offset`, not box-shadow
 - Typography: `--vw-font-body` (Inter) for prose, `--vw-font-mono`

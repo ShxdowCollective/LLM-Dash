@@ -352,7 +352,11 @@ CSS custom properties on `:root` make the entire theme overridable.
 Milestone 10 moves Voidware from an implicit local CSS snapshot to an explicit
 `@shxdowcollective/voidware@1.0.1` dependency. LLM-Dash still serves committed
 static CSS at runtime; the package is the source for vendoring, runtime API
-audits, and the planned ground-up app CSS rebuild.
+audits, and the planned ground-up app CSS rebuild. Refresh vendored CSS with
+`npm run vendor:voidware` after `npm ci`. The app-owned approval bridge still
+depends on a Voidware CLI service build exposed through
+`VOIDWARE_CLI_SERVICE_MODULE`; the root package exports auth/config/logging
+helpers but not the CLI broker host.
 
 ---
 

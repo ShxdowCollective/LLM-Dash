@@ -83,6 +83,16 @@ class VoidwareAuthTests(unittest.TestCase):
         self.assertNotIn("sk-should-not-leak", json.dumps(discovered))
         self.assertNotIn("sk-top-level-should-not-leak", json.dumps(discovered))
 
+    def test_opencode_go_model_prefix_is_normalized_case_insensitively(self) -> None:
+        self.assertEqual(
+            config.normalize_provider_model_id("https://opencode.ai/zen/go", "OpenCode-Go/mimo-v2.5"),
+            "mimo-v2.5",
+        )
+        self.assertEqual(
+            config.normalize_provider_model_id("https://api.example.com", "opencode-go/mimo-v2.5"),
+            "opencode-go/mimo-v2.5",
+        )
+
     def test_selected_provider_persistence_stores_metadata_and_reads_secret_through_broker(self) -> None:
         grant = {
             "expiresAt": "2099-01-01T00:00:00Z",

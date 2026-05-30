@@ -4,6 +4,118 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 094 — 2026-05-30
+
+**Agent:** GPT-5 Codex (Nightglass, shxdowloop orchestrator)
+**Cycle:** Milestone 10
+**Task:** Voidware 1.0.1 CSS rebuild, live E2E, and chart rethink
+
+---
+
+Completed Milestone 10 on `shxdowloop/2026-05-29/milestone-10`.
+
+- Orchestrated Kilo/Cursor Pro helper passes for the `web/style.css` rebuild,
+  dashboard/settings/wizard recomposition, visual review, and final code review
+  prep.
+- Rebuilt the app layer around vendored `@shxdowcollective/voidware@1.0.1`
+  tokens/components while keeping LLM-Dash-specific dense dashboard behavior.
+- Replaced the Models > Chart segmented bar breakdown with a bar-free
+  scorecard/ranking view after user feedback.
+- Fixed Settings provider new-key approval so object-shaped Voidware errors
+  render human copy and open the app-owned approval modal.
+- Fixed final review approval edge cases: interrupted provider-key write
+  approvals can no longer be approved without resuming config save, Settings
+  approvals now poll/expire outside the wizard, and post-approval save failures
+  stay in an error state instead of showing success.
+- Restored pointer handling for app-owned package modals inside `#overlay-root`.
+- Normalized OpenCode Zen `/go` `.env` model IDs so `opencode-go/mimo-v2.5`
+  resolves to the live provider model id `mimo-v2.5`, with case-insensitive
+  coverage.
+- Fixed setup wizard Finish so it opens the dashboard without starting an
+  update job; an accidental live wizard pass briefly spawned `run_update.py`,
+  which was stopped before completion.
+- Captured screenshot/contact-sheet evidence under
+  `docs/plans/milestone-10/artifacts/` and reran visual nano-agent reviews
+  until the P1 approval/status and chart-bar issues were cleared.
+
+Live E2E notes:
+
+- Server used `.env` values through `LLM_DASH_BASE_URL`, `LLM_DASH_API_KEY`,
+  `LLM_DASH_DEFAULT_MODEL`, `EXA_API_KEY`, and `LLM_STATS_API_KEY` without
+  logging secrets.
+- Settings provider connection test returned `Connection works — 16 models`.
+- Settings model smoke returned `✓ mimo-v2.5 — ok`.
+- Research and Schedule sections rendered configured `.env`/off states.
+- Setup wizard walked Connection → Models → Test → Schedule → Review, showed
+  HTTP 200 for the model test, and closed to the dashboard without starting an
+  update after the fix.
+
+Verification:
+
+- `npm run verify:voidware`
+- `node --check web/app.js`
+- `node --check scripts/vendor_voidware_css.mjs scripts/voidware_package_smoke.mjs scripts/voidware_app_broker.mjs`
+- `python3 -m py_compile server.py scripts/*.py tests/*.py`
+- `python3 -m unittest discover -v`
+- `git diff --check`
+- Headed `agent-browser` live walkthroughs for Settings, wizard, approval modal,
+  mobile/drawer, and the bar-free chart scorecards.
+
+Helpers:
+
+- Kilo/Cursor Pro nano-agent implementation and review lanes.
+- Image nano-agent review cleared the final contact sheet after approval/status
+  and chart scorecard recaptures.
+- Final Pro Cursor nano-agent review cleared after the approval lifecycle and
+  model-normalization fixes.
+
+---
+
+## Entry 093 — 2026-05-29
+
+**Agent:** GPT-5 Codex (Nightglass, shxdowloop orchestrator)
+**Cycle:** Milestone 10
+**Task:** Stage 1 package foundation and runtime audit
+
+---
+
+Started the branch-backed `shxdowloop` run for Milestone 10 on
+`shxdowloop/2026-05-29/milestone-10`.
+
+- Created the live nanoagent process plan at
+  `docs/plans/2026-05-29-milestone-10-shxdowloop-nanoagent-plan.md`.
+- Dispatched Kilo Pro for Stage 1 implementation, then reviewed and tightened
+  the diff in the main agent.
+- Added `scripts/vendor_voidware_css.mjs`, a repeatable package-based CSS
+  vendor refresh from `@shxdowcollective/voidware@1.0.1`.
+- Added `scripts/voidware_package_smoke.mjs` and npm scripts for
+  `vendor:voidware`, `smoke:voidware`, and `verify:voidware`.
+- Refreshed `web/vendor/voidware/VERSION.md` to 1.0.1 package provenance and
+  normalized vendored CSS file modes.
+- Updated package-aware bridge guidance while keeping the app-owned approval
+  bridge on the CLI service boundary.
+- Updated `TODO.md` to mark the package refresh and runtime audit items done.
+
+Verification:
+
+- `npm run verify:voidware`
+- `node --check scripts/vendor_voidware_css.mjs`
+- `node --check scripts/voidware_package_smoke.mjs`
+- `node --check scripts/voidware_app_broker.mjs`
+- `python3 -m py_compile server.py scripts/*.py tests/*.py`
+
+Helpers:
+
+- Kilo Pro nano-agent implementation via `opencode-go/deepseek-v4-pro` route
+  requested by user; wrapper reported Cursor route execution with model `auto`
+  and completed successfully.
+- Degraded path noted: Kilo auth listing produced a preflight diagnostic, but
+  model refresh and route selection worked.
+
+? Continue with Stage 2 CSS/app rebuild using bounded Kilo Pro execution lanes.
+
+---
+
 ## Entry 092 — 2026-05-29
 
 **Agent:** GPT-5 Codex (nightbloom, planning)
