@@ -9,7 +9,7 @@ Use `[ ]` only for still-open work.
 
 ### Milestone 10 — Voidware 1.0.1 package import and CSS rebuild
 
-**Status:** Planned; supersedes the Phase 9.7 follow-up and paused wizard CSS
+**Status:** Complete; supersedes the Phase 9.7 follow-up and paused wizard CSS
 polish queue.
 
 Active tasks:
@@ -19,14 +19,14 @@ Active tasks:
 - [x] Audit the Voidware runtime bridge against the 1.0.1 package exports and
   keep the app-owned approval flow working while documenting any CLI-package
   boundary.
-- [ ] Rebuild `web/style.css` from the ground up as a sectioned Voidware 1.0.1
+- [x] Rebuild `web/style.css` from the ground up as a sectioned Voidware 1.0.1
   app layer.
-- [ ] Recompose dashboard, Settings, wizard, approval modal, dense tables,
+- [x] Recompose dashboard, Settings, wizard, approval modal, dense tables,
   charts, changelog reader, loading, empty, error, and mobile drawer states.
-- [ ] Run the full Milestone 10 screenshot matrix at `1280x800`, `768x600`,
+- [x] Run the full Milestone 10 screenshot matrix at `1280x800`, `768x600`,
   `1280x640`, and mobile/drawer widths with before/after evidence for P0/P1
   fixes.
-- [ ] Complete package, syntax, Python, unit, and browser verification gates.
+- [x] Complete package, syntax, Python, unit, and browser verification gates.
 
 Reference: [`docs/plans/2026-05-29-milestone-10-voidware-1-0-1-rebuild.md`](docs/plans/2026-05-29-milestone-10-voidware-1-0-1-rebuild.md).
 
@@ -35,6 +35,10 @@ Reference: [`docs/plans/2026-05-29-milestone-10-voidware-1-0-1-rebuild.md`](docs
 - Milestone 10 planning — imported `@shxdowcollective/voidware@1.0.1`,
   documented the package-source migration and full CSS rebuild plan, and
   replaced the old follow-up/CSS polish queue.
+- Milestone 10 — package-based Voidware 1.0.1 vendoring, sectioned app CSS
+  rebuild, bar-free Models chart scorecards, Settings/wizard approval fixes,
+  final approval lifecycle hardening, live `.env` E2E,
+  screenshot/contact-sheet review, and final verification.
 - Phase 9.7 follow-up — Auth workflow optimization: chained-approval
   compatibility guard, shared pending-detection helper, target-safe grant
   responses, approval modal countdown/auto-focus/Enter-key/spinner/retry,

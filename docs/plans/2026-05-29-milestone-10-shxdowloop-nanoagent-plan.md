@@ -1,10 +1,10 @@
 # Milestone 10 Nanoagent Shxdowloop Plan
 
-**Status:** Active  
-**Created:** 2026-05-29  
-**Branch:** `shxdowloop/2026-05-29/milestone-10`  
-**Remote:** `origin` / `https://github.com/phxntomkid/LLM-Dash.git`  
-**Primary handle:** Nightglass  
+**Status:** Complete
+**Created:** 2026-05-29
+**Branch:** `shxdowloop/2026-05-29/milestone-10`
+**Remote:** `origin` / `https://github.com/phxntomkid/LLM-Dash.git`
+**Primary handle:** Nightglass
 
 ## Goal
 
@@ -57,74 +57,81 @@ Reference plan:
 
 ## Stage 1 — Package Foundation And Runtime Audit
 
-**Status:** Complete  
-**Goal:** Make Voidware 1.0.1 vendoring and runtime import checks repeatable.  
+**Status:** Complete
+**Goal:** Make Voidware 1.0.1 vendoring and runtime import checks repeatable.
 **Phases:**
 - [x] 1.1 Add a package-based vendor refresh script and refresh
   `web/vendor/voidware`.
 - [x] 1.2 Add package import smoke checks for CSS source and runtime exports.
 - [x] 1.3 Audit Voidware runtime bridge guidance and update package-aware docs
   or error text where needed.
-**Helpers:** Kilo Pro implementation; main-agent integration.  
-**Verification:** `npm run verify:voidware`; `node --check scripts/vendor_voidware_css.mjs scripts/voidware_package_smoke.mjs scripts/voidware_app_broker.mjs`; `python3 -m py_compile server.py scripts/*.py tests/*.py`.  
-**Checkpoint:** `3bdb9b7` pushed to `origin/shxdowloop/2026-05-29/milestone-10`.  
+**Helpers:** Kilo Pro implementation; main-agent integration.
+**Verification:** `npm run verify:voidware`; `node --check scripts/vendor_voidware_css.mjs scripts/voidware_package_smoke.mjs scripts/voidware_app_broker.mjs`; `python3 -m py_compile server.py scripts/*.py tests/*.py`.
+**Checkpoint:** `3bdb9b7` pushed to `origin/shxdowloop/2026-05-29/milestone-10`.
 **Notes:** Kilo Pro implemented Stage 1. Main-agent review added stale CSS cleanup to the vendor script and removed a no-op smoke block. Static runtime contract preserved; no secrets exposed.
 
 ## Stage 2 — CSS/App Layer Rebuild
 
-**Status:** Pending  
+**Status:** Complete
 **Goal:** Rebuild `web/style.css` as a sectioned Voidware 1.0.1 app layer
-without breaking existing JS behavior.  
+without breaking existing JS behavior.
 **Phases:**
-- [ ] 2.1 Inventory current selectors and UI surfaces.
-- [ ] 2.2 Recompose shell, navigation, page headers, dashboard, dense tables,
+- [x] 2.1 Inventory current selectors and UI surfaces.
+- [x] 2.2 Recompose shell, navigation, page headers, dashboard, dense tables,
   charts, changelog, stats, settings, wizard, approval modal, loading, empty,
   error, and drawer states.
-- [ ] 2.3 Make only scoped JS markup/state-hook changes needed by the CSS
+- [x] 2.3 Make only scoped JS markup/state-hook changes needed by the CSS
   rebuild.
 **Helpers:** Kilo Pro implementation in bounded file scopes; main-agent diff
-review.  
+review.
 **Verification:** `node --check web/app.js`; browser smoke at desktop/tablet/
-short/mobile widths.  
-**Checkpoint:** Pending.  
+short/mobile widths.
+**Checkpoint:** Pending final commit.
 **Notes:** Prefer Voidware package classes, but keep app-specific CSS owned by
-LLM-Dash.
+LLM-Dash. Stage 2 started after Stage 1 checkpoint `3bdb9b7` plus plan-record
+commit `7a9316a`. Kilo/Cursor Pro helper passes rebuilt the CSS/app hooks;
+main-agent review fixed approval modal pointer handling, Settings approval
+state, chart scorecards, and wizard finish behavior.
 
 ## Stage 3 — Visual QA And Recommendations
 
-**Status:** Pending  
+**Status:** Complete
 **Goal:** Capture screenshot evidence and run visual nano-agent review on
-contact sheets, then implement actionable recommendations.  
+contact sheets, then implement actionable recommendations.
 **Phases:**
-- [ ] 3.1 Run one headed `agent-browser` session and capture the Milestone 10
+- [x] 3.1 Run one headed `agent-browser` session and capture the Milestone 10
   matrix: `1280x800`, `768x600`, `1280x640`, and mobile/drawer widths.
-- [ ] 3.2 Build contact sheets under `docs/plans/milestone-10/artifacts/`.
-- [ ] 3.3 Dispatch image nano-agent review and implement confirmed P0/P1 fixes.
-**Helpers:** Kimi image nano-agent; main-agent verification.  
+- [x] 3.2 Build contact sheets under `docs/plans/milestone-10/artifacts/`.
+- [x] 3.3 Dispatch image nano-agent review and implement confirmed P0/P1 fixes.
+**Helpers:** Kimi image nano-agent; main-agent verification.
 **Verification:** screenshot dimensions, visible wizard/settings/drawer states,
-no overlap/clipping, no blank canvases.  
-**Checkpoint:** Pending.  
-**Notes:** Use fake/disposable credential values; never include secrets in
-screenshots or logs.
+no overlap/clipping, no blank canvases.
+**Checkpoint:** Pending final commit.
+**Notes:** Used fake/disposable credential values; screenshots avoid actual
+secret contents. Visual nano-agent initially held on `[object Object]` approval
+status evidence and stale chart bars; both were fixed and recaptured.
 
 ## Stage 4 — Live E2E, Final Review, Docs
 
-**Status:** Pending  
+**Status:** Complete
 **Goal:** Prove the wizard and settings flows with `.env`, pass final code
-review, and close docs/checklist work.  
+review, and close docs/checklist work.
 **Phases:**
-- [ ] 4.1 Run live e2e against a local server using `.env` values for wizard
+- [x] 4.1 Run live e2e against a local server using `.env` values for wizard
   and all Settings sections.
-- [ ] 4.2 Dispatch final pro Cursor nano-agent review and fix actionable
+- [x] 4.2 Dispatch final pro Cursor nano-agent review and fix actionable
   findings.
-- [ ] 4.3 Run static, Python, unit, and browser verification gates.
-- [ ] 4.4 Update `TODO.md`, `LOGBOOK.md`, and this process plan.
-**Helpers:** Cursor Pro final reviewer; Kilo Pro fallback if Cursor fails.  
+- [x] 4.3 Run static, Python, unit, and browser verification gates.
+- [x] 4.4 Update `TODO.md`, `LOGBOOK.md`, and this process plan.
+**Helpers:** Cursor Pro final reviewer; Kilo Pro fallback if Cursor fails.
 **Verification:** `git diff --check`, package smoke checks, `node --check`,
 `python3 -m py_compile`, `python3 -m unittest discover -v`, live browser
-wizard/settings walkthrough.  
-**Checkpoint:** Pending.  
-**Notes:** Commit and push after completed stages.
+wizard/settings walkthrough.
+**Checkpoint:** Pending final commit.
+**Notes:** Live `.env` E2E found and fixed OpenCode Zen model-id normalization
+and the wizard Finish auto-update surprise. Final pro Cursor nano-agent review
+found approval-resume and polling edge cases plus case-sensitive model
+normalization; all actionable items were fixed and reverified.
 
 ## Verification Matrix
 
@@ -133,15 +140,15 @@ wizard/settings walkthrough.
 | `npm ci` | Passed | Kilo Pro ran successfully. |
 | Voidware vendor refresh | Passed | `npm run verify:voidware` copied 18 CSS files. |
 | Package import smoke | Passed | `npm run verify:voidware` imported `auth`, `auth-templates`, and `logging`. |
-| `node --check web/app.js scripts/voidware_app_broker.mjs` | Partial | Stage 1 checked changed JS scripts and broker; full app check pending later stages. |
-| `python3 -m py_compile server.py scripts/*.py tests/*.py` | Passed | Stage 1 compile passed. |
-| `python3 -m unittest discover -v` | Pending | |
-| Headed browser screenshot matrix | Pending | |
-| Live wizard e2e with `.env` | Pending | |
-| Settings e2e with `.env` | Pending | |
-| Visual nano-agent review | Pending | |
-| Pro Cursor nano-agent review | Pending | |
-| `git diff --check` | Pending | |
+| `node --check web/app.js scripts/voidware_app_broker.mjs` | Passed | `node --check web/app.js`; Stage 1 checked helper scripts and broker. |
+| `python3 -m py_compile server.py scripts/*.py tests/*.py` | Passed | Re-run after `scripts/config.py` normalization. |
+| `python3 -m unittest discover -v` | Passed | 14 tests passed. |
+| Headed browser screenshot matrix | Passed | `docs/plans/milestone-10/artifacts/screenshots/` plus contact sheets. |
+| Live wizard e2e with `.env` | Passed | Connection 16 models; model test HTTP 200; Finish closes dashboard without update. |
+| Settings e2e with `.env` | Passed | Provider connection, Models primary smoke, Research, Schedule. |
+| Visual nano-agent review | Passed | Approval/status and bar-free chart rechecks cleared. |
+| Pro Cursor nano-agent review | Passed | Fixed interrupted provider-write approvals, Settings approval polling/expiry, post-approval save status, and OpenCode model normalization. |
+| `git diff --check` | Passed | Re-run after chart/config/wizard fixes. |
 
 ## Checkpoint Log
 
@@ -149,20 +156,22 @@ wizard/settings walkthrough.
 |---|---|---|---|
 | Preflight/branch | none | pushed branch | No code changes before proceed. |
 | 1 — Package Foundation And Runtime Audit | `3bdb9b7` | Pushed | Kilo Pro implementation reviewed and locally verified. |
+| 2–4 — CSS rebuild, visual QA, live E2E | Pending final commit | Pending | Includes bar-free chart scorecards and live `.env` fixes. |
 
 ## Open Risks
 
-- Full CSS rebuild has high visual regression risk; keep browser evidence tight.
-- Approval/wizard screenshots can accidentally reveal secret-adjacent UI; use
-  fake values or redacted paths and avoid capturing actual `.env` contents.
+- Remaining visual polish is P2/P3 only: tablet table first-paint density and
+  filter slider wrap can be improved later.
+- Approval/wizard screenshots can accidentally reveal secret-adjacent UI; fake
+  values were used and actual `.env` contents were not captured.
 - Kilo auth diagnostics may make a helper flaky; retry once, then integrate in
   the main agent if needed.
 
 ## Merge Readiness Checklist
 
 - [ ] All stage checkpoints are pushed.
-- [ ] TODO active Milestone 10 tasks reflect done/deferred state.
-- [ ] LOGBOOK has newest-first entry with helper routing and verification.
-- [ ] Browser evidence is saved under `docs/plans/milestone-10/artifacts/`.
-- [ ] No credentials are present in diffs, logs, screenshots, or docs.
+- [x] TODO active Milestone 10 tasks reflect done/deferred state.
+- [x] LOGBOOK has newest-first entry with helper routing and verification.
+- [x] Browser evidence is saved under `docs/plans/milestone-10/artifacts/`.
+- [x] No credentials are present in diffs, logs, screenshots, or docs.
 - [ ] Final handoff names branch, commits, verification, risks, and PR link.

@@ -32,11 +32,11 @@
     { key: "speed", label: "Speed" },
     { key: "cost", label: "Cost" },
   ];
-  const CHART_BARS = [
-    { key: "intelligence", label: "Intelligence", raw: "var(--vw-iridescent-6)" },
-    { key: "coding", label: "Coding", raw: "var(--vw-iridescent-5)" },
-    { key: "agents", label: "Agent", raw: "var(--vw-iridescent-4)" },
-    { key: "speed", label: "Speed", raw: "var(--vw-iridescent-3)" },
+  const CHART_PROFILE_METRICS = [
+    { key: "intelligence", label: "Intelligence", short: "Intel" },
+    { key: "coding", label: "Coding", short: "Code" },
+    { key: "agents", label: "Agent", short: "Agent" },
+    { key: "speed", label: "Speed", short: "Speed" },
   ];
   const TIER_COLOR_MAP = {
     S: "var(--vw-iridescent-6)",
@@ -1642,8 +1642,7 @@
         render();
         await fetchProvider();
         await fetchSchedule();
-        closeWizard(false);
-        startRunUpdate();
+        closeWizard();
       }
     } catch (error) {
       state.wizard.saving = false;
@@ -2466,7 +2465,7 @@
       model.pricing ? "Pricing: " + model.pricing + "/M tok" : null,
       model.status && model.status !== "active" ? model.status : null,
     ].filter(Boolean);
-    return h("div", { class: "detail-panel" }, [
+    return h("div", { class: "detail-panel vw-page-accent-panel vw-accent-edge" }, [
       h("div", { class: "detail-head" }, [
         h("div", null, [
           h("div", { class: "detail-name" }, [
@@ -2572,9 +2571,9 @@
   }
 
   function renderEmptyState(title, copy) {
-    return h("div", { class: "empty-state" }, [
-      h("h2", null, title),
-      h("p", null, copy),
+    return h("div", { class: "vw-feature-empty-state empty-state", role: "status" }, [
+      h("h2", { class: "vw-feature-empty-state-title" }, title),
+      h("p", { class: "vw-feature-empty-state-copy" }, copy),
     ]);
   }
 
@@ -2631,7 +2630,7 @@
       " · ",
       active ? active + " filters active" : "No filters",
     ];
-    const filterPanel = h("div", { class: "filter-panel" }, [
+    const filterPanel = h("div", { class: "filter-panel vw-page-accent-panel" }, [
       h("div", { class: "filter-summary" }, [
         h("div", { class: "filter-summary-copy" }, [
           h("span", { class: "summary-pill" }, state.models.length + " / " + state.totalModelCount + " models"),
@@ -2718,7 +2717,7 @@
       collapsed: state.ui.statsFiltersCollapsed,
       onToggle: toggleStatsFiltersCollapsed,
       children: [
-        h("div", { class: "filter-panel stats-filter-panel" }, [
+        h("div", { class: "filter-panel stats-filter-panel vw-page-accent-panel" }, [
           h("div", { class: "filter-summary" }, [
             h("div", { class: "filter-summary-copy" }, [
               h("span", { class: "summary-pill" }, getFilteredMetrics().length + " runs"),
@@ -2893,7 +2892,12 @@
     const preview = endpointPreview(state.wizard.baseUrl, state.wizard.endpointMode, state.wizard.modelsOverrideUrl);
     const presets = state.providerPresets.providers;
     const credentials = state.providerCredentials.credentials || [];
-    return h("div", { class: "wizard-step-body" }, [
+    const branchClass = state.wizard.selectedCredentialName
+      ? "is-saved-key"
+      : state.wizard.apiKey
+        ? "is-manual-key"
+        : "";
+    return h("div", { class: "wizard-step-body wizard-connection-surface " + branchClass }, [
       state.wizard.voidwareSaveConfirmation
         ? h("div", { class: "wizard-voidware-save-confirmation vw-card-compact" }, [
             wizardStatusChip("success", "Saved in Voidware"),
@@ -2913,81 +2917,85 @@
               selected: state.wizard.selectedCredentialName === candidate.name,
             }, (candidate.label || candidate.name) + " · " + (candidate.base_url || "No URL"))),
           ]), state.providerCredentials.error || (state.wizard.selectedCredential ? "Secret stays in Voidware; LLM-Dash stores only the saved key name." : "")) : null,
-      wizardField("Service", h("select", {
-        class: "vw-select",
-        value: state.wizard.presetId,
-        onchange: (event) => applyWizardPreset(event.target.value),
-      }, [
-        h("option", { value: "" }, "Choose a service"),
-        ...presets.map((preset) => h("option", {
-          value: preset.id,
-          selected: state.wizard.presetId === preset.id,
-        }, preset.label)),
-      ])),
-      state.wizard.selectedCredential ? h("div", { class: "wizard-credential-card vw-card vw-card-compact" }, [
-        h("div", { class: "vw-summary-chip-row" }, credentialChipNodes(state.wizard.selectedCredential, false)),
-        h("div", { class: "vw-display-row" }, [
-          h("span", { class: "vw-display-row-label" }, "Saved key"),
-          h("span", { class: "vw-display-row-value" }, state.wizard.selectedCredential.name),
+      h("div", { class: "wizard-connection-primary" }, [
+        wizardField("Service", h("select", {
+          class: "vw-select",
+          value: state.wizard.presetId,
+          onchange: (event) => applyWizardPreset(event.target.value),
+        }, [
+          h("option", { value: "" }, "Choose a service"),
+          ...presets.map((preset) => h("option", {
+            value: preset.id,
+            selected: state.wizard.presetId === preset.id,
+          }, preset.label)),
+        ])),
+        state.wizard.selectedCredential ? h("div", { class: "wizard-credential-card vw-card vw-card-compact" }, [
+          h("div", { class: "vw-summary-chip-row" }, credentialChipNodes(state.wizard.selectedCredential, false)),
+          h("div", { class: "vw-display-row" }, [
+            h("span", { class: "vw-display-row-label" }, "Saved key"),
+            h("span", { class: "vw-display-row-value" }, state.wizard.selectedCredential.name),
+          ]),
+          h("div", { class: "vw-display-row" }, [
+            h("span", { class: "vw-display-row-label" }, "Base URL"),
+            h("span", { class: "vw-display-row-value" }, state.wizard.selectedCredential.base_url || "Unavailable"),
+          ]),
+        ]) : null,
+        state.wizard.selectedCredentialName ? h("div", { class: "wizard-voidware-grant vw-card vw-card-compact" }, [
+          h("p", { class: "vw-hint" }, "Authorize LLM-Dash to read this saved key. If Voidware needs a password, approval opens here in the dashboard."),
+          h("div", { class: "wizard-voidware-grant-row" }, [
+            h("button", {
+              class: "vw-btn vw-btn-primary",
+              type: "button",
+              disabled: state.wizard.voidwareGrantState === "requesting",
+              onclick: requestWizardVoidwareGrant,
+            }, state.wizard.voidwareGrantState === "requesting"
+              ? "Waiting…"
+              : state.wizard.voidwareGrantState === "success"
+                ? "Refresh access"
+                : "Approve Access"),
+            state.wizard.voidwareGrantState === "success"
+              ? wizardStatusChip("success", "Access granted")
+              : null,
+          ]),
+          state.wizard.voidwareGrantError ? h("p", { class: "wizard-error" }, state.wizard.voidwareGrantError) : null,
+        ]) : null,
+      ]),
+      h("div", { class: "wizard-connection-manual" }, [
+        wizardField("Base URL", h("input", {
+          id: "wizard-base-url",
+          class: "vw-input",
+          type: "url",
+          value: state.wizard.baseUrl,
+          placeholder: "https://api.openai.com",
+          oninput: (event) => {
+            state.wizard.baseUrl = event.target.value;
+            state.wizard.connectionTestState = "idle";
+            state.wizard.connectionTestSkipped = false;
+            render();
+          },
+        })),
+        wizardField("API key", h("input", {
+          id: "wizard-api-key",
+          class: "vw-input",
+          type: "password",
+          value: state.wizard.apiKey,
+          placeholder: state.wizard.selectedCredentialName ? "Using selected Voidware key" : state.provider.has_provider ? "Leave blank to keep stored key" : "sk-…",
+          disabled: Boolean(state.wizard.selectedCredentialName),
+          oninput: (event) => {
+            state.wizard.apiKey = event.target.value;
+            if (state.wizard.apiKey) {
+              state.wizard.selectedCredentialName = "";
+              state.wizard.selectedCredential = null;
+            }
+            state.wizard.connectionTestState = "idle";
+            state.wizard.connectionTestSkipped = false;
+            render();
+          },
+        })),
+        h("div", { class: "wizard-preview vw-card-compact" }, [
+          h("span", null, "Requests: " + preview.chat),
+          h("span", null, "Model list: " + preview.models),
         ]),
-        h("div", { class: "vw-display-row" }, [
-          h("span", { class: "vw-display-row-label" }, "Base URL"),
-          h("span", { class: "vw-display-row-value" }, state.wizard.selectedCredential.base_url || "Unavailable"),
-        ]),
-      ]) : null,
-      state.wizard.selectedCredentialName ? h("div", { class: "wizard-voidware-grant vw-card vw-card-compact" }, [
-        h("p", { class: "vw-hint" }, "Authorize LLM-Dash to read this saved key. If Voidware needs a password, approval opens here in the dashboard."),
-        h("div", { class: "wizard-voidware-grant-row" }, [
-          h("button", {
-            class: "vw-btn vw-btn-primary",
-            type: "button",
-            disabled: state.wizard.voidwareGrantState === "requesting",
-            onclick: requestWizardVoidwareGrant,
-          }, state.wizard.voidwareGrantState === "requesting"
-            ? "Waiting…"
-            : state.wizard.voidwareGrantState === "success"
-              ? "Refresh access"
-              : "Approve Access"),
-          state.wizard.voidwareGrantState === "success"
-            ? wizardStatusChip("success", "Access granted")
-            : null,
-        ]),
-        state.wizard.voidwareGrantError ? h("p", { class: "wizard-error" }, state.wizard.voidwareGrantError) : null,
-      ]) : null,
-      wizardField("Base URL", h("input", {
-        id: "wizard-base-url",
-        class: "vw-input",
-        type: "url",
-        value: state.wizard.baseUrl,
-        placeholder: "https://api.openai.com",
-        oninput: (event) => {
-          state.wizard.baseUrl = event.target.value;
-          state.wizard.connectionTestState = "idle";
-          state.wizard.connectionTestSkipped = false;
-          render();
-        },
-      })),
-      wizardField("API key", h("input", {
-        id: "wizard-api-key",
-        class: "vw-input",
-        type: "password",
-        value: state.wizard.apiKey,
-        placeholder: state.wizard.selectedCredentialName ? "Using selected Voidware key" : state.provider.has_provider ? "Leave blank to keep stored key" : "sk-…",
-        disabled: Boolean(state.wizard.selectedCredentialName),
-        oninput: (event) => {
-          state.wizard.apiKey = event.target.value;
-          if (state.wizard.apiKey) {
-            state.wizard.selectedCredentialName = "";
-            state.wizard.selectedCredential = null;
-          }
-          state.wizard.connectionTestState = "idle";
-          state.wizard.connectionTestSkipped = false;
-          render();
-        },
-      })),
-      h("div", { class: "wizard-preview vw-card-compact" }, [
-        h("span", null, "Requests: " + preview.chat),
-        h("span", null, "Model list: " + preview.models),
       ]),
       h("details", {
         class: "wizard-advanced",
@@ -3027,7 +3035,7 @@
           renderHeaderEditor(),
         ]),
       ]),
-      h("div", { class: "wizard-test-row" }, [
+      h("div", { class: "wizard-connection-test wizard-test-row" }, [
         h("button", {
           class: "vw-btn vw-btn-secondary",
           type: "button",
@@ -3162,8 +3170,8 @@
   function renderWizardScheduleStep() {
     return h("div", { class: "wizard-step-body" }, [
       h("p", { class: "wizard-helper" }, "Choose whether LLM-Dash should ask your local system to run updates automatically. Off keeps updates manual."),
-      h("div", { class: "wizard-segmented" }, ["off", "daily", "weekly", "monthly"].map((cadence) => h("button", {
-        class: "view-btn",
+      h("div", { class: "vw-segmented", role: "group", "aria-label": "Update cadence" }, ["off", "daily", "weekly", "monthly"].map((cadence) => h("button", {
+        class: "vw-segmented-item" + (state.wizard.scheduleCadence === cadence ? " active" : ""),
         type: "button",
         "aria-pressed": state.wizard.scheduleCadence === cadence ? "true" : "false",
         onclick: () => {
@@ -3529,6 +3537,7 @@
     }
     slot.replaceChildren(...nodes);
     document.body.classList.toggle("has-overlay", nodes.length > 0);
+    syncVoidwareApprovalPoll();
   }
 
   function syncRefreshButton() {
@@ -3626,8 +3635,46 @@
       ]);
     }));
 
-    return h("div", { class: "table-wrap models-table-wrap" }, [
+    return h("div", { class: "table-wrap models-table-wrap vw-scroll-shadow" }, [
       h("table", { class: "models" }, [head, body]),
+    ]);
+  }
+
+  function renderChartDecisionChip(label, score, isFocus) {
+    const t = tier(score);
+    const display = score !== null && score !== undefined ? Number(score).toFixed(1) : "—";
+    return h("div", {
+      class: "chart-decision-chip " + t.cls + (isFocus ? " is-focus" : ""),
+      title: label + ": " + display,
+    }, [
+      h("span", { class: "chart-decision-label" }, label),
+      h("strong", { class: "chart-decision-value" }, display),
+      h("span", { class: "chart-decision-tier" }, t.label),
+    ]);
+  }
+
+  function renderChartProfileMetric(metric, model, isFocus) {
+    const score = model[metric.key];
+    const t = tier(score);
+    const display = score !== null && score !== undefined ? Number(score).toFixed(1) : "—";
+    return h("div", {
+      class: "chart-profile-metric" + (isFocus ? " is-focus" : ""),
+      title: metric.label + ": " + display,
+    }, [
+      h("span", { class: "chart-profile-label" }, metric.short),
+      h("strong", { class: "chart-profile-value " + t.cls }, display),
+      h("span", { class: "tier-pill " + t.cls }, t.label),
+    ]);
+  }
+
+  function renderChartSummary() {
+    const sortLabel = SORT_OPTIONS.find((option) => option.key === state.sortBy)?.label || state.sortBy;
+    return h("div", { class: "chart-summary" }, [
+      h("div", { class: "chart-summary-copy" }, [
+        h("span", { class: "summary-pill" }, state.models.length + " models"),
+        h("span", null, "Sorted by " + sortLabel),
+      ]),
+      h("span", { class: "chart-summary-hint" }, "Scorecards use 0-10 scale"),
     ]);
   }
 
@@ -3635,9 +3682,12 @@
     if (!state.models.length) {
       return renderEmptyState("No Chart Data", "Loosen the filters or reset them to see results.");
     }
+    const sortKey = state.sortBy;
     const rows = state.models.map((model, index) => {
       const overall = getOverall(model);
+      const value = getValue(model);
       const isSelected = state.selectedModelIds.includes(model.id);
+      const sub = [model.vendor, model.pricing || null].filter(Boolean).join(" · ");
       return h("div", {
         id: "chart-row-" + model.id,
         class: "chart-row" + (isSelected ? " selected" : ""),
@@ -3648,35 +3698,37 @@
         onclick: () => toggleModelSelection(model.id),
         onkeydown: (event) => handleModelSelectionKey(event, model.id),
       }, [
-        h("span", { class: "idx" }, String(index + 1)),
-        h("div", { class: "dot", style: { backgroundColor: safeHex(model.color, "#888") } }),
-        h("span", { class: "name" }, model.name),
-        statusBadge(model.status),
-        h("div", { class: "bars" }, CHART_BARS.map((bar) => {
-          const value = model[bar.key];
-          const width = value == null ? 0 : clamp((Number(value) / 10) * 25, 0, 25);
-          return h("div", {
-            class: "bar",
-            style: {
-              width: width + "%",
-              backgroundColor: bar.raw,
-              opacity: value == null ? 0.2 : 0.85,
-            },
-            title: bar.label + ": " + (value == null ? "N/A" : Number(value).toFixed(1)),
-          });
-        })),
-        h("span", { class: "overall " + tier(overall).cls }, overall !== null ? overall.toFixed(1) : "—"),
+        h("div", { class: "chart-row-identity" }, [
+          h("span", { class: "idx" }, String(index + 1)),
+          h("div", { class: "dot", style: { backgroundColor: safeHex(model.color, "#888") } }),
+          h("div", { class: "chart-row-nameblock" }, [
+            h("span", { class: "name" }, [
+              model.name,
+              statusBadge(model.status),
+            ]),
+            sub ? h("span", { class: "chart-row-sub" }, sub) : null,
+          ]),
+        ]),
+        h("div", { class: "chart-row-decision" }, [
+          renderChartDecisionChip("Overall", overall, sortKey === "overall"),
+          renderChartDecisionChip("Value", value, sortKey === "value"),
+          renderChartDecisionChip("Cost", model.cost, sortKey === "cost"),
+        ]),
+        h("div", { class: "chart-row-profile" },
+          CHART_PROFILE_METRICS.map((metric) =>
+            renderChartProfileMetric(metric, model, sortKey === metric.key)
+          )
+        ),
       ]);
     });
 
-    return h("div", { class: "chart-wrap" }, [
-      ...rows,
-      h("div", { class: "chart-legend" }, CHART_BARS.map((bar) =>
-        h("span", null, [
-          h("div", { class: "swatch", style: { backgroundColor: bar.raw } }),
-          bar.label,
-        ])
-      )),
+    return h("div", { class: "chart-dashboard" }, [
+      renderChartSummary(),
+      h("div", {
+        class: "chart-board vw-scroll-shadow",
+        role: "region",
+        "aria-label": "Models comparison chart",
+      }, rows),
     ]);
   }
 
@@ -3853,23 +3905,22 @@
   }
 
   function renderChangelogReadBody(active, cache) {
+    let content;
     if (!active) {
-      return renderEmptyState("Select an Entry", "Choose a date from the sidebar to view its changelog.");
-    }
-    if (!cache || cache.status === "loading") {
-      return h("div", { class: "changelog-body" }, [
-        h("div", { class: "changelog-skeleton" }, [
-          h("div", { class: "skeleton-line w-60" }),
-          h("div", { class: "skeleton-line w-80" }),
-          h("div", { class: "skeleton-line w-45" }),
-          h("div", { class: "skeleton-line w-70" }),
-        ]),
+      content = renderEmptyState("Select an Entry", "Choose a date from the sidebar to view its changelog.");
+    } else if (!cache || cache.status === "loading") {
+      content = h("div", { class: "changelog-skeleton" }, [
+        h("div", { class: "skeleton-line w-60" }),
+        h("div", { class: "skeleton-line w-80" }),
+        h("div", { class: "skeleton-line w-45" }),
+        h("div", { class: "skeleton-line w-70" }),
       ]);
+    } else if (cache.status === "error") {
+      content = h("p", { class: "status-msg error" }, "Failed to load changelog: " + cache.error);
+    } else {
+      content = renderMarkdown(cache.body);
     }
-    if (cache.status === "error") {
-      return h("p", { class: "status-msg error" }, "Failed to load changelog: " + cache.error);
-    }
-    return renderMarkdown(cache.body);
+    return h("div", { class: "changelog-body vw-scroll-shadow" }, content);
   }
 
   function renderChangelog() {
@@ -3883,7 +3934,7 @@
     const body = renderChangelogReadBody(active, cache);
 
     return h("div", { class: "changelog-view" }, [
-      h("aside", { class: "changelog-list" }, state.changelogs.map((entry) => {
+      h("aside", { class: "changelog-list vw-scroll-shadow", role: "list", "aria-label": "Changelog entries" }, state.changelogs.map((entry) => {
         const isActive = entry.date === state.activeChangelogDate;
         const newModels = parseJsonArray(entry.new_models_json);
         return h("button", {
@@ -4322,12 +4373,22 @@
 
   function renderSettingsGroup({ id, title, summary, children }) {
     return h("section", { class: "vw-settings-group", id }, [
-      h("div", { class: "vw-settings-group-head" }, [
-        h("h3", null, title),
-        summary ? h("p", null, summary) : null,
+      h("div", { class: "vw-settings-group-header" }, [
+        h("div", null, [
+          h("h3", { class: "vw-settings-group-title" }, title),
+          summary ? h("p", { class: "vw-settings-group-copy" }, summary) : null,
+        ]),
       ]),
-      h("div", { class: "vw-settings-group-body" }, children),
+      h("div", { class: "vw-settings-group-controls" }, children),
     ]);
+  }
+
+  function settingsDirtyBadge(text) {
+    return text ? h("span", { class: "vw-dirty-badge" }, text) : null;
+  }
+
+  function settingsProvenanceBadge(text) {
+    return text ? h("span", { class: "vw-provenance-badge" }, text) : null;
   }
 
   function settingsStatusChip(text, tone) {
@@ -4442,6 +4503,18 @@
     return approval ? String(approval.target || (approval.operation && approval.operation.target) || "") : "";
   }
 
+  function voidwareApprovalOperationKind(approval) {
+    return approval ? String(approval.kind || (approval.operation && approval.operation.kind) || "") : "";
+  }
+
+  function isProviderSecretWriteApproval(approval) {
+    return voidwareApprovalTarget(approval) === "llmdash.provider.api_key" && voidwareApprovalOperationKind(approval) === "auth:secret:write";
+  }
+
+  function interruptedProviderWriteApprovalMessage() {
+    return "Voidware approval was interrupted before LLM-Dash could save connection settings. Deny this request and save the provider key again.";
+  }
+
   function clearVoidwareApprovalPoll() {
     if (voidwareApprovalPollTimer) window.clearInterval(voidwareApprovalPollTimer);
     voidwareApprovalPollTimer = null;
@@ -4452,9 +4525,14 @@
     clearVoidwareApprovalPoll();
     stopApprovalCountdown();
     const text = message || "Voidware approval expired. Start approval again.";
+    const approvalContext = state.wizard.voidwareApprovalContext || null;
     state.wizard.voidwareGrantState = "failed";
     state.wizard.voidwareGrantError = text;
     state.wizard.saveError = text;
+    if (approvalContext && approvalContext.kind === "settings-provider-write") {
+      state.settings.providerStatus = text;
+      state.settings.providerStatusTone = "error";
+    }
     state.wizard.voidwareApproval = null;
     state.wizard.voidwareApprovalContext = null;
     state.wizard.voidwareApprovalPassword = "";
@@ -4465,7 +4543,7 @@
 
   async function pollVoidwareApproval() {
     const approval = state.wizard.voidwareApproval;
-    if (!state.wizard.open || !approval) {
+    if (!approval) {
       clearVoidwareApprovalPoll();
       return;
     }
@@ -4487,7 +4565,7 @@
   function syncVoidwareApprovalPoll() {
     const approval = state.wizard.voidwareApproval;
     const requestId = approval ? String(approval.requestId || "") : "";
-    if (!state.wizard.open || !approval || !requestId) {
+    if (!approval || !requestId) {
       clearVoidwareApprovalPoll();
       return;
     }
@@ -4504,6 +4582,10 @@
     state.wizard.voidwareGrantState = "approval";
     state.wizard.voidwareGrantError = "";
     state.wizard.voidwareApproval = pendingApproval;
+    if (isProviderSecretWriteApproval(pendingApproval)) {
+      state.wizard.voidwareGrantState = "failed";
+      state.wizard.voidwareGrantError = interruptedProviderWriteApprovalMessage();
+    }
     state.wizard.voidwareApprovalPassword = "";
     state.wizard.voidwareApprovalSecret = "";
     render();
@@ -4588,6 +4670,17 @@
       render();
       return;
     }
+    if (!approvalContext && isProviderSecretWriteApproval(state.wizard.voidwareApproval)) {
+      voidwareApprovalSubmitInFlight = false;
+      state.wizard.voidwareGrantState = "failed";
+      state.wizard.voidwareGrantError = interruptedProviderWriteApprovalMessage();
+      if (!state.wizard.open) {
+        state.settings.providerStatus = state.wizard.voidwareGrantError;
+        state.settings.providerStatusTone = "error";
+      }
+      render();
+      return;
+    }
     state.wizard.voidwareGrantState = "requesting";
     state.wizard.voidwareGrantError = "";
     render();
@@ -4655,7 +4748,6 @@
       state.wizard.connectionTestState = "idle";
       state.wizard.connectionTestError = "";
       if (approvalContext && approvalContext.kind === "provider-write") {
-        state.wizard.voidwareSaveConfirmation = "Key saved in Voidware. LLM-Dash stored only connection settings.";
         const includeModels = Boolean(approvalContext.includeModels);
         const saved = await saveProviderFromWizard(includeModels, {
           omitApiKey: true,
@@ -4663,9 +4755,13 @@
           suppressApproval: true,
         });
         if (!saved) {
+          state.wizard.voidwareGrantState = "failed";
+          state.wizard.voidwareGrantError = state.wizard.saveError || "Provider settings were not saved after approval. Save the provider key again.";
           voidwareApprovalSubmitInFlight = false;
+          render();
           return;
         }
+        state.wizard.voidwareSaveConfirmation = "Key saved in Voidware. LLM-Dash stored only connection settings.";
         if (includeModels) {
           state.wizard.step = 2;
           render();
@@ -4678,26 +4774,66 @@
         voidwareApprovalSubmitInFlight = false;
         return;
       }
+      if (approvalContext && approvalContext.kind === "settings-provider-write") {
+        const payload = { ...(approvalContext.payload || {}) };
+        delete payload.api_key;
+        await fetchJson("/api/provider", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        await fetchProvider();
+        state.settings.draftBaseUrl = null;
+        state.settings.draftEndpointMode = null;
+        state.settings.draftApiKey = "";
+        state.settings.draftProviderCredentialName = null;
+        state.settings.draftDefaultModel = null;
+        state.settings.draftBackupModel = null;
+        state.settings.modelsList = [];
+        state.settings.providerStatus = "Key saved in Voidware. LLM-Dash stored only connection settings.";
+        state.settings.providerStatusTone = "success";
+        settingsLoadModels();
+        voidwareApprovalSubmitInFlight = false;
+        render();
+        return;
+      }
     } catch (error) {
       state.wizard.voidwareGrantState = "failed";
       state.wizard.voidwareGrantError = voidwareErrorMessage(error);
+      if (approvalContext && approvalContext.kind === "settings-provider-write") {
+        state.settings.providerStatus = state.wizard.voidwareGrantError;
+        state.settings.providerStatusTone = "error";
+      }
     }
     voidwareApprovalSubmitInFlight = false;
     render();
   }
 
   async function denyWizardVoidwareGrant() {
+    const approvalContext = state.wizard.voidwareApprovalContext || null;
     stopApprovalCountdown();
     try {
       await fetchJson("/api/voidware/broker/approval/deny", { method: "POST" });
     } catch (_) {}
     state.wizard.voidwareGrantState = "failed";
     state.wizard.voidwareGrantError = "Voidware access was denied. You can approve it again without losing this setup.";
+    if (approvalContext && approvalContext.kind === "settings-provider-write") {
+      state.settings.providerStatus = state.wizard.voidwareGrantError;
+      state.settings.providerStatusTone = "error";
+    }
     state.wizard.voidwareApproval = null;
     state.wizard.voidwareApprovalContext = null;
     state.wizard.voidwareApprovalPassword = "";
     state.wizard.voidwareApprovalSecret = "";
     render();
+  }
+
+  function handleVoidwareDenyEvent(event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    denyWizardVoidwareGrant();
   }
 
   function brokerStatusCopy(code) {
@@ -4737,13 +4873,16 @@
 
   function renderCredentialStatus(label, status) {
     const source = status && status.source ? status.source : "missing";
-    const tone = status && status.configured ? (source === "voidware-broker" ? "success" : "idle") : "error";
+    const configured = Boolean(status && status.configured);
+    const sourceLabel = authSourceLabel(source);
     return h("div", { class: "settings-auth-status vw-display-row" }, [
       h("span", { class: "vw-display-row-label" }, label),
-      h("span", { class: "vw-display-row-value" }, [
-        settingsStatusChip(authSourceLabel(source), tone),
+      h("span", { class: "vw-display-row-value settings-source-badges" }, [
+        configured
+          ? settingsProvenanceBadge(sourceLabel)
+          : settingsStatusChip(sourceLabel, "error"),
         status && status.legacy_migration_available
-          ? h("span", { class: "vw-status-chip" }, "Migration available")
+          ? settingsProvenanceBadge("Migration available")
           : null,
       ]),
       renderGrantRenewal(status && status.grant),
@@ -4888,6 +5027,7 @@
     s.providerSaving = true;
     s.providerStatus = "";
     render();
+    let payload = null;
     try {
       const base_url = (s.draftBaseUrl !== null ? s.draftBaseUrl : state.provider.base_url || "").trim();
       const endpoint_mode = s.draftEndpointMode !== null ? s.draftEndpointMode : state.provider.endpoint_mode || "append_v1";
@@ -4899,13 +5039,19 @@
       const models_override_url = state.provider.models_override_url || "";
       if (!base_url) throw new Error("Base URL is required");
       if (!default_model) throw new Error("Default model is required");
-      const payload = { base_url, endpoint_mode, default_model, backup_model, models_override_url };
+      payload = { base_url, endpoint_mode, default_model, backup_model, models_override_url };
       if (api_key) payload.api_key = api_key;
       else if (providerCredentialName) {
         payload.provider_credential_name = providerCredentialName;
         payload.provider_credential_meta = credentialMetaPayload(providerCredential);
       } else if (s.draftProviderCredentialName !== null) {
         payload.provider_credential_name = "";
+      }
+      if (api_key) {
+        const pendingApproval = await loadPendingVoidwareApproval().catch(() => null);
+        if (pendingApproval && voidwareApprovalTarget(pendingApproval) !== "llmdash.provider.api_key") {
+          await fetchJson("/api/voidware/broker/approval/deny", { method: "POST" }).catch(() => null);
+        }
       }
       await fetchJson("/api/provider", {
         method: "POST",
@@ -4924,7 +5070,25 @@
       s.modelsList = [];
       settingsLoadModels();
     } catch (error) {
-      s.providerStatus = String(error?.message || error);
+      const detail = error && error.payload && error.payload.detail;
+      if (payload && payload.api_key && isVoidwareApprovalPending(error)) {
+        const detailApproval = detail && typeof detail === "object" && detail.approval && typeof detail.approval === "object" ? detail.approval : null;
+        const pendingApproval = detailApproval && detailApproval.requestId ? detailApproval : await loadPendingVoidwareApproval().catch(() => null);
+        if (pendingApproval && pendingApproval.requestId) {
+          const retryPayload = { ...payload };
+          delete retryPayload.api_key;
+          state.wizard.voidwareGrantState = "approval";
+          state.wizard.voidwareGrantError = "";
+          state.wizard.voidwareApproval = pendingApproval;
+          state.wizard.voidwareApprovalContext = { kind: "settings-provider-write", payload: retryPayload };
+          state.wizard.voidwareApprovalPassword = "";
+          state.wizard.voidwareApprovalSecret = "";
+          s.providerStatus = "Voidware approval required to save the new provider key.";
+          s.providerStatusTone = "warning";
+          return;
+        }
+      }
+      s.providerStatus = voidwareErrorMessage(error);
       s.providerStatusTone = "error";
     } finally {
       s.providerSaving = false;
@@ -5219,13 +5383,13 @@
               ]), state.providerCredentials.error || "Use an existing Voidware key without exposing its secret.") : null,
           selectedCredential ? h("div", { class: "settings-provider-credential vw-card vw-card-compact" }, [
             h("div", { class: "vw-summary-chip-row" }, credentialChipNodes(selectedCredential, true)),
-            h("div", { class: "vw-display-row" }, [
-            h("span", { class: "vw-display-row-label" }, "Saved key"),
-              h("span", { class: "vw-display-row-value" }, selectedCredential.name || selectedCredentialName),
+            h("div", { class: "vw-path-row" }, [
+              h("span", { class: "vw-path-row-label" }, "Saved key"),
+              h("span", { class: "vw-path-row-value" }, selectedCredential.name || selectedCredentialName),
             ]),
-            h("div", { class: "vw-display-row" }, [
-              h("span", { class: "vw-display-row-label" }, "Base URL"),
-              h("span", { class: "vw-display-row-value" }, selectedCredential.base_url || selectedCredential.baseURL || "Unavailable"),
+            h("div", { class: "vw-path-row" }, [
+              h("span", { class: "vw-path-row-label" }, "Base URL"),
+              h("span", { class: "vw-path-row-value" }, selectedCredential.base_url || selectedCredential.baseURL || "Unavailable"),
             ]),
             renderGrantRenewal(state.provider.provider_credential_grant),
           ]) : null,
@@ -5274,7 +5438,9 @@
           )),
           renderCredentialStatus("Model service key", state.provider.auth && state.provider.auth.provider),
           h("div", { class: "settings-state-row" }, [
-            settingsStatusChip(dirty ? "Unsaved changes" : state.provider.has_provider ? "Applied" : "Setup needed", dirty ? "warning" : state.provider.has_provider ? "success" : "warning"),
+            dirty
+              ? settingsDirtyBadge("Unsaved changes")
+              : settingsStatusChip(state.provider.has_provider ? "Applied" : "Setup needed", state.provider.has_provider ? "success" : "warning"),
             dirty ? h("button", { class: "vw-btn vw-btn-tertiary", type: "button", onclick: resetProviderDrafts }, "Revert") : null,
           ]),
           h("div", { class: "settings-actions" }, [
@@ -5341,7 +5507,9 @@
             dirty ? h("button", { class: "vw-btn vw-btn-tertiary", type: "button", onclick: resetModelDrafts }, "Revert") : null,
           ]),
           h("div", { class: "settings-state-row" }, [
-            settingsStatusChip(dirty ? "Unsaved model choices" : state.provider.has_provider ? "Applied" : "Connection needed", dirty ? "warning" : state.provider.has_provider ? "success" : "warning"),
+            dirty
+              ? settingsDirtyBadge("Unsaved model choices")
+              : settingsStatusChip(state.provider.has_provider ? "Applied" : "Connection needed", state.provider.has_provider ? "success" : "warning"),
           ]),
           s.modelsError ? settingsStatusChip(s.modelsError, "error") : null,
           defaultResult ? settingsStatusChip(defaultResult.ok ? "✓ " + (defaultResult.model || "default") + " — " + (defaultResult.output || "ok").slice(0, 80) : "✗ Default: " + (defaultResult.error || "failed"), defaultResult.ok ? "success" : "error") : null,
@@ -5436,8 +5604,8 @@
       summary: scheduleLabel,
       children: [
         h("div", { class: "settings-form" }, [
-          settingsField("Cadence", h("div", { class: "settings-segmented" }, ["off", "daily", "weekly", "monthly"].map((cadence) => h("button", {
-            class: "vw-btn settings-seg-btn" + (s.scheduleCadence === cadence ? " vw-btn-primary" : " vw-btn-secondary"),
+          settingsField("Cadence", h("div", { class: "vw-segmented", role: "group", "aria-label": "Update cadence" }, ["off", "daily", "weekly", "monthly"].map((cadence) => h("button", {
+            class: "vw-segmented-item" + (s.scheduleCadence === cadence ? " active" : ""),
             type: "button",
             "aria-pressed": s.scheduleCadence === cadence ? "true" : "false",
             onclick: () => { s.scheduleCadence = cadence; render(); },
@@ -5461,7 +5629,7 @@
           }), "Limited to 1–28 so every month works.") : null,
           h("p", { class: "settings-field-status" }, schedulePreview(s.scheduleCadence, s.scheduleTimeLocal, s.scheduleDayOfWeek, s.scheduleDayOfMonth, settingsScheduleUtcEcho())),
           h("div", { class: "settings-state-row" }, [
-            settingsStatusChip(dirty ? "Unsaved schedule" : "Applied", dirty ? "warning" : "success"),
+            dirty ? settingsDirtyBadge("Unsaved schedule") : settingsStatusChip("Applied", "success"),
             dirty ? h("button", { class: "vw-btn vw-btn-tertiary", type: "button", onclick: resetScheduleDrafts }, "Revert") : null,
           ]),
           h("div", { class: "settings-actions" }, [
@@ -6168,6 +6336,7 @@
     const sidebar = document.getElementById("sidebar");
     const backdrop = document.getElementById("sidebar-backdrop");
     const toggle = document.getElementById("sidebar-toggle");
+    const content = document.getElementById("content");
     if (sidebar) {
       sidebar.classList.toggle("open", state.ui.sidebarOpen);
       sidebar.dataset.vwOpen = state.ui.sidebarOpen ? "true" : "false";
@@ -6177,6 +6346,10 @@
       backdrop.dataset.vwOpen = state.ui.sidebarOpen ? "true" : "false";
     }
     if (toggle) toggle.setAttribute("aria-expanded", state.ui.sidebarOpen ? "true" : "false");
+    if (content) {
+      if (state.ui.sidebarOpen) content.setAttribute("inert", "");
+      else content.removeAttribute("inert");
+    }
   }
 
   function finishBootPaint() {
@@ -6334,6 +6507,7 @@
       el.textContent = "Expired";
       el.classList.add("is-expired");
       stopApprovalCountdown();
+      expireWizardVoidwareApproval("Voidware approval expired. Start approval again.");
       return;
     }
     const minutes = Math.floor(remaining / 60000);
@@ -6435,7 +6609,8 @@
           h("button", {
             class: "vw-btn vw-btn-secondary",
             type: "button",
-            onclick: denyWizardVoidwareGrant,
+            onpointerdown: handleVoidwareDenyEvent,
+            onclick: handleVoidwareDenyEvent,
           }, "Deny"),
           isFailed ? h("button", {
             class: "vw-btn vw-btn-primary",

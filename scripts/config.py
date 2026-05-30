@@ -341,6 +341,15 @@ def normalize_base_url(value: str, *, field: str = "base_url", allow_v1: bool = 
     return url
 
 
+def normalize_provider_model_id(base_url: str, model_id: str) -> str:
+    model = str(model_id or "").strip()
+    base = str(base_url or "").strip().lower()
+    opencode_prefix = "opencode-go/"
+    if base and "opencode.ai/zen/go" in base and model.lower().startswith(opencode_prefix):
+        return model[len(opencode_prefix):].strip()
+    return model
+
+
 def _endpoint_base(base_url: str, endpoint_mode: str) -> str:
     mode = normalize_endpoint_mode(endpoint_mode)
     if mode == ENDPOINT_MODE_ROOT:
@@ -555,8 +564,8 @@ def load_provider_config() -> ProviderConfig:
         )
         if models_override_url
         else "",
-        default_model=default_model.strip(),
-        backup_model=backup_model.strip(),
+        default_model=normalize_provider_model_id(base_url, default_model),
+        backup_model=normalize_provider_model_id(base_url, backup_model),
         endpoint_mode=endpoint_mode,
         request_headers=_normalize_header_map(request_headers),
         provider_credential_name=provider_credential_name,
@@ -650,8 +659,8 @@ def save_provider(
         )
         if models_override_url
         else "",
-        default_model=str(default_model or "").strip(),
-        backup_model=str(backup_model or "").strip(),
+        default_model=normalize_provider_model_id(base_url, default_model),
+        backup_model=normalize_provider_model_id(base_url, backup_model),
         endpoint_mode=mode,
         request_headers=_normalize_header_map(request_headers or {}),
         provider_credential_name=selected_name,

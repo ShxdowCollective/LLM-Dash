@@ -6,7 +6,7 @@
 - Source tarball: `https://npm.pkg.github.com/download/@shxdowcollective/voidware/1.0.1/0a16ee75814e74df12d1d252a55e2d0a745bb66a`
 - Tarball integrity: `sha512-Z0CR5xlg6qsDmRsye6gagbtiNpDrsLTb1CZ/+cs9KOWmLINjf8/2Qi9MkCREILz8QGQtTT1+0ZyjjiVmr97JVA==`
 - Refresh command: `node scripts/vendor_voidware_css.mjs`
-- Copied: `2026-05-29`
+- Copied: `2026-05-30`
 - License: `Apache-2.0`; vendored for the zero-build LLM-Dash static runtime.
 
 ## Files
