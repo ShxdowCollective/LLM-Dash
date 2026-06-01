@@ -16,18 +16,20 @@ document are the only artifacts so far.
 
 Active tasks:
 
-- [ ] **Phase 1 — Tokens and shell.** Add `--llm-*` tokens (tier colors,
-  freshness tones, shell sizes, spacing). Rebuild sidebar, mobile header,
-  drawer, page header rhythm. Refreshment tone (fresh / stale / never /
-  error). Sidebar + drawer footer rhythm. Disabled state distinction.
+- [ ] **Phase 1 — Tokens, scrollbars, and shell.** Add `--llm-*` tokens (tier
+  colors, freshness tones, shell sizes, spacing). Custom dark-mode scrollbars.
+  Rebuild sidebar, mobile header, drawer, page header rhythm. Refreshment tone
+  (fresh / stale / never / error). Sidebar + drawer footer rhythm. Disabled
+  state distinction.
 - [ ] **Phase 2 — Models Table and toolbar.** Replace the sort chip grid
   with a sort rail + filter/search disclosure. New column structure, score
   cell with tier letter square. Compress mobile/tablet so the first model
   card is visible at `390px` and `768px`.
 - [ ] **Phase 3 — Models Chart redesign.** Replace the row-based scorecard
   list with a real analysis surface: X/Y axis selectors, scatter + radar
-  modes (hand-rolled SVG), legend by provider, right-side selection panel,
-  comparison strip. Empty / loading / mobile graceful degrade.
+  modes (hand-rolled interactive SVG with tabindex and arrow key support),
+  legend by provider, right-side selection panel, comparison strip. Elegant shimmer
+  skeleton loader. Empty / loading / mobile graceful degrade.
 - [ ] **Phase 4 — Changelog polish.** Shrink one-entry rails, strip the
   duplicate markdown H1 when it matches the panel header, reduce redundant
   purple accent depth between rail and detail.
@@ -40,7 +42,7 @@ Active tasks:
   distinction. Backup model helper line, credential label cleanup.
 - [ ] **Phase 7 — Score encoding, accessibility, verification.** Tier
   letter + number on every score surface, tooltip on tier letter. Focus
-  ring audit, contrast audit, keyboard pass. Headed `agent-browser`
+  ring audit, WCAG AA contrast audit (specifically targeting `--vw-text-soft`), keyboard pass. Headed `agent-browser`
   screenshot matrix at `1280x800`, `768x600`, `1280x640`, `390x844`,
   plus drawer. `node --check web/app.js`, full Python test suite,
   `git diff --check`.

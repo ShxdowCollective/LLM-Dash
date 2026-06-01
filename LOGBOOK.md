@@ -3,6 +3,32 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 099 — 2026-05-31
+
+**Agent:** Kilo (main agent, plan improvements)
+**Cycle:** Milestone 11
+**Task:** Review and refine the M11 full-redesign plan for polished production-SaaS UI
+
+---
+
+Refined `docs/plans/2026-05-31-m11-full-redesign-plan.md` to guarantee a highly polished, friendly, and fully production-ready UI for Milestone 11.
+
+Key refinements added:
+- **Scrollbar Design**: Added custom scrollbar styles for bounded horizontal/vertical panels (Comparison Strip, scrollable Table wrapper, and Changelog details) to blend beautifully with the dark aesthetic using standard and Webkit-fallback CSS properties.
+- **Contrast & Contrast Compliance**: Mandated that promoted `--vw-text-soft` color mix satisfy a minimum of 4.5:1 contrast against background colors (WCAG AA compliance) to elevate readability.
+- **Skeleton & Shimmer Animation**: Described precise gradient rules and linear sweep animations for simulated loading states (axes, cards, detail lines) to prevent layout shifts.
+- **Interactive SVG Accessibility**: Added exact keyboard navigation guidelines for hand-rolled SVG dots in Scatter mode (using hidden interactive list items, arrow-key navigation, and `tabindex`/`aria-label` elements) so it is fully accessible.
+
+Updated `TODO.md` to map these refinements cleanly into Phase 1, Phase 3, and Phase 7 respectively.
+
+Verification:
+- Read-only review pass; ran `git diff --check` and `git status`. All is clean.
+
+Next:
+- Ready to proceed with Phase 1 (tokens, shell, scrollbars, toast system, and offline banner).
+
+---
+
 ## Entry 098 — 2026-05-31
 
 **Agent:** Kilo (main agent, plan review)
