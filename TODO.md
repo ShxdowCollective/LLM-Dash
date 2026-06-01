@@ -7,6 +7,24 @@ Use `[ ]` only for still-open work.
 
 ## Now
 
+### Milestone 11 — E2E UI/UX polish follow-up
+
+**Status:** Planned from the 2026-05-31 screenshot audit.
+
+Active tasks:
+
+- [ ] Compress Models controls on tablet/mobile so leaderboard content appears
+  in the first viewport at `390px` and `768px`.
+- [ ] Recompose Settings Connection/Models screens with clearer primary
+  actions, status placement, and sparse-state support context.
+- [ ] Replace passive Stats low-data placeholders with action-oriented empty
+  states and polish one-run formatting.
+- [ ] Reduce color-only score encoding and tighten table/chart/mobile scoring
+  readability.
+- [ ] Polish Changelog, stale freshness state, and mobile drawer footer rhythm.
+
+Reference: [`docs/plans/2026-05-31-e2e-ui-ux-polish-implementation-plan.md`](docs/plans/2026-05-31-e2e-ui-ux-polish-implementation-plan.md).
+
 ### Milestone 10 — Voidware 1.0.1 package import and CSS rebuild
 
 **Status:** Complete; supersedes the Phase 9.7 follow-up and paused wizard CSS
@@ -39,6 +57,9 @@ Reference: [`docs/plans/2026-05-29-milestone-10-voidware-1-0-1-rebuild.md`](docs
   rebuild, bar-free Models chart scorecards, Settings/wizard approval fixes,
   final approval lifecycle hardening, live `.env` E2E,
   screenshot/contact-sheet review, and final verification.
+- E2E UI audit — captured nine screenshots in `e2e/screenshots/`, wrote
+  per-screenshot reports and final issue list under `docs/plans/e2e-analysis/`,
+  and planned Milestone 11 polish.
 - Phase 9.7 follow-up — Auth workflow optimization: chained-approval
   compatibility guard, shared pending-detection helper, target-safe grant
   responses, approval modal countdown/auto-focus/Enter-key/spinner/retry,

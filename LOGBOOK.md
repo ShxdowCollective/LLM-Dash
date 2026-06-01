@@ -4,6 +4,57 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 095 — 2026-05-31
+
+**Agent:** GPT-5 Codex (Silverthread, UI audit)
+**Cycle:** E2E UI audit
+**Task:** Screenshot-driven Voidware UI/UX audit and polish plan
+
+---
+
+Ran a full `e2e-ui-audit` pass against the local provider-backed dashboard.
+
+- Captured nine headed `agent-browser` screenshots under `e2e/screenshots/`:
+  desktop Models table/chart, Changelog, Stats, Settings provider/models,
+  tablet Models, mobile Models, and mobile drawer.
+- Created contact-sheet artifact at
+  `docs/plans/e2e-ui-audit/artifacts/contact-dashboard.png`.
+- Wrote the live audit process plan at
+  `docs/plans/2026-05-31-e2e-ui-audit-nanoagent-plan.md`.
+- Wrote per-screenshot reports plus master/final issue lists under
+  `docs/plans/e2e-analysis/`.
+- Wrote the reviewed implementation plan at
+  `docs/plans/2026-05-31-e2e-ui-ux-polish-implementation-plan.md`.
+- Updated `TODO.md` with Milestone 11 follow-up tasks.
+
+Findings:
+
+- P0: Models tablet/mobile control stack buries leaderboard content.
+- P1: Settings provider/models screens need stronger composition/action
+  hierarchy; Stats low-data state is passive; scoring surfaces are too
+  color-heavy.
+- P2: Changelog over-framing, stale freshness tone, drawer footer rhythm, small
+  text/truncation, and minor control polish.
+
+Helper routing:
+
+- Visual nano-agent: Cursor image route (`auto`) against the contact sheet.
+- Pro code/context nano-agent: Cursor pro route (`auto`) against frontend files.
+- Native reviewer: confirmed severity downgrades and highlighted the real
+  blockers.
+- Pro synthesis/plan reviewers: cleared structure and prompted traceability and
+  acceptance-criteria tightening.
+
+Verification notes:
+
+- Provider-backed capture required mapping repo `.env` generic names to
+  `LLM_DASH_*` env vars and overriding the local base URL without `/v1`; no
+  secret values were logged or screenshotted.
+- An initial browser session retained first-run wizard state; a fresh
+  `agent-browser` session captured the correct dashboard state.
+
+---
+
 ## Entry 094 — 2026-05-30
 
 **Agent:** GPT-5 Codex (Nightglass, shxdowloop orchestrator)
