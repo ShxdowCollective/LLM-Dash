@@ -1,6 +1,57 @@
 # LLM-Dash Logbook
-
 Casual handoff notes. Newest first.
+
+---
+
+## Entry 097 — 2026-05-31
+
+**Agent:** Kilo (main agent, planning only)
+**Cycle:** Milestone 11
+**Task:** Draft the full Milestone 11 frontend redesign plan
+
+---
+
+Drafted the Milestone 11 full-redesign plan from the existing e2e audit and
+the four active TODO items. No code, CSS, or `web/app.js` changes were made
+in this pass.
+
+- Wrote [`docs/plans/2026-05-31-m11-full-redesign-plan.md`](../plans/2026-05-31-m11-full-redesign-plan.md)
+  covering tokens, typography, color, motion, layout, Models table + chart
+  redesign, Changelog polish, Stats low-data states, Settings composition,
+  and cross-cutting score / freshness / drawer / accessibility rules.
+- Replaced the previous Milestone 11 polish task block in `TODO.md` with
+  the seven-phase redesign task list. The old polish plan is preserved at
+  `docs/plans/2026-05-31-e2e-ui-ux-polish-implementation-plan.md` for
+  history; all of its acceptance criteria are absorbed into the redesign
+  phases.
+- The chart redesign section explicitly addresses the audit finding that
+  the current chart surface reads as a wider table. It introduces X/Y
+  axis selectors, scatter + radar modes (hand-rolled SVG), a right-side
+  selection panel with a radar mini-chart, a comparison strip for up to
+  four selected models, and a provider legend. Mobile degrades to a
+  2-model comparison list, not a canvas.
+- The models controls compression is scoped to a single 48px toolbar row
+  at 390 / 768 with the sort reduced to a single chip + dropdown, filters
+  + search collapsed into disclosures, and the first model card visible
+  above the fold.
+- The plan does not change benchmark data, changelog history, the
+  Voidware 1.0.1 vendored package, backend scripts, or the provider
+  approval flow. It is a frontend-only redesign with explicit non-scope.
+
+Verification:
+
+- Read-only planning pass; ran `git diff --check` (clean) and a quick
+  `git status` to confirm no working-tree changes outside
+  `TODO.md`, `LOGBOOK.md`, and the new plan file.
+
+Helpers:
+
+- None. Planning-only pass; no nano-agent dispatches were needed.
+
+Next:
+
+- Begin Phase 1 (tokens and shell) in a fresh shxdowloop run, with the
+  chart redesign and the mobile/tablet compression in parallel lanes.
 
 ---
 

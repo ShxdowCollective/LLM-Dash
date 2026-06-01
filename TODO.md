@@ -7,23 +7,48 @@ Use `[ ]` only for still-open work.
 
 ## Now
 
-### Milestone 11 — E2E UI/UX polish follow-up
+### Milestone 11 — Full frontend redesign
 
-**Status:** Planned from the 2026-05-31 screenshot audit.
+**Status:** Plan drafted 2026-05-31. Supersedes the previous E2E UI/UX polish
+follow-up; every active item from that queue is rolled into the redesign
+phases below. Implementation has not started; the planning entry and plan
+document are the only artifacts so far.
 
 Active tasks:
 
-- [ ] Redesign Models Chart as a real visual analysis view: axis selectors,
-  scatter/radar modes, model details panel, and meaningful chart interactions
-  instead of another widened table/card list.
-- [ ] Compress Models controls on tablet/mobile so leaderboard content appears
-  in the first viewport at `390px` and `768px`.
-- [ ] Recompose Settings and Stats low-data states with clearer primary actions,
-  status placement, and actionable empty guidance.
-- [ ] Tighten score encoding, Changelog polish, stale freshness tone, and mobile
-  drawer/footer rhythm.
+- [ ] **Phase 1 — Tokens and shell.** Add `--llm-*` tokens (tier colors,
+  freshness tones, shell sizes, spacing). Rebuild sidebar, mobile header,
+  drawer, page header rhythm. Refreshment tone (fresh / stale / never /
+  error). Sidebar + drawer footer rhythm. Disabled state distinction.
+- [ ] **Phase 2 — Models Table and toolbar.** Replace the sort chip grid
+  with a sort rail + filter/search disclosure. New column structure, score
+  cell with tier letter square. Compress mobile/tablet so the first model
+  card is visible at `390px` and `768px`.
+- [ ] **Phase 3 — Models Chart redesign.** Replace the row-based scorecard
+  list with a real analysis surface: X/Y axis selectors, scatter + radar
+  modes (hand-rolled SVG), legend by provider, right-side selection panel,
+  comparison strip. Empty / loading / mobile graceful degrade.
+- [ ] **Phase 4 — Changelog polish.** Shrink one-entry rails, strip the
+  duplicate markdown H1 when it matches the panel header, reduce redundant
+  purple accent depth between rail and detail.
+- [ ] **Phase 5 — Stats low-data states.** Action-oriented empty states for
+  0 / 1 / filtered-empty / N runs. Pluralization fix (`1 run` vs
+  `N runs`). Card rebalance so Words is not stranded. `—` instead of `0`
+  for null fields. Chart axis contrast + description lines.
+- [ ] **Phase 6 — Settings composition.** Deduplicate subpage vs card
+  title. Inline action row with status chip. Form helpers and disabled
+  distinction. Backup model helper line, credential label cleanup.
+- [ ] **Phase 7 — Score encoding, accessibility, verification.** Tier
+  letter + number on every score surface, tooltip on tier letter. Focus
+  ring audit, contrast audit, keyboard pass. Headed `agent-browser`
+  screenshot matrix at `1280x800`, `768x600`, `1280x640`, `390x844`,
+  plus drawer. `node --check web/app.js`, full Python test suite,
+  `git diff --check`.
 
-Reference: [`docs/plans/2026-05-31-e2e-ui-ux-polish-implementation-plan.md`](docs/plans/2026-05-31-e2e-ui-ux-polish-implementation-plan.md).
+Reference:
+[`docs/plans/2026-05-31-m11-full-redesign-plan.md`](docs/plans/2026-05-31-m11-full-redesign-plan.md).
+The earlier polish plan is preserved for history at
+[`docs/plans/2026-05-31-e2e-ui-ux-polish-implementation-plan.md`](docs/plans/2026-05-31-e2e-ui-ux-polish-implementation-plan.md).
 
 ### Milestone 10 — Voidware 1.0.1 package import and CSS rebuild
 
