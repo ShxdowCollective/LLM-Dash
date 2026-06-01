@@ -3,6 +3,73 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 098 — 2026-05-31
+
+**Agent:** Kilo (main agent, plan review)
+**Cycle:** Milestone 11
+**Task:** Review the M11 full-redesign plan for production-SaaS UI/UX gaps
+
+---
+
+Reviewed `docs/plans/2026-05-31-m11-full-redesign-plan.md` against the
+production-SaaS rubric and identified 17 gaps. All were folded into the plan
+as targeted additions; no existing design decisions were changed.
+
+Improvements added:
+
+- **Toast / notification system** — fixed-position stack, success/error/info
+  variants, auto-dismiss, ARIA roles. Covers CSV export, Settings save,
+  refresh lifecycle, and new-data notifications.
+- **Error states and recovery** — defined error surfaces for Table, Chart,
+  Changelog, Stats, and Settings. Every data surface now has a Retry CTA
+  instead of a blank panel on failure. Added a global offline banner tied
+  to `navigator.onLine`.
+- **Keyboard shortcuts panel** — `?` opens a modal listing all shortcuts
+  in a two-column grid. Covers navigation, table, and general groups.
+- **Unsaved changes guard** — confirmation dialog when navigating away from
+  dirty Settings forms. Uses the Voidware modal pattern, not
+  `beforeunload`.
+- **Confirmation dialogs** — for destructive actions like Remove Key.
+- **Screen reader announcements** — `aria-live` region for route changes,
+  sort direction, filter count, refresh lifecycle, and chart selection.
+- **`prefers-reduced-motion`** — all transitions collapse to 0ms; drawer
+  slide, skeleton animation, and decorative motion are disabled.
+- **Sort direction indicator** — caret glyph (▲/▼) on the active sort chip;
+  click-to-toggle asc/desc.
+- **Search UX** — 200ms debounce, `<mark>` match highlighting, empty-results
+  state with clear-search button.
+- **Table empty states** — 0-models state with `Run Refresh` CTA;
+  filter-empty state with `Clear filters`.
+- **Mobile card interaction fix** — replaced the undiscoverable long-press
+  gesture with a visible `+` icon button for comparison selection.
+- **Changelog rail search** — search input appears when >10 entries;
+  filters by date, title, and summary.
+- **Filter / UI state persistence** — `localStorage`-backed persistence for
+  sort, filters, chart axes, and stats range. `Reset view` button to
+  clear.
+- **Print styles** — `@media print` rules for clean monochrome output with
+  tier letters preserved as text.
+- **Chart resize debounce** — 150ms `ResizeObserver` debounce to prevent
+  SVG re-paint jank.
+- **Comparison strip mobile behavior** — 2-up vertical stack below 768px,
+  half-sheet detail panel, `Compare all` button.
+- **Settings inline validation** — required-field and URL-format validation
+  on blur, inline Test Connection result display.
+
+Updated phases, file map, acceptance criteria, and risks to reflect the
+additions. No code, CSS, or `web/app.js` changes were made.
+
+Verification:
+
+- Read-only review pass; ran `git diff --check` (clean before edits).
+
+Next:
+
+- Begin Phase 1 (tokens, shell, toast system, shortcuts, a11y) in a fresh
+  implementation run.
+
+---
+
 ## Entry 097 — 2026-05-31
 
 **Agent:** Kilo (main agent, planning only)
