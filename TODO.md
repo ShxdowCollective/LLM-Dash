@@ -13,15 +13,15 @@ Use `[ ]` only for still-open work.
 
 Active tasks:
 
+- [ ] Redesign Models Chart as a real visual analysis view: axis selectors,
+  scatter/radar modes, model details panel, and meaningful chart interactions
+  instead of another widened table/card list.
 - [ ] Compress Models controls on tablet/mobile so leaderboard content appears
   in the first viewport at `390px` and `768px`.
-- [ ] Recompose Settings Connection/Models screens with clearer primary
-  actions, status placement, and sparse-state support context.
-- [ ] Replace passive Stats low-data placeholders with action-oriented empty
-  states and polish one-run formatting.
-- [ ] Reduce color-only score encoding and tighten table/chart/mobile scoring
-  readability.
-- [ ] Polish Changelog, stale freshness state, and mobile drawer footer rhythm.
+- [ ] Recompose Settings and Stats low-data states with clearer primary actions,
+  status placement, and actionable empty guidance.
+- [ ] Tighten score encoding, Changelog polish, stale freshness tone, and mobile
+  drawer/footer rhythm.
 
 Reference: [`docs/plans/2026-05-31-e2e-ui-ux-polish-implementation-plan.md`](docs/plans/2026-05-31-e2e-ui-ux-polish-implementation-plan.md).
 

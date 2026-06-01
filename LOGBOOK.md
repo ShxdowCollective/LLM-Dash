@@ -4,6 +4,26 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 096 — 2026-05-31
+
+**Agent:** GPT-5 Codex (Cinderline, planning polish)
+**Cycle:** Milestone 11
+**Task:** Add real Chart redesign requirement
+
+---
+
+Updated the UX/UI polish milestone so Models Chart is explicitly a redesign,
+not a table/card-list widening pass.
+
+- Condensed `TODO.md` Milestone 11 into four current work items.
+- Added the chart requirement to the final audit issue list:
+  `docs/plans/e2e-analysis/final-master-issue-list.md`.
+- Added a dedicated implementation-plan phase for a real analysis surface:
+  X/Y axis selectors, scatter/radar modes, selectable model points, provider
+  legend, and a model details panel.
+
+---
+
 ## Entry 095 — 2026-05-31
 
 **Agent:** GPT-5 Codex (Silverthread, UI audit)
