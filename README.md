@@ -14,7 +14,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org)
 [![sql.js](https://img.shields.io/badge/sql.js-WASM-4B32C3)](https://sql.js.org)
-[![voidware](https://img.shields.io/badge/voidware-v1.0.1-7c5cc4)](https://github.com/shxdow)
+[![voidware](https://img.shields.io/badge/voidware-v1.0.4-7c5cc4)](https://github.com/shxdow)
 [![License: MIT](https://img.shields.io/badge/license-MIT-a6f17b)](LICENSE)
 [![OpenAI Agents SDK](https://img.shields.io/badge/OpenAI_Agents-SDK-412991?logo=openai&logoColor=white)](https://github.com/openai/openai-agents-python)
 <a href="https://buymeacoffee.com/shxdowenby">
@@ -39,14 +39,13 @@
 - **Models leaderboard** — sortable table with five benchmark dimensions
   (intelligence, coding, agent capability, speed, cost), tier grades S–F, and
   per-vendor color coding.
-- **Interactive charts** — horizontal bar comparisons powered by uPlot.
-- **Changelog timeline** — append-only daily entries rendered from Markdown,
-  with full-text search.
+- **Interactive charts** — scatter and radar comparisons with selectable model
+  profiles.
+- **Changelog timeline** — append-only daily entries rendered from Markdown.
 - **Stats & analytics** — token usage, cost tracking, duration metrics, and
   per-agent breakdowns across every update run.
-- **Setup wizard** — first-run walkthrough configures your BYOK provider,
-  models, Exa API key, optional LLM Stats enrichment, and OS-level scheduling
-  in under two minutes.
+- **Settings-first setup** — local subpages configure your BYOK provider,
+  models, Exa API key, optional LLM Stats enrichment, and OS-level scheduling.
 - **Agent-agnostic updates** — any AI agent (Claude, Codex, Gemini, etc.)
   follows `skill/SKILL.md` to research, score, and commit new data.
 - **Zero build runtime** — vanilla HTML/CSS/JS served by a tiny FastAPI server.
@@ -110,13 +109,14 @@ run.bat --reset               # Windows
 ```
 
 Clears local provider/schedule settings, deletes generated dashboard data and
-run logs, restarts from the bootstrap seed, and opens the setup wizard.
+run logs, restarts from the bootstrap seed, clears saved UI preferences, and
+opens Settings.
 Historical `changelogs/*.md`, Voidware broker grants/secrets, legacy
 `~/.shxdow/auth.json`, and keyring/keystore secrets are left alone.
 
-Saved Voidware credentials use the local Voidware 1.0.1 package and CLI service bridge.
-For source-tree testing, keep `/home/phxntom/Repos/voidware/packages/cli/dist`
-built or set `VOIDWARE_CLI_SERVICE_MODULE` to the built service entry.
+Saved Voidware credentials use the local Voidware 1.0.4 package and CLI service bridge.
+For source-tree testing, set `VOIDWARE_CLI_SERVICE_MODULE` to the built
+Voidware CLI service entry.
 
 ### Desktop Shortcuts
 
@@ -134,8 +134,8 @@ provider, research, and schedule configuration.
 
 ### Automated (Agent Provider)
 
-After completing the setup wizard, click **Refresh** in the dashboard
-sidebar footer.
+After configuring the Provider and Models Settings, click **Refresh** in the
+dashboard sidebar footer.
 The app dispatches `skill/SKILL.md` to your configured provider via the OpenAI
 Agents SDK. Progress streams live in an overlay.
 
@@ -159,9 +159,9 @@ codex  (Get-Clipboard)
 
 ### Scheduled
 
-The setup wizard can install an OS-level scheduled job (systemd timer, launchd
-plist, or Windows Task Scheduler) to run updates automatically — daily, weekly,
-or monthly.
+The Schedule Settings subpage can install an OS-level scheduled job (systemd
+timer, launchd plist, or Windows Task Scheduler) to run updates automatically
+— daily, weekly, or monthly.
 
 ## Project Layout
 
@@ -173,7 +173,7 @@ LLM-Dash/
 │
 ├── web/                   # Static frontend (vanilla HTML/CSS/JS)
 │   ├── index.html
-│   ├── style.css          # App-specific Voidware 1.0.1 app layer
+│   ├── style.css          # App-specific Voidware 1.0.4 app layer
 │   ├── app.js             # sql.js bootstrap, state, rendering
 │   └── vendor/            # Vendored libs (sql-wasm, marked, uPlot)
 │
@@ -219,7 +219,7 @@ LLM-Dash/
 | LAN access not working | Start with `LLM_DASH_HOST=0.0.0.0` and allow the port through your firewall |
 | Browser didn't open | Copy the URL from terminal output and open manually |
 | First-run spinner hangs | Check `logs/server.log` and `scripts/init_db.py` output |
-| Setup wizard won't connect | Verify your API key and base URL; check the "Test Connection" result |
+| Provider connection fails | Verify your API key and base URL; check the Settings "Test connection" result |
 
 ## Documentation
 

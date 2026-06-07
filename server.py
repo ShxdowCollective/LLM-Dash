@@ -647,6 +647,8 @@ def post_exa(payload: ExaPayload) -> dict[str, Any]:
     try:
         save_exa_api_key(payload.api_key)
         return {"exa_configured": True}
+    except voidware_auth.VoidwareAuthError as exc:
+        raise _voidware_auth_http_error(exc) from exc
     except ConfigError as exc:
         raise _http_error(exc)
 
@@ -667,6 +669,8 @@ def post_llmstats(payload: LLMStatsPayload) -> dict[str, Any]:
     try:
         save_llmstats_api_key(payload.api_key)
         return {"llmstats_configured": True}
+    except voidware_auth.VoidwareAuthError as exc:
+        raise _voidware_auth_http_error(exc) from exc
     except ConfigError as exc:
         raise _http_error(exc)
 

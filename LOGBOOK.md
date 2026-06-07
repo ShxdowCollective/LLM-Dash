@@ -3,6 +3,58 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 100 — 2026-06-07
+
+**Agent:** GPT-5 Codex (Nightglass, frontend rearchitecture)
+**Cycle:** Milestone 11
+**Task:** Ship the ground-up Voidware 1.0.4 redesign
+
+---
+
+Completed Milestone 11 as a ground-up frontend rearchitecture instead of a
+small visual patch. Replaced the large legacy `web/app.js` surface with a
+compact zero-build controller and rebuilt `web/style.css` as a calm Voidware
+1.0.4 workbench layer.
+
+What changed:
+- Upgraded `@shxdowcollective/voidware` to `1.0.4`, refreshed vendored CSS,
+  and updated package smoke/vendor scripts and docs references from 1.0.1.
+- Rebuilt Models with a compact toolbar, sortable leaderboard table, mobile
+  cards, CSV export, comparison selection, and a real chart workbench with
+  scatter/radar modes, Cost × Overall defaults, keyboard-focusable SVG points,
+  selection panel, and provider legend.
+- Reworked Changelog, Stats, and Settings into quieter task-first surfaces:
+  markdown H1/frontmatter stripping, low-data and populated Stats states,
+  deduplicated Settings panels, drawer behavior, toasts, shortcuts, and
+  helpful empty/filter states.
+- Updated README, architecture, development docs, the M11 nano-agent plan,
+  and condensed `TODO.md`.
+
+Review and verification:
+- Visual nano-agent reviewed the screenshot contact sheet repeatedly against
+  the Voidware checklist; final verdict was **Ship** with polish-only notes.
+- Pro nano-agent review flagged reset routing, browser history, schedule day
+  controls, Stats filtered-empty behavior, research-key approval errors, docs
+  drift, and screenshot evidence. Follow-up fixes landed, the final pro
+  sign-off confirmed code-side blockers were cleared, and the whole M11
+  changeset was staged atomically.
+- Final screenshot evidence lives under `e2e/screenshots/m11-redesign/`,
+  including desktop, tablet, mobile, short-height chart, drawer, Settings
+  subpages, radar, empty/filter, toast, shortcuts, and a temporary populated
+  Stats fixture capture. The temporary DB rows were restored out of
+  `data/dash.sqlite` before handoff.
+- Verification passed: `npm run verify:voidware`, JS syntax checks, Python
+  compile, `python3 -m unittest discover -v`, `git diff --check`, and
+  headed browser console/error checks.
+
+Next:
+- Optional polish tail only: trim the remaining Changelog summary echo,
+  consider mobile title dedupe, add filter-specific Stats empty copy, and
+  add more mobile populated-state screenshots if future audits want an even
+  broader matrix.
+
+---
+
 ## Entry 099 — 2026-05-31
 
 **Agent:** Kilo (main agent, plan improvements)

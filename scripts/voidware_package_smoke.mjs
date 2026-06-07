@@ -8,6 +8,7 @@ const PKG_ROOT = join(ROOT, 'node_modules/@shxdowcollective/voidware')
 const PKG_CSS = join(PKG_ROOT, 'src/css')
 const VENDOR_DIR = join(ROOT, 'web/vendor/voidware')
 const IMPORT_RE = /@import\s+url\(["']([^"']+)["']\)/g
+const EXPECTED_VOIDWARE_VERSION = '1.0.4'
 
 const RUNTIME_EXPORTS = [
   '@shxdowcollective/voidware/auth',
@@ -41,8 +42,8 @@ function assertPackageInstalled() {
     throw new Error('Missing node_modules/@shxdowcollective/voidware. Run npm ci first.')
   }
   const pkg = JSON.parse(readFileSync(join(PKG_ROOT, 'package.json'), 'utf8'))
-  if (pkg.version !== '1.0.1') {
-    throw new Error(`Expected @shxdowcollective/voidware@1.0.1, found ${pkg.version}`)
+  if (pkg.version !== EXPECTED_VOIDWARE_VERSION) {
+    throw new Error(`Expected @shxdowcollective/voidware@${EXPECTED_VOIDWARE_VERSION}, found ${pkg.version}`)
   }
   return pkg.version
 }

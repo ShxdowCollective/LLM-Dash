@@ -66,7 +66,7 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 | `LLM_DASH_API_KEY` | — | Provider API key; takes precedence over broker/legacy stores |
 | `LLM_DASH_DEFAULT_MODEL` | — | Default model for Agent Provider updates |
 | `LLM_DASH_SHXDOW_ROOT` | `~/.shxdow` | Isolated config/auth root for tests |
-| `EXA_API_KEY` | — | Exa search API key (alternative to wizard config) |
+| `EXA_API_KEY` | — | Exa search API key (alternative to Settings config) |
 | `LLM_STATS_API_KEY` | — | Optional LLM Stats enrichment key |
 | `LLM_DASH_LLMSTATS_API_KEY` | — | Alternate LLM-Dash-specific LLM Stats key |
 
@@ -81,7 +81,7 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 | `server.py` | FastAPI app: static mounts, API routes, bootstrap, job management |
 | `scripts/config.py` | Provider config + credential pipeline (env → selected Voidware provider → Voidware broker; legacy keyring reads are migration-only) |
 | `scripts/voidware_auth.py` | Python controller for Voidware provider discovery, app-owned approval bridge lifecycle, and broker-backed provider/Exa/LLM Stats API keys |
-| `scripts/voidware_app_broker.mjs` | Node worker that imports Voidware 1.0.1 package/CLI service APIs and hosts LLM-Dash-owned approval prompts |
+| `scripts/voidware_app_broker.mjs` | Node worker that imports Voidware 1.0.4 package/CLI service APIs and hosts LLM-Dash-owned approval prompts |
 | `scripts/vendor_voidware_css.mjs` | Copies `@shxdowcollective/voidware` CSS into `web/vendor/voidware/` and refreshes provenance |
 | `scripts/voidware_package_smoke.mjs` | Verifies package CSS sources and runtime exports (`auth`, `auth-templates`, `logging`) |
 | `scripts/init_db.py` | First-run DB creation from `schema.sql` + 34-model seed |
@@ -97,9 +97,9 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 | File | Responsibility |
 |---|---|
 | `web/index.html` | App shell, font imports, mount points |
-| `web/style.css` | App-specific Voidware 1.0.1 app layer and component styles |
-| `web/app.js` | sql.js bootstrap, route state, area renderers, wizard, overlays |
-| `web/provider-presets.json` | Static catalog of provider presets for the setup wizard |
+| `web/style.css` | App-specific Voidware 1.0.4 app layer and component styles |
+| `web/app.js` | sql.js bootstrap, route state, area renderers, Settings workflows, overlays |
+| `web/provider-presets.json` | Static catalog of provider presets kept for API compatibility |
 | `web/vendor/` | Vendored libraries (sql-wasm, marked.js, uPlot) — committed, not installed |
 
 ### Data
@@ -147,7 +147,7 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 
 ### CSS
 
-- Voidware v1.0.1 is pinned in `package.json`; committed runtime CSS is still
+- Voidware v1.0.4 is pinned in `package.json`; committed runtime CSS is still
   vendored under `web/vendor/voidware/` for the zero-build launcher contract.
   Refresh it from the installed package with:
 
@@ -286,13 +286,13 @@ The `## Run Metadata` footer is **required**. The Stats page joins
 
 ## Provider Presets
 
-The setup wizard loads `web/provider-presets.json` for one-click provider
-configuration. To add a new preset:
+`web/provider-presets.json` remains the static catalog served by
+`/api/provider-presets`. To add or update a preset:
 
 1. Edit `web/provider-presets.json`
 2. Follow the existing shape: `name`, `base_url`, `endpoint_mode`, `docs_url`,
    `model_examples`, and optional `models_override_url`
-3. Test the wizard flow end-to-end with the new preset
+3. Test the provider API and Settings connection flow with the new preset data
 
 ---
 

@@ -347,5 +347,5 @@ gemini "<paste>"
 ```
 
 Scheduled: an OS-level scheduled job (systemd timer on Linux/WSL, launchd on
-macOS, Task Scheduler on Windows) installed by the setup wizard runs
+macOS, Task Scheduler on Windows) installed from Settings runs
 `scripts/run_update.py` at the configured cadence with the same prompt.

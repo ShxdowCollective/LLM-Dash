@@ -371,6 +371,231 @@
   animation: vw-slide-in-right 220ms ease;
 }
 
+/* ── App-Shell / Chat Primitives ───────────────────────── */
+
+.vw-app-workspace {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  block-size: 100%;
+  min-height: 100%;
+  min-width: 0;
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--vw-page-accent, var(--vw-accent)) 14%, transparent), transparent 34%),
+    var(--vw-bg);
+}
+
+.vw-app-topbar,
+.vw-chat-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 12px 20px;
+  background: color-mix(in srgb, var(--vw-bg-soft) 86%, transparent);
+  box-shadow: inset 0 -1px 0 var(--vw-border);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.vw-app-topbar-main,
+.vw-chat-topbar-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.vw-app-topbar-actions,
+.vw-chat-topbar-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.vw-chat-topic {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--vw-text);
+  font-size: 14px;
+  font-weight: var(--vw-weight-semibold);
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vw-chat-subtopic {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--vw-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vw-setup-shell,
+.vw-chat-shell {
+  display: grid;
+  block-size: 100%;
+  min-height: 100%;
+  min-width: 0;
+}
+
+.vw-setup-shell {
+  place-items: center;
+  padding: 40px 24px;
+}
+
+.vw-setup-content {
+  display: grid;
+  gap: 18px;
+  width: min(var(--vw-setup-max-width), 100%);
+}
+
+.vw-setup-panel {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+  border-radius: var(--vw-radius-lg);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--vw-surface-1) 90%, var(--vw-page-accent, var(--vw-accent)) 10%), var(--vw-surface-1));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--vw-border) 72%, var(--vw-page-accent, var(--vw-accent)) 28%), var(--vw-shadow-sm);
+}
+
+.vw-chat-shell {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.vw-chat-transcript {
+  --vw-scroll-shadow-bg: var(--vw-bg);
+
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-height: 0;
+  padding: 20px 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.vw-chat-transcript-inner {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  width: min(var(--vw-chat-max-width), 100%);
+  margin-inline: auto;
+}
+
+.vw-chat-message {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.vw-chat-message[data-vw-align="end"] {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.vw-chat-message[data-vw-align="end"] .vw-chat-message-avatar {
+  order: 2;
+}
+
+.vw-chat-message-avatar {
+  width: 32px;
+  height: 32px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 9999px;
+  color: var(--vw-chat-avatar-fg, var(--vw-text));
+  background: var(--vw-chat-avatar-bg, var(--vw-surface-3));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--vw-border) 72%, var(--vw-page-accent, var(--vw-accent)) 28%);
+  font-size: 11px;
+  font-weight: var(--vw-weight-bold);
+  line-height: 1;
+}
+
+.vw-chat-message-body {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  max-width: 64ch;
+  padding: 12px 14px;
+  border-radius: var(--vw-radius-md);
+  color: var(--vw-text-soft);
+  background: var(--vw-surface-1);
+  box-shadow: 0 0 0 1px var(--vw-border);
+}
+
+.vw-chat-message[data-vw-align="end"] .vw-chat-message-body {
+  justify-self: end;
+  color: var(--vw-text);
+  background: color-mix(in srgb, var(--vw-surface-1) 84%, var(--vw-page-accent, var(--vw-accent)) 16%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--vw-border) 70%, var(--vw-page-accent, var(--vw-accent)) 30%);
+}
+
+.vw-chat-message-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--vw-text-muted);
+  font-size: 11px;
+  font-weight: var(--vw-weight-medium);
+  line-height: 1.3;
+}
+
+.vw-chat-message-text {
+  margin: 0;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.vw-chat-composer {
+  display: grid;
+  gap: 10px;
+  width: min(var(--vw-chat-max-width), calc(100% - 48px));
+  margin: 0 auto 20px;
+  padding: 12px;
+  border-radius: var(--vw-radius-lg);
+  background: color-mix(in srgb, var(--vw-surface-1) 92%, var(--vw-page-accent, var(--vw-accent)) 8%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--vw-border) 72%, var(--vw-page-accent, var(--vw-accent)) 28%), var(--vw-shadow-sm);
+}
+
+.vw-chat-composer-input {
+  min-height: 78px;
+  resize: vertical;
+}
+
+.vw-chat-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.vw-chat-control-group {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.vw-chat-empty-state {
+  width: min(var(--vw-chat-max-width), 100%);
+  margin: auto;
+}
+
 /* ── Error Banner ────────────────────────────────────────── */
 
 .vw-error-banner {

@@ -1,12 +1,12 @@
 # Vendored Voidware CSS
 
 - Package: `@shxdowcollective/voidware`
-- Version: `1.0.1`
+- Version: `1.0.4`
 - Source path: `node_modules/@shxdowcollective/voidware/src/css`
-- Source tarball: `https://npm.pkg.github.com/download/@shxdowcollective/voidware/1.0.1/0a16ee75814e74df12d1d252a55e2d0a745bb66a`
-- Tarball integrity: `sha512-Z0CR5xlg6qsDmRsye6gagbtiNpDrsLTb1CZ/+cs9KOWmLINjf8/2Qi9MkCREILz8QGQtTT1+0ZyjjiVmr97JVA==`
+- Source tarball: `https://npm.pkg.github.com/download/@shxdowcollective/voidware/1.0.4/6b9879cd6ac4c7b08cc12da0d3be3b4e237a9194`
+- Tarball integrity: `sha512-7TCBa5tWBKl+h55U8qGFpHi2GaSZSUlGVNYQoEYXTeqOfZuU7cGP0C8Z3ZAiSaVS6a18pDCqUeaznAhmTF3YEw==`
 - Refresh command: `node scripts/vendor_voidware_css.mjs`
-- Copied: `2026-05-30`
+- Copied: `2026-06-07`
 - License: `Apache-2.0`; vendored for the zero-build LLM-Dash static runtime.
 
 ## Files

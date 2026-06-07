@@ -94,6 +94,10 @@
   .vw-path-row {
     grid-template-columns: minmax(104px, 0.32fr) minmax(0, 1fr) auto;
   }
+
+  .vw-chat-composer {
+    width: min(var(--vw-chat-max-width), calc(100% - 40px));
+  }
 }
 
 @media (max-width: 767px) {
@@ -291,6 +295,9 @@
 
   .vw-settings-group-header {
     display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
   }
 
   /* Rail hidden on mobile */
@@ -312,12 +319,71 @@
     padding: 10px 14px;
   }
 
+  .vw-app-topbar,
+  .vw-chat-topbar {
+    align-items: start;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .vw-app-topbar-main,
+  .vw-chat-topbar-main {
+    flex: 1 1 100%;
+  }
+
+  .vw-app-topbar-actions,
+  .vw-chat-topbar-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .vw-chat-topic,
+  .vw-chat-subtopic {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
   .vw-chat-transcript {
     padding: 16px;
   }
 
+  .vw-chat-transcript-inner {
+    gap: 12px;
+  }
+
+  .vw-chat-message,
+  .vw-chat-message[data-vw-align="end"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vw-chat-message-avatar {
+    display: none;
+  }
+
+  .vw-chat-message-body,
+  .vw-chat-message[data-vw-align="end"] .vw-chat-message-body {
+    justify-self: stretch;
+    max-width: none;
+  }
+
+  .vw-chat-composer {
+    width: calc(100% - 32px);
+    margin-bottom: 16px;
+  }
+
+  .vw-chat-composer-input {
+    resize: none;
+  }
+
   .vw-chat-controls {
+    display: grid;
+    justify-content: stretch;
     padding: 8px 14px;
+  }
+
+  .vw-chat-control-group {
+    justify-content: space-between;
   }
 
   /* Font size adjustments */

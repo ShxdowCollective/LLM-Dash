@@ -7,7 +7,7 @@
   <link rel="icon" href="data:," />
   <link rel="stylesheet" href="vendor/uPlot.min.css" />
   <link rel="stylesheet" href="vendor/voidware/index.css" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=m11-20260607j" />
   <script src="vendor/sql-wasm.js"></script>
   <script src="vendor/marked.min.js"></script>
   <script src="vendor/uPlot.iife.min.js"></script>
@@ -45,6 +45,7 @@
         </svg>
       </button>
       <div class="sidebar-brand">
+        <p class="shell-kicker">Local benchmark workbench</p>
         <h1>LLM-Dash</h1>
       </div>
 
@@ -108,7 +109,7 @@
       </div>
     </aside>
 
-    <section id="content" class="vw-page-content app-content" tabindex="-1" aria-live="polite">
+    <section id="content" class="vw-page-content app-content" tabindex="-1">
       <header id="page-header" class="app-page-header"></header>
       <nav id="subpage-nav" class="vw-subpage-nav" aria-label="Sub-pages">
         <button class="vw-subpage-nav-link view-btn" type="button" data-area="models" data-view="table" aria-current="page">Table</button>
@@ -124,6 +125,7 @@
     </section>
   </main>
   <div id="overlay-root" aria-live="polite"></div>
-  <script src="app.js"></script>
+  <div id="toast-root" aria-live="polite"></div>
+  <script type="module" src="app.js?v=m11-20260607j"></script>
 </body>
 </html>

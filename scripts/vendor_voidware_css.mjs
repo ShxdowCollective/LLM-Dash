@@ -17,6 +17,7 @@ const PKG_CSS = join(PKG_ROOT, 'src/css')
 const VENDOR_DIR = join(ROOT, 'web/vendor/voidware')
 const EXCLUDE = new Set(['theme-template.css'])
 const IMPORT_RE = /@import\s+url\(["']([^"']+)["']\)/g
+const EXPECTED_VOIDWARE_VERSION = '1.0.4'
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'))
@@ -113,8 +114,8 @@ function main() {
   const sourceDir = resolvePackageCssDir()
   const pkg = readJson(join(PKG_ROOT, 'package.json'))
   const version = String(pkg.version || '')
-  if (version !== '1.0.1') {
-    throw new Error(`Expected @shxdowcollective/voidware@1.0.1, found ${version || 'unknown version'}`)
+  if (version !== EXPECTED_VOIDWARE_VERSION) {
+    throw new Error(`Expected @shxdowcollective/voidware@${EXPECTED_VOIDWARE_VERSION}, found ${version || 'unknown version'}`)
   }
 
   const copiedFiles = copyCssFiles(sourceDir)

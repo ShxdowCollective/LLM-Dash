@@ -2,7 +2,7 @@
 # LLM-Dash — POSIX launcher.
 # Creates/uses a repo-local .venv, installs deps, starts uvicorn, opens the browser.
 # Use --silent to detach the server and print the URL for startup tasks.
-# Use --reset to clear local settings/data and open the setup wizard.
+# Use --reset to clear local settings/data and open Settings.
 
 set -euo pipefail
 
@@ -48,7 +48,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "${SILENT}" -eq 1 ] && [ "${RESET}" -eq 1 ]; then
-  echo "LLM-Dash: --reset opens the setup wizard and cannot be combined with --silent." >&2
+  echo "LLM-Dash: --reset opens Settings and cannot be combined with --silent." >&2
   exit 2
 fi
 

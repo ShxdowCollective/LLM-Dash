@@ -73,7 +73,7 @@ function resolveServiceModule() {
     if (existsSync(absolute)) return absolute
   }
   throw Object.assign(
-    new Error('Voidware 1.0.1 CLI bridge unavailable. Run npm ci, build packages/cli from a local voidware checkout, or set VOIDWARE_CLI_SERVICE_MODULE to the CLI service entrypoint.'),
+    new Error('Voidware 1.0.4 CLI bridge unavailable. Run npm ci, build packages/cli from a local voidware checkout, or set VOIDWARE_CLI_SERVICE_MODULE to the CLI service entrypoint.'),
     { code: 'bridge_unavailable' },
   )
 }
@@ -95,7 +95,7 @@ async function loadService() {
     'AuthService',
   ]
   for (const key of required) {
-    if (!(key in loaded)) throw Object.assign(new Error(`Voidware service module is missing ${key}. Install @shxdowcollective/voidware@1.0.1 and point VOIDWARE_CLI_SERVICE_MODULE at a Voidware CLI service build.`), { code: 'bridge_unavailable' })
+    if (!(key in loaded)) throw Object.assign(new Error(`Voidware service module is missing ${key}. Install @shxdowcollective/voidware@1.0.4 and point VOIDWARE_CLI_SERVICE_MODULE at a Voidware CLI service build.`), { code: 'bridge_unavailable' })
   }
   service = { ...loaded, modulePath }
   return service

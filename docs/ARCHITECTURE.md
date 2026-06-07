@@ -67,13 +67,13 @@ in-progress update. Killing the agent doesn't affect the dashboard.
 | Frontend | Vanilla HTML / CSS / JS | Zero-build constraint; no npm at runtime |
 | SQL in browser | sql.js (SQLite-WASM) | Real SQL for complex filtering without a server round-trip |
 | Markdown rendering | marked.js | Tiny, single-file, zero dependencies |
-| Charts | uPlot 1.6.31 | 52 KB vendored; time-series with hover readouts |
+| Charts | SVG + CSS mini-bars | SVG powers the model scatter/radar surface; lightweight CSS bars summarize run telemetry |
 | Local server | FastAPI + uvicorn | Needed for API routes; bare `http.server` can't do `/api/*` |
 | Agent execution | OpenAI Agents SDK | BYOK-compatible; runs against any OpenAI-compatible endpoint |
 | Research | Exa (preferred) | Structured search + content fetch with citation control |
 | Credential storage | Env → Voidware provider credential → Voidware app broker → legacy keyring | Secrets stay outside repo/API responses; selected provider credentials use broker grants with renewal metadata |
 | Scheduling | OS-native jobs | systemd timer (Linux/WSL), launchd (macOS), Task Scheduler (Windows) |
-| Design system | Voidware v1.0.1 | Package-pinned dark-native surfaces, sidebar app shell, and iridescent accent system |
+| Design system | Voidware v1.0.4 | Package-pinned dark-native surfaces, sidebar app shell, and iridescent accent system |
 
 ---
 
@@ -165,10 +165,10 @@ changelogs 1──1 run_metrics (via changelog_date)
 
 | View | Purpose | Primary Data Source |
 |---|---|---|
-| **Table** | Sortable model leaderboard with score cells, tier badges, inline trend sparklines, detail panel with multi-series score-history chart and Markdown report export | `v_models_latest`, `model_scores` |
-| **Chart** | Horizontal bar comparison across models | `v_models_latest` |
-| **Changelog** | Date list + rendered Markdown body, plus an internal **Compare** tab that diffs new models, score changes, and status changes between two dates (hash-shareable via `#changelog?tab=compare&from=...&to=...`) | `changelogs` table + `changelogs/*.md` + `model_scores` |
-| **Stats** | Token/cost/duration analytics, Agent Provider Leaderboard, per-agent breakdowns, time-series charts | `run_metrics` |
+| **Table** | Sortable model leaderboard with tier-letter score cells, compact mobile cards, comparison selection, search, filters, and CSV export | `v_models_latest`, `model_scores` |
+| **Chart** | SVG scatter/radar analysis surface with axis selectors, keyboard-focusable model points, selection panel, legend, and comparison strip | `v_models_latest`, `model_scores` |
+| **Changelog** | Date list + rendered Markdown body. The older Compare tab is intentionally removed; changelog files remain append-only. | `changelogs` table + `changelogs/*.md` |
+| **Stats** | Token/cost/duration analytics, Agent Provider Leaderboard, per-agent breakdowns, and compact trend bars | `run_metrics` |
 | **Settings** | Provider, Models, Research, and Schedule subpages, plus a Manual Update card on the Provider subpage and a sidebar-footer Refresh trigger | `/api/provider`, `/api/exa`, `/api/llmstats`, `/api/schedule`, `/api/run-update` |
 
 ### State Management
@@ -179,24 +179,15 @@ that this is performant without diffing.
 
 ```js
 state = {
-  view,              // table | chart | changelog | stats | data
-  area, subview,     // sidebar area + subpage routing
+  area, subpage,     // sidebar area + subpage routing
   models,            // from v_models_latest
+  filteredModels,    // filtered and sorted model rows
   changelogs,        // from changelogs table
   metrics,           // from run_metrics
-  scoreHistory,      // Map<modelId, Array<row>> from model_scores (Phase 9.1)
-  filter,            // vendors, text, tier, range sliders
-  statsFilter,       // date range, agent filter
-  sortBy,            // column + direction (incl. "trend")
-  ui,                // persistent UI prefs (filters collapsed, leaderboard sort)
-  selectedModelIds,  // detail panel + comparison targets
-  focusedRowIndex,   // j/k row nav target (Phase 9.2)
+  ui,                // persistent filters, sort direction, chart mode/axes, stats filters
+  focusIndex,        // j/k row nav target
   activeChangelogDate,
-  changelogCompare,  // { from, to, active } for the Compare tab (Phase 9.1)
   lastUpdated,       // from meta.last_updated; polled via /api/meta
-  uiToastShownFor,   // dedupe key for the new-data toast (Phase 9.2)
-  uiToastDismissed,  // suppression key set on user dismiss
-  detailUplots,      // separate uPlot map so Stats scheduler doesn't wipe it
   provider,          // from GET /api/provider
 };
 ```
@@ -206,9 +197,8 @@ state = {
 Every filter change rebuilds a parameterized SQL query executed against the
 in-browser sql.js instance. Filters include:
 
-- **Vendor multi-select** — pill toggles
-- **Tier chips** — S through F (computed from weighted overall score)
-- **Range sliders** — dual-handle, one per benchmark dimension
+- **Vendor select** — provider/vendor narrowing
+- **Tier select** — S through F (computed from weighted overall score)
 - **Text search** — case-insensitive LIKE across name, vendor, notes, params
 
 ### Offline Behavior
@@ -240,7 +230,7 @@ Three explicit mounts maintain the frontend's fetch contract:
 | `/api/bootstrap-status` | GET | First-run DB seeding state for the UI spinner |
 | `/api/open-terminal` | POST | Opens a platform-native terminal at the repo root |
 | `/api/provider` | GET/POST | Read/write Agent Provider configuration |
-| `/api/provider-presets` | GET | Static catalog of provider presets for the wizard |
+| `/api/provider-presets` | GET | Static catalog of provider presets retained for compatibility |
 | `/api/provider/test-connection` | GET/POST | Test models endpoint reachability |
 | `/api/provider/models` | GET | Fetch + normalize available models from provider |
 | `/api/provider/test-model` | POST | Short-prompt roundtrip to verify model access |
@@ -321,7 +311,7 @@ Re-running an update for the same date upserts rather than duplicates:
 API keys are **never** returned in API responses, logged, or written to any
 on-disk trace outside the credential store. Provider discovery returns redacted
 Voidware metadata only. Selected credentials are read through the app-owned
-Node bridge in `scripts/voidware_app_broker.mjs`, which hosts Voidware 1.0.1's
+Node bridge in `scripts/voidware_app_broker.mjs`, which hosts Voidware 1.0.4's
 approval surface for the FastAPI/browser app. Grants request the longest
 supported lifetime (`120d`), and the returned renewal window metadata drives
 the 90-day renewal prompt. Opaque grant tokens are cached by Voidware's
@@ -335,7 +325,7 @@ external service and retry with the app-owned approval surface.
 
 ---
 
-## Design System — Voidware v1.0.1
+## Design System — Voidware v1.0.4
 
 The UI follows the Voidware design specification:
 
@@ -349,10 +339,10 @@ The UI follows the Voidware design specification:
 
 CSS custom properties on `:root` make the entire theme overridable.
 
-Milestone 10 moves Voidware from an implicit local CSS snapshot to an explicit
-`@shxdowcollective/voidware@1.0.1` dependency. LLM-Dash still serves committed
+Milestone 11 updates Voidware to the explicit
+`@shxdowcollective/voidware@1.0.4` dependency. LLM-Dash still serves committed
 static CSS at runtime; the package is the source for vendoring, runtime API
-audits, and the planned ground-up app CSS rebuild. Refresh vendored CSS with
+audits, and the ground-up app CSS rebuild. Refresh vendored CSS with
 `npm run vendor:voidware` after `npm ci`. The app-owned approval bridge still
 depends on a Voidware CLI service build exposed through
 `VOIDWARE_CLI_SERVICE_MODULE`; the root package exports auth/config/logging
@@ -387,4 +377,4 @@ the job entirely.
 | Update contract | SKILL.md (agent reads it) | Python `update.py` script | Agent-agnostic; any LLM can follow it |
 | Scheduling | OS-native jobs | Claude Code `/schedule`, cron | Reliable, survives reboots, no dependency on Claude |
 | Credential store | env → selected Voidware provider → Voidware broker → keyring | env-only, dotenv | Layered precedence: process env first, then reusable brokered provider grants, with keyring kept as a legacy migration fallback |
-| Chart library | uPlot | Chart.js, plain `<canvas>` | Tiny (52 KB), proper time axes, zero deps |
+| Chart surface | SVG + CSS | Chart.js, `<canvas>`, uPlot | Zero-build, accessible SVG model points, and lightweight telemetry bars |
