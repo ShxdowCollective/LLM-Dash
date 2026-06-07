@@ -3,6 +3,53 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 101 — 2026-06-06
+
+**Agent:** Claude Sonnet 4.6 (claude-code)
+**Cycle:** Milestone 11
+**Task:** Per-screenshot visual nano-agent review of the M11 Voidware redesign
+
+---
+
+Ran a one-screenshot-per-agent visual QA pass over all 22 screenshots in
+`e2e/screenshots/m11-redesign/` (everything except the contact sheet — no
+batching, no contact-sheet shortcuts, dispatched sequentially). Each screenshot
+went to its own dedicated `--type image` nano-agent (Cursor CLI route) judged
+against the Voidware Composition Checklist (18-point) plus copy/jargon, cards,
+text wrapping/cropping, fonts, accent/gradient budget, spinners/loading,
+setup-wizard CTAs, usefulness, minimalism/calm design, and responsive scaling.
+
+**Headline: every screenshot passed** ("Pass with minor polish items" — zero
+"Needs rework" verdicts). The redesign reads as calm, modular, and on-brand
+across desktop/tablet/mobile.
+
+Full screenshot-by-screenshot writeup, systemic findings, and a prioritized
+punch list landed at
+[`docs/plans/2026-06-06-m11-screenshot-visual-review-report.md`](docs/plans/2026-06-06-m11-screenshot-visual-review-report.md).
+Top systemic items (repeat across 8+ screens, fix-once-fixes-many):
+- Border stacking / "bordered child inside bordered parent" on nearly every
+  screen (toolbars, score pills, settings cards+inputs, modal keycaps).
+- The "refresh recommended · 48d ago" stale badge reads loud/competing and
+  isn't actionable; recommend making it a clickable "Refresh data" link and
+  muting it on read-only pages.
+- Duplicate "Reset view" CTAs on 3 screens; duplicated mobile page titles
+  (Changelog/Stats/Settings each shown twice); underfilled desktop Settings/
+  Stats canvases; low-contrast chart data points on both scatter views and
+  mobile radar; internal-facing copy ("BENCHMARK WORKBENCH", raw repo paths,
+  raw agent slugs) that should read as plain product language.
+
+Two real (non-polish) bugs surfaced: the "Coding" axis label on the radar view
+is clipped behind the Selected Model card, and several screens clip
+content/rows below the fold with no scroll cue (`models-table-1280x800` row 8,
+`models-table-768x600` card 3, `changelog-mobile-390x844` "Seed Entry" body).
+
+Next:
+- Work the prioritized punch list in the report — P0 clipping/contrast bugs
+  first, then the systemic border/badge/copy fixes (P1), then the underfilled
+  desktop Settings/Stats composition (P2).
+
+---
+
 ## Entry 100 — 2026-06-07
 
 **Agent:** GPT-5 Codex (Nightglass, frontend rearchitecture)
