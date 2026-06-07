@@ -39,7 +39,7 @@
   const AREA = {
     models: {
       title: "Models",
-      eyebrow: "Benchmark workbench",
+      eyebrow: "Compare model scores",
       lead: "Sort, filter, and compare the latest local model scores without losing the thread.",
       subpages: [
         ["table", "Table"],
@@ -54,7 +54,7 @@
     },
     stats: {
       title: "Stats",
-      eyebrow: "Run telemetry",
+      eyebrow: "Update activity",
       lead: "Watch update cost, duration, tokens, and agent throughput over time.",
       subpages: [],
     },
@@ -420,8 +420,7 @@
       ]),
       h("div", { class: "toolbar-actions" }, [
         h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: exportModels }, "Export CSV"),
-        h("button", { class: "vw-btn vw-btn-secondary icon-action", type: "button", onclick: () => { state.helpOpen = true; render(); }, "aria-label": "Keyboard shortcuts" }, "?"),
-        count ? h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: resetFilters }, "Reset view") : null,
+        count && state.filteredModels.length ? h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: resetFilters }, "Reset view") : null,
       ]),
       state.ui.filtersOpen ? renderFilters() : null,
     ]);
@@ -510,8 +509,8 @@
     const selected = selectedModels();
     return h("section", { class: "chart-workbench" }, [
       h("div", { class: "chart-controls" }, [
-        metricSelect("X axis", "chartX"),
-        metricSelect("Y axis", "chartY"),
+        state.ui.chartMode === "scatter" ? metricSelect("X axis", "chartX") : null,
+        state.ui.chartMode === "scatter" ? metricSelect("Y axis", "chartY") : null,
         h("div", { class: "segmented-pill", role: "group", "aria-label": "Chart mode" }, [
           modeButton("scatter", "Scatter"),
           modeButton("radar", "Radar"),
@@ -554,7 +553,7 @@
         return h("circle", {
           cx: sx(metricValue(model, xKey)),
           cy: sy(metricValue(model, yKey)),
-          r: selected ? "8" : "6",
+          r: selected ? "9" : "7",
           class: "model-point" + (selected ? " selected" : ""),
           tabindex: "0",
           style: { "--model-color": safeColor(model.color) },
@@ -570,9 +569,10 @@
   function renderRadar(models) {
     const chosen = models.length ? models : [state.filteredModels[0]];
     const metrics = ["intelligence", "coding", "agents", "speed", "cost"];
-    const size = 460, cx = size / 2, cy = size / 2, radius = 166;
+    const size = 460, cx = size / 2, cy = size / 2, radius = 150, labelRadius = radius + 20;
+    const angleAt = (i) => -Math.PI / 2 + (Math.PI * 2 * i) / metrics.length;
     const axis = (i, value) => {
-      const angle = -Math.PI / 2 + (Math.PI * 2 * i) / metrics.length;
+      const angle = angleAt(i);
       const r = radius * (clamp(Number(value) || 0, 0, 10) / 10);
       return [cx + Math.cos(angle) * r, cy + Math.sin(angle) * r];
     };
@@ -584,9 +584,15 @@
         })),
         ...metrics.map((metric, i) => {
           const p = axis(i, 10);
+          const angle = angleAt(i);
+          const lx = cx + Math.cos(angle) * labelRadius;
+          const ly = cy + Math.sin(angle) * labelRadius;
+          const cosA = Math.cos(angle);
+          const anchor = Math.abs(cosA) < 0.3 ? "middle" : cosA > 0 ? "start" : "end";
+          const dy = Math.sin(angle) > 0.3 ? 12 : Math.sin(angle) < -0.3 ? -6 : 4;
           return h("g", null, [
             h("line", { x1: cx, y1: cy, x2: p[0], y2: p[1], class: "chart-grid-line" }),
-            h("text", { x: p[0], y: p[1], class: "chart-axis-label radar-label" }, labelFor(metric)),
+            h("text", { x: lx, y: ly + dy, "text-anchor": anchor, class: "radar-label" }, labelFor(metric)),
           ]);
         }),
         ...chosen.map((model) => h("polygon", {
@@ -611,7 +617,7 @@
         scoreBlock("Cost", model.cost),
       ]),
       h("p", { class: "selection-metrics-line" },
-        `Intel ${fmtScore(model.intelligence)} · Coding ${fmtScore(model.coding)} · Agent ${fmtScore(model.agents)} · Speed ${fmtScore(model.speed)}`),
+        `Intelligence ${fmtScore(model.intelligence)} · Coding ${fmtScore(model.coding)} · Agent ${fmtScore(model.agents)} · Speed ${fmtScore(model.speed)}`),
       model.notes ? h("p", { class: "model-notes" }, model.notes) : null,
     ]);
   }
@@ -710,11 +716,19 @@
         statCard("Tokens", totals.tokens ? compact.format(totals.tokens) : "—", "Input, output, and cached"),
         statCard("Words", totals.words ? int.format(totals.words) : "—", "Changelog body length"),
       ]),
-      h("div", { class: "analytics-grid" }, [
-        h("section", { class: "panel-card" }, [h("h3", null, "Run duration"), miniBars(filtered, "duration_sec", "Duration seconds")]),
-        h("section", { class: "panel-card" }, [h("h3", null, "Cost per run"), miniBars(filtered, "cost_usd", "Cost USD")]),
-        h("section", { class: "panel-card" }, [h("h3", null, "Agent leaderboard"), leaderboard(filtered)]),
-      ]),
+      filtered.length < 2
+        ? h("div", { class: "analytics-grid" }, [
+            h("section", { class: "panel-card stats-single-cta" }, [
+              h("h3", null, "One run so far"),
+              h("p", null, "Run Refresh again to unlock duration trends, cost-per-run history, and the agent leaderboard."),
+              h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: handleRefresh }, "Run Refresh"),
+            ]),
+          ])
+        : h("div", { class: "analytics-grid" }, [
+            h("section", { class: "panel-card" }, [h("h3", null, "Run duration"), miniBars(filtered, "duration_sec", "Duration seconds")]),
+            h("section", { class: "panel-card" }, [h("h3", null, "Cost per run"), miniBars(filtered, "cost_usd", "Cost USD")]),
+            h("section", { class: "panel-card" }, [h("h3", null, "Agent leaderboard"), leaderboard(filtered)]),
+          ]),
     ]);
   }
 
@@ -740,7 +754,7 @@
           h("option", { value: "" }, "Use typed key or current saved key"),
           ...state.credentials.map((c) => h("option", { value: c.name }, c.label || c.name)),
         ]),
-      ]) : h("p", { class: "settings-note" }, "No reusable Voidware provider keys are visible yet."),
+      ]) : h("p", { class: "settings-note" }, "No saved API key on file yet."),
       h("label", { class: "field" }, [h("span", null, "Base URL"), input(f, "base_url", "https://api.openai.com")]),
       h("label", { class: "field" }, [h("span", null, "API key"), input(f, "api_key", "Only needed when saving a new key", "password")]),
       h("label", { class: "field" }, [h("span", null, "Models URL override"), input(f, "models_override_url", "Optional")]),
@@ -771,7 +785,7 @@
 
   function settingsResearch() {
     const f = state.forms.research;
-    return panel("Research", "Optional keys enrich update runs while staying outside repo files.", [
+    return panel("Research", "Add API keys here. They're stored locally, not in the repo.", [
       h("div", { class: "status-row" }, [statusPill(state.provider.exa_configured ? "Configured" : "Not configured", state.provider.exa_configured ? "fresh" : "unknown"), h("span", null, "Exa search")]),
       h("label", { class: "field" }, [h("span", null, "Exa API key"), input(f, "exa", "Paste to save", "password")]),
       h("div", { class: "action-row" }, [
@@ -995,7 +1009,7 @@
       shortcut("/", "Search models"),
       shortcut("j / k", "Move through visible models"),
       shortcut("e", "Export current models"),
-      shortcut("r", "Run Refresh"),
+      shortcut("r", "Run refresh"),
       shortcut("?", "Open this panel"),
       shortcut("Esc", "Close drawer or dialogs"),
     ], () => { state.helpOpen = false; render(); }));
@@ -1057,17 +1071,34 @@
     if (!state.lastUpdated) {
       els.freshness.textContent = "No updates yet";
       els.freshness.dataset.state = "unknown";
+      els.freshness.removeAttribute("role");
+      els.freshness.removeAttribute("tabindex");
+      els.freshness.title = "No update recorded yet";
       return;
     }
     const age = Date.now() - Date.parse(state.lastUpdated);
     const hours = age / 3600000;
-    els.freshness.textContent = hours <= 24 ? "updated " + humanAge(age) : "refresh recommended · " + humanAge(age);
-    els.freshness.dataset.state = hours <= 24 ? "fresh" : "stale";
+    const stale = hours > 24;
+    els.freshness.textContent = stale ? "Data updated " + humanAge(age) + " · Update now" : "Updated " + humanAge(age);
+    els.freshness.dataset.state = stale ? "stale" : "fresh";
+    if (stale) {
+      els.freshness.setAttribute("role", "button");
+      els.freshness.setAttribute("tabindex", "0");
+      els.freshness.title = "Run an update now";
+    } else {
+      els.freshness.removeAttribute("role");
+      els.freshness.removeAttribute("tabindex");
+      els.freshness.title = "Benchmark data is up to date";
+    }
   }
 
   function bindShell() {
     document.querySelectorAll(".view-btn[data-area]").forEach((btn) => btn.addEventListener("click", () => navigate(btn.dataset.area, btn.dataset.view === "chart" ? "chart" : btn.dataset.area === "models" ? "table" : btn.dataset.area === "settings" ? "provider" : "index")));
     els.refresh.addEventListener("click", handleRefresh);
+    if (els.freshness) {
+      els.freshness.addEventListener("click", () => { if (els.freshness.dataset.state === "stale") handleRefresh(); });
+      els.freshness.addEventListener("keydown", (e) => { if (els.freshness.dataset.state === "stale" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); handleRefresh(); } });
+    }
     els.help.addEventListener("click", () => { state.helpOpen = true; render(); });
     els.toggle.addEventListener("click", () => { state.drawerOpen = true; render(); });
     els.backdrop.addEventListener("click", closeDrawer);
@@ -1195,7 +1226,7 @@
   }
 
   function exportModels() {
-    if (!state.filteredModels.length) return toast("No models to export.", "warning");
+    if (!state.filteredModels.length) return toast("No models to export. Clear filters or reset the view.", "warning");
     const headers = ["rank", "model", "vendor", "intelligence", "coding", "agent", "speed", "cost", "overall", "value"];
     const lines = [headers.join(",")];
     state.filteredModels.forEach((m, i) => lines.push([i + 1, m.name, m.vendor, m.intelligence, m.coding, m.agents, m.speed, m.cost, overall(m), valueScore(m)].map(csv).join(",")));
@@ -1225,6 +1256,8 @@
   }
 
   function toast(text, tone, actionLabel, action) {
+    const modalOpen = state.helpOpen || state.manualOpen || state.approval.open || state.run.open;
+    if (modalOpen && tone !== "error") return;
     const id = ++state.toastId;
     const node = h("div", { class: "vw-toast toast", "data-tone": tone || "info", role: tone === "error" ? "alert" : "status" }, [
       h("span", null, text),
@@ -1232,6 +1265,7 @@
       h("button", { type: "button", "aria-label": "Dismiss", onclick: () => node.remove() }, "×"),
     ]);
     els.toast.appendChild(node);
+    while (els.toast.children.length > 2) els.toast.firstChild.remove();
     window.setTimeout(() => { if (node.isConnected && id <= state.toastId) node.remove(); }, 4500);
   }
 
@@ -1353,7 +1387,14 @@
     }
     const values = data.slice().reverse().map((r) => Number(r[key]) || 0);
     const max = Math.max(...values, 1);
-    return h("div", { class: "mini-bars", role: "img", "aria-label": aria }, values.map((v) => h("span", { style: { height: Math.max(4, (v / max) * 100) + "%" }, title: String(v) })));
+    const fmtVal = (n) => key === "cost_usd" ? money.format(n) : `${Math.round(n)}s`;
+    return h("div", { class: "mini-bars-wrap" }, [
+      h("div", { class: "mini-bars", role: "img", "aria-label": aria }, values.map((v) => h("span", { style: { height: Math.max(4, (v / max) * 100) + "%" }, title: fmtVal(v) }))),
+      h("div", { class: "mini-bars-axis" }, [
+        h("span", null, `${values.length} runs (oldest → newest)`),
+        h("span", null, `peak ${fmtVal(max)}`),
+      ]),
+    ]);
   }
 
   function leaderboard(data) {
@@ -1365,8 +1406,8 @@
     }
     const map = new Map();
     data.forEach((r) => {
-      const key = [r.agent_name || "unknown", r.agent_runtime || "unknown"].join(" · ");
-      const item = map.get(key) || { label: key, runs: 0, cost: 0, words: 0 };
+      const key = agentKey(r);
+      const item = map.get(key) || { label: displayAgent(r.agent_name, r.agent_runtime), runs: 0, cost: 0, words: 0 };
       item.runs += 1; item.cost += Number(r.cost_usd) || 0; item.words += Number(r.word_count) || 0;
       map.set(key, item);
     });
@@ -1376,11 +1417,28 @@
     ])));
   }
 
+  function agentKey(row) {
+    return [row.agent_name || "unknown", row.agent_runtime || "unknown"].join(" · ");
+  }
+
+  function titleCaseSlug(value) {
+    return String(value || "").replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).trim();
+  }
+
+  function displayAgent(name, runtime) {
+    const RUNTIMES = { "claude-code": "Claude Code", "init-script": "init script", "unknown": "unknown" };
+    const human = (v) => /^claude-/i.test(v || "") ? titleCaseSlug(String(v).replace(/^claude-/i, "Claude ")) : titleCaseSlug(v) || "Unknown";
+    const rt = RUNTIMES[runtime] || titleCaseSlug(runtime) || "unknown";
+    return `${human(name)} (${rt})`;
+  }
+
   function agentSelect() {
-    const agents = [...new Set(state.metrics.map((m) => [m.agent_name || "unknown", m.agent_runtime || "unknown"].join(" · ")))].sort();
+    const seen = new Map();
+    state.metrics.forEach((m) => { const k = agentKey(m); if (!seen.has(k)) seen.set(k, displayAgent(m.agent_name, m.agent_runtime)); });
+    const agents = [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
     return h("select", { value: state.ui.statsAgent, onchange: (e) => { state.ui.statsAgent = e.target.value; savePrefs(); render(); } }, [
       h("option", { value: "" }, "All agents"),
-      ...agents.map((a) => h("option", { value: a }, a)),
+      ...agents.map(([key, label]) => h("option", { value: key }, label)),
     ]);
   }
 
@@ -1446,7 +1504,7 @@
   }
 
   function providerStatusCopy() {
-    return state.provider.has_provider ? "Provider connection is ready. Secrets stay in environment, Voidware, or the OS key store." : "Add a provider to let Refresh run from the dashboard.";
+    return state.provider.has_provider ? "Connected. Your key is stored securely on this machine." : "Add a provider to let Refresh run from the dashboard.";
   }
 
   function shortcut(keys, label) {

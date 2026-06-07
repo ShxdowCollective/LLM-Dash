@@ -228,9 +228,22 @@ mark {
 }
 
 .freshness-chip[data-state="stale"] {
-  color: var(--llm-freshness-stale);
-  background: color-mix(in srgb, var(--vw-warning) 8%, transparent);
-  box-shadow: 0 0 0 1px var(--vw-warning-border);
+  color: var(--vw-text-muted);
+  cursor: pointer;
+}
+
+.freshness-chip[data-state="stale"]::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-right: 2px;
+  border-radius: 999px;
+  background: var(--llm-freshness-stale);
+}
+
+.freshness-chip[data-state="stale"]:hover {
+  color: var(--vw-text);
+  text-decoration: underline;
 }
 
 .freshness-chip[data-state="expired"] {
@@ -321,6 +334,11 @@ mark {
   min-width: 0;
 }
 
+/* Nesting convention: ONE 1px ring per structural region (the containers
+   below). Children — chips, pills, icon buttons, legend chips, KPI tiles —
+   use fill/tint or a soft shadow instead of a second ring, so no bordered
+   element sits inside a bordered grandparent. tr.selected (inset accent bar +
+   tint) is the reference child pattern. */
 .boot-panel,
 .empty-state.vw-feature-empty-state,
 .panel-card,
@@ -432,9 +450,8 @@ mark {
   padding: 0 10px;
   border: 0;
   border-radius: var(--vw-radius-sm);
-  background: var(--vw-surface-2);
+  background: var(--vw-surface-3);
   color: var(--vw-text);
-  box-shadow: 0 0 0 1px var(--vw-border);
 }
 
 .filter-dock {
@@ -473,6 +490,15 @@ mark {
 
 .models-table-wrap {
   max-height: clamp(320px, calc(100dvh - 310px), 660px);
+  --vw-scroll-shadow-bg: var(--vw-surface-1);
+}
+
+/* Match the scroll fade to each region's actual surface so the bottom cue
+   reads cleanly instead of fading toward the page background. */
+.changelog-list,
+.changelog-body,
+.compare-strip {
+  --vw-scroll-shadow-bg: color-mix(in srgb, var(--vw-surface-1) 94%, var(--vw-bg));
 }
 
 table.models {
@@ -571,9 +597,8 @@ table.models td:last-child {
   min-width: 66px;
   padding: 4px 5px 4px 8px;
   border-radius: var(--vw-radius-sm);
-  background: color-mix(in srgb, var(--vw-surface-2) 92%, var(--vw-bg));
+  background: color-mix(in srgb, var(--tier-color) 12%, var(--vw-surface-2));
   color: var(--vw-text);
-  box-shadow: 0 0 0 1px var(--vw-border);
 }
 
 .score-num,
@@ -673,7 +698,8 @@ table.models td:last-child {
   gap: 8px;
 }
 
-.selection-scores {
+.selection-scores,
+.compare-card-scores {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -831,7 +857,7 @@ table.models td:last-child {
 }
 
 .chart-grid-line {
-  stroke: color-mix(in srgb, var(--vw-border) 72%, transparent);
+  stroke: color-mix(in srgb, var(--vw-border) 50%, transparent);
   stroke-width: 1;
 }
 
@@ -854,14 +880,16 @@ table.models td:last-child {
 
 .model-point {
   fill: var(--model-color);
-  stroke: color-mix(in srgb, var(--model-color) 70%, white);
+  stroke: var(--vw-bg);
   stroke-width: 1.5;
-  opacity: 0.76;
+  paint-order: stroke;
+  opacity: 0.92;
 }
 
 .model-point:hover,
 .model-point.selected {
   opacity: 1;
+  stroke: color-mix(in srgb, var(--model-color) 60%, white);
   stroke-width: 3;
   filter: drop-shadow(0 0 12px color-mix(in srgb, var(--model-color) 55%, transparent));
 }
@@ -872,13 +900,15 @@ table.models td:last-child {
 }
 
 .radar-shape {
-  fill: color-mix(in srgb, var(--model-color) 20%, transparent);
+  fill: color-mix(in srgb, var(--model-color) 30%, transparent);
   stroke: var(--model-color);
-  stroke-width: 2;
+  stroke-width: 2.5;
 }
 
 .radar-label {
-  text-anchor: middle;
+  fill: var(--vw-text-faint);
+  font-family: var(--vw-font-body);
+  font-size: 11px;
 }
 
 .chart-legend {
@@ -894,9 +924,8 @@ table.models td:last-child {
   min-height: 26px;
   padding: 4px 8px;
   border-radius: 999px;
-  background: var(--vw-surface-2);
+  background: var(--vw-surface-3);
   color: var(--vw-text-soft);
-  box-shadow: 0 0 0 1px var(--vw-border);
   font-size: 11px;
 }
 
@@ -933,8 +962,8 @@ table.models td:last-child {
 }
 
 .changelog-item.is-active {
-  background: color-mix(in srgb, var(--vw-accent) 12%, var(--vw-surface-2));
-  box-shadow: inset 3px 0 0 var(--vw-accent), 0 0 0 1px color-mix(in srgb, var(--vw-accent) 40%, var(--vw-border));
+  background: color-mix(in srgb, var(--vw-accent) 14%, var(--vw-surface-2));
+  box-shadow: inset 3px 0 0 var(--vw-accent);
 }
 
 .changelog-date {
@@ -1012,8 +1041,8 @@ table.models td:last-child {
   display: grid;
   gap: 6px;
   border-radius: var(--vw-radius-lg);
-  background: var(--vw-surface-1);
-  box-shadow: 0 0 0 1px var(--vw-border);
+  background: color-mix(in srgb, var(--vw-surface-2) 70%, var(--vw-surface-1));
+  box-shadow: var(--vw-shadow-sm);
 }
 
 .stat-card span {
@@ -1053,6 +1082,31 @@ table.models td:last-child {
   background: linear-gradient(180deg, var(--vw-accent), color-mix(in srgb, var(--vw-accent) 26%, transparent));
 }
 
+.mini-bars-wrap {
+  display: grid;
+  gap: 6px;
+}
+
+.mini-bars-axis {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--vw-text-faint);
+  font-size: 11px;
+}
+
+.stats-single-cta {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+}
+
+.stats-single-cta p {
+  max-width: 52ch;
+  margin: 0;
+  color: var(--vw-text-soft);
+}
+
 .chart-empty-note {
   display: grid;
   place-items: center;
@@ -1060,7 +1114,6 @@ table.models td:last-child {
   padding: 18px;
   border-radius: var(--vw-radius-md);
   background: var(--vw-surface-2);
-  box-shadow: inset 0 0 0 1px var(--vw-border);
   text-align: center;
 }
 
@@ -1104,7 +1157,11 @@ table.models td:last-child {
 .settings-panel {
   display: grid;
   gap: 16px;
+  max-width: 560px;
   padding: 18px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--vw-accent) 7%, transparent), transparent 140px),
+    color-mix(in srgb, var(--vw-surface-1) 94%, var(--vw-bg));
 }
 
 .settings-summary {
@@ -1190,8 +1247,7 @@ table.models td:last-child {
   box-shadow: inset 0 0 0 1px var(--vw-border);
 }
 
-.run-status,
-.shortcut-row {
+.run-status {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1199,6 +1255,10 @@ table.models td:last-child {
 }
 
 .shortcut-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
   padding: 9px 0;
   border-bottom: 1px solid var(--vw-border);
 }
@@ -1258,6 +1318,18 @@ kbd {
 
   .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Single-column: don't let the list reserve a tall min-height that pushes the
+     entry body below the fold. */
+  .changelog-list {
+    min-height: 0;
+    max-height: min(40vh, 320px);
+  }
+
+  .changelog-panel {
+    min-height: 0;
+    max-height: none;
   }
 }
 
@@ -1335,7 +1407,7 @@ kbd {
   }
 
   .app-content.vw-page-content {
-    padding: 18px 14px 32px;
+    padding: 18px 14px calc(56px + env(safe-area-inset-bottom));
   }
 
   .app-page-title h2 {
@@ -1354,8 +1426,28 @@ kbd {
 
   .toolbar-primary {
     display: grid;
-    grid-template-columns: minmax(88px, 0.9fr) 34px minmax(0, 1.35fr) auto;
+    grid-template-columns: minmax(0, 1fr) 34px auto;
     gap: 6px;
+  }
+
+  .toolbar-primary .search-field {
+    grid-column: 1 / -1;
+    order: -1;
+  }
+
+  /* The fixed mobile app bar already shows the page title; visually hide the
+     duplicate in the page header (kept in the a11y tree as the page heading)
+     so each mobile screen shows one title. */
+  .app-page-title h2 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .toolbar-actions {

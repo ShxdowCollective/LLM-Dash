@@ -3,6 +3,120 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 103 — 2026-06-06
+
+**Agent:** Claude Opus 4.8 (claude-code)
+**Cycle:** Milestone 11
+**Task:** Implement the M11 polish plan (close out the visual-review punch list)
+
+---
+
+Executed [`docs/plans/2026-06-06-m11-polish-implementation-plan.md`](docs/plans/2026-06-06-m11-polish-implementation-plan.md)
+via shxdowflow. All work in `web/app.js`, `web/style.css`, `web/index.html`
+(+ a forward-looking copy note in `skill/SKILL.md`); no `web/vendor/` edits,
+changelogs untouched, `?v=` bumped to `m11-20260607m`.
+
+**What landed (by workstream):**
+- **A (P0):** radar "Coding" axis-label clip fixed — reduced plot radius
+  166→150, pushed labels to their own radius, and added quadrant-aware
+  `text-anchor`. (Codex caught that `.radar-label{text-anchor:middle}` was
+  overriding the SVG attr; dropped the `chart-axis-label` class on radar labels
+  so the anchors actually apply — verified computed anchors = middle/start/start/
+  end/end, all labels within the panel.) Scatter points `.model-point`
+  opacity 0.76→0.92 + `paint-order:stroke` halo + r 6/8→7/9; radar fill
+  20%→30%; grid lines dimmed 72%→50%. Per-region `--vw-scroll-shadow-bg` so the
+  bottom scroll fade reads on the table/changelog; mobile bottom padding bump.
+- **B (P1):** single border/nesting convention — dropped the second 1px ring on
+  `.score-chip/.score-block`, `.icon-action`, `.legend-chip`, `.chart-empty-note`,
+  the active changelog item, and turned KPI `.stat-card` rings into soft shadows.
+  Stale freshness chip is now muted text + dot and clickable (role=button,
+  Enter/Space) → runs Refresh; copy "Data updated 48d ago · Update now".
+  De-duped "Reset view" (toolbar reset hidden in empty states). Duplicate mobile
+  page title visually hidden (kept in a11y tree). Internal copy rewritten
+  ("Compare model scores"/"Update activity" kickers, plain provider/research
+  status lines); agent/runtime slugs humanized via `displayAgent` in the
+  leaderboard + agent filter.
+- **C (P2):** Settings panel capped 560px + subtle accent wash; low-data Stats
+  consolidated from three empty boxes to one "One run so far" CTA; mini-bar
+  charts gained a value/peak caption so they read without hover.
+- **D (general):** radar mode hides the no-op X/Y axis selects (root of the
+  "two Overall" confusion); duplicate toolbar "?" removed (sidebar/drawer/`?`
+  key cover it); shortcut casing "Run refresh"; toast queue capped at 2 +
+  suppressed (non-error) while a modal is open; mobile filter-row reflow
+  (full-width search on its own row); "Intel"→"Intelligence" in the selection
+  panel. (`prefers-reduced-motion` + `:focus-visible` were already handled.)
+
+**Review/verify:** Codex CLI final review flagged the radar-anchor override and
+a few plan-vs-impl gaps — all addressed (anchors fixed, changelog ring dropped,
+Settings → 560px, freshness title cleared on unknown, mobile padding). Live
+desktop smoke via agent-browser confirmed: radar labels clear the selection
+card, scatter contrast up, Stats single CTA, Settings capped, no raw slug, no
+toolbar "?". User flagged redundant nested corners on the compare card → fixed
+by switching `.compare-card-scores` to 2-col so scores sit as compact chips
+instead of full-width bars echoing the card corners. Mobile (390×844) also
+verified live: single page title (duplicate H2 visually hidden), search on its
+own full-width row, changelog list capped so the body isn't pushed below the
+fold. `node --check` clean, CSS braces balanced, voidware vendor smoke still
+18/18 @ 1.0.4.
+
+> Gotcha for next time: capture viewports with `agent-browser set viewport <w>
+> <h>` **before** `open`. The bare `agent-browser viewport …` form silently
+> no-ops (it isn't the real subcommand), which briefly looked like the WSL host
+> "didn't honor emulation" — it does; the syntax was wrong.
+
+**Next:** the only open item is optional clean-sweep verification — re-capture
+the full 22-viewport matrix + re-run the per-screenshot nano review.
+
+---
+
+## Entry 102 — 2026-06-06
+
+**Agent:** Claude Opus 4.8 (claude-code)
+**Cycle:** Milestone 11
+**Task:** Implementation plan to close out the M11 visual-review punch list
+
+---
+
+Turned the Entry 101 review findings into an executable plan with **no remaining
+follow-ups**:
+[`docs/plans/2026-06-06-m11-polish-implementation-plan.md`](docs/plans/2026-06-06-m11-polish-implementation-plan.md).
+
+Traced every finding to real code in `web/app.js` / `web/style.css` /
+`web/index.html` (line-cited) and grouped into four workstreams:
+- **A — P0 bugs:** radar "Coding" axis-label clip (`renderRadar` draws labels on
+  the ring radius with one centered anchor → shrink radius + quadrant-aware
+  anchors); below-fold clipping (strengthen the package `vw-scroll-shadow` cue
+  per-region + bound the mobile card list); low-contrast chart points/radar fill
+  (raise `.model-point` opacity/radius + halo, dim grid lines, bump radar fill).
+- **B — P1 systemic:** one border/nesting convention (the shared
+  `box-shadow: 0 0 0 1px border` ring is applied to 9 container classes and
+  re-stacked by chips/inputs/keycaps — `tr.selected` already does it right and
+  is the reference pattern); make the stale freshness chip actionable + muted;
+  kill duplicate "Reset view" (suppress toolbar reset in empty states);
+  hide the mobile page H2 (app bar already shows the title); copy rewrites for
+  internal/debug strings; humanize agent/runtime slugs in the leaderboard.
+- **C — P2 composition:** cap/center Settings cards + module wash; consolidate
+  the 3 redundant low-data Stats empty boxes into one; add chart axis labels.
+- **D — general polish (not in the screenshot matrix):** per-region scroll-cue
+  tuning, hide no-op X/Y selects in radar mode (root of the "two Overall"
+  confusion), drop the duplicate toolbar "?", casing normalization,
+  reduced-motion guard, touch-target/focus-visible audit, toast queue limit +
+  modal-aware suppression, mobile filter-row reflow, jargon shorthand cleanup.
+
+Corrected two assumptions during tracing: `vw-scroll-shadow` **is** defined in
+the Voidware package (not missing), and selected table rows **already** use the
+tint + inset-accent pattern — both reframed in the plan so we don't "fix" working
+code. Constraints honored: no `web/vendor/` edits, changelogs stay append-only
+(the raw repo path in the seed changelog is left alone; SKILL.md gets a
+forward-looking copy note instead), bump `?v=` after CSS changes.
+
+**Next:** execute in the plan's suggested order (scroll cue → nesting convention
+→ radar/contrast → copy/CTAs → composition/interaction), then re-screenshot the
+22-viewport matrix and re-run the per-screenshot nano review to confirm a clean
+sweep.
+
+---
+
 ## Entry 101 — 2026-06-06
 
 **Agent:** Claude Sonnet 4.6 (claude-code)

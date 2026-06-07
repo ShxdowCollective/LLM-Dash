@@ -233,6 +233,10 @@ Rules:
   run.
 - `word_count` is of the body only (between frontmatter and the `## Run
   Metadata` heading).
+- **Plain-language prose.** The changelog body is read in the dashboard by real
+  people. Write in plain product language — no raw repo paths or filenames
+  (e.g. `references/foo.jsx`), no internal/debug slugs, no design-system jargon.
+  Cite sources as readable link text, not bare file paths.
 - Use `NULL` (or leave blank) when a value is genuinely unknowable — e.g.
   `cost_usd` if your SDK doesn't expose pricing. Prefer accurate nulls to
   guesses.

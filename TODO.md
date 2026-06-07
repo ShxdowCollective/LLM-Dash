@@ -9,7 +9,26 @@ Use `[ ]` only for still-open work.
 
 No active development task is logged.
 
+- [ ] Follow-up verification (optional): re-capture the full 22-viewport
+  screenshot matrix and re-run the per-screenshot nano review for a clean-sweep
+  sign-off. Capture with `agent-browser set viewport <w> <h>` before `open`
+  (desktop + mobile spot-checks already verified live this way).
+
 ## Recent Completed
+
+- Milestone 11 polish — implemented
+  [`docs/plans/2026-06-06-m11-polish-implementation-plan.md`](docs/plans/2026-06-06-m11-polish-implementation-plan.md)
+  end to end (A–D workstreams): radar axis-label clip fixed (reduced radius +
+  quadrant-aware anchors that now actually apply), higher-contrast scatter
+  points + radar fill, single border/nesting convention (child chips/pills/tiles
+  de-ringed; active changelog item de-ringed), actionable+muted stale freshness
+  chip, de-duped "Reset view", duplicate mobile page title hidden, internal copy
+  rewritten + agent/runtime slugs humanized, Settings card capped (560px) with
+  accent wash, low-data Stats consolidated to one CTA, chart value captions,
+  radar X/Y selects hidden, duplicate toolbar "?" removed, toast queue cap +
+  modal-aware suppression, mobile filter-row reflow, compare-card scores to
+  2-col (fixed redundant nested corners). Codex review findings addressed; live
+  desktop smoke verified; `?v=` bumped; benchmark data untouched.
 
 - Milestone 11 — ground-up Voidware 1.0.4 frontend rearchitecture:
   replaced the large legacy vanilla surface with a compact zero-build
