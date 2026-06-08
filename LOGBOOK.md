@@ -3,6 +3,152 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 106 — 2026-06-08
+
+**Agent:** Claude Opus 4.8 (Prism, frontend)
+**Cycle:** Milestone 12 — follow-ups
+**Task:** Official model-card links, per-metric bar colors, fit-to-viewport shell
+
+---
+
+Three owner-requested follow-ups on the M12 work:
+
+- **Official model-card links (D1, now done).** Added `card_url TEXT` to the
+  `models` schema, threaded it through both writers (`scripts/init_db.py` seed
+  insert + `scripts/run_update.py` upsert with `COALESCE` so a run never wipes an
+  existing URL), and documented it in `skill/SKILL.md` (the update agent already
+  reads each model card as a primary source, so it records the URL). Wrote
+  `scripts/migrate_add_card_url.py` — adds the column, recreates `v_models_latest`
+  so its `m.*` picks up the new column, backfills per-vendor official docs pages,
+  bumps `meta.schema_version` to 3. Ran it on the live DB: 34/34 models now carry
+  an official `card_url`. Frontend `modelCardUrl()` returns `{url, official}`;
+  the card link reads "Model card ↗" to the real page when present, falling back
+  to "Find model card ↗" (web search) only for pre-field rows.
+- **Distinct per-metric bar colors.** The single-model detail bars were one
+  teal-purple wash (tier-blended). Added a `BAR_COLOR` map giving each metric its
+  own iridescent hue (Overall purple, Value blue, Intelligence pink, Coding
+  green, Agent teal, Speed yellow, Cost orange) via a per-row `--bar-color`.
+- **Card too wide / cut off → fit-to-viewport shell.** The single-model card was
+  full-bleed and awkward on 1440p; redesigned it as two columns (identity+meta
+  left, bars right) capped at 1040px. Then the bigger ask: **no page vertical
+  scrollbar on any view — only the model list may scroll.** Rebuilt the shell:
+  `html`/`body` locked (overflow hidden), `.app-content` is a `100dvh` flex
+  column, `#content-body` flexes, and each view fills it. Table view: the table
+  scrolls internally, detail sits below. Chart view: two columns — the chart
+  fills the left and the SVG scales to fit, the detail panel scrolls on the
+  right. Stats/Settings scroll inside their own region; Changelog keeps its
+  panels. Verified live (1440 + 390): `window.scrollY` stays 0 on table and
+  chart, the chart scales instead of overflowing, the model list still scrolls.
+
+`?v=` → `m12-20260607i`. Scripts `py_compile` clean; schema round-trip tested.
+Benchmark scores untouched. Not committed.
+
+---
+
+## Entry 105 — 2026-06-07
+
+**Agent:** Claude Opus 4.8 (Prism, frontend)
+**Cycle:** Milestone 12 — implementation
+**Task:** Build the full color revival + comparison overhaul, retarget CLAUDE.md
+
+---
+
+Shipped all 8 M12 items end to end in `web/` (app.js +491/-, style.css +~640,
+index.html, new `web/vendor/logos/`). Verified live headed at 127.0.0.1:8787,
+desktop 1440 + mobile 390, screenshots in `e2e/screenshots/m12/`.
+
+What landed:
+- **Color revival** — added an iridescent gradient token layer derived from the
+  existing `--vw-iridescent-*` tokens (no edits to vendored voidware). Gradient
+  Refresh button, gradient-clipped brand wordmark, iridescent active sidebar
+  bar + gradient nav icon, gradient subnav underline, faint iridescent page
+  wash, model-color-mapped row/point/card accents, hover lifts everywhere.
+- **Checkbox multi-select** — split state into `compare` (multi, checkbox-driven,
+  empty by default, capped at 4 with a toast) and `inspect` (single row/point
+  click). Right-side Compare column in the table, matching checkbox on mobile
+  cards. `loadPrefs` migrates old `selected`/`vendor` keys and never resurrects
+  an auto-selected model. Shared `renderCompareArea()` for table + chart parity.
+- **Comparison overhaul** — unified `modelStatCard`: one model → labeled
+  gradient bars, 2-4 → tier-colored grade boxes. Each card shows provider logo,
+  colored vendor, cost, released, tracked-since, type, notes, tier badge, and a
+  "Find model card" link. Rounded `lg` corners + gradient top stripe (the sharp
+  corners are gone).
+- **Single bold title** — dropped eyebrow/lead from `AREA` + `renderHeader`;
+  mobile kicker removed. **Freshness** demoted to quiet gray `Last update: <age>`
+  with no CTA/handlers.
+- **Filters** — tier, status (SQL), min-overall slider (debounced),
+  has-pricing, released-after (year buckets), and multi-vendor chips that share
+  one `vendors` set with the chart legend.
+- **Provider logos** — vendored 12 real SVGs from models.dev under
+  `web/vendor/logos/` (+ `SOURCE.md`); `VENDOR_LOGO` map, monogram fallback for
+  unmapped vendors. Dropped the `z-ai`/`meta`/`qwen` slugs that returned the
+  generic fallback.
+- **Chart rescue** — lifted the pitch-black plot bg to a gradient surface,
+  brightened grid lines, colored points with inspect/compare glow, and a colored
+  clickable legend that filters chart + table by vendor (verified 34→7 on a
+  click).
+
+**Root-cause fix:** `h()` was setting CSS custom properties via
+`Object.assign(el.style, …)`, which silently no-ops for `--vars`. That's why the
+original chart points rendered black and model colors never showed. Switched to
+`setProperty` for `--*` keys, which lit up color across rows, points, cards,
+and legend (verified `getComputedStyle().fill` = the model hex, not black).
+
+Pro nano-agent reviewed the working tree; folded in the real findings:
+`hasPricing` now rejects NULL cost, mobile cards got keyboard activation
+(Enter/Space/c/x) + `role=button`, `setInspect` syncs `focusIndex` for j/k,
+stale `tr.selected` comment fixed, dead `.compare-strip`/`.compare-card` CSS
+removed, initial freshness text no longer flashes "No updates yet". No console
+errors across Models/Chart/Changelog/Stats/Settings.
+
+Also retargeted **CLAUDE.md** at the owner's request: it now reads as the
+update-agent contract pointing at `skill/SKILL.md`, with the boundaries scoped
+to "during an update run" instead of a blanket "frontend is read-only" that was
+being misread as forbidding all `web/` dev.
+
+`?v=` bumped to `m12-20260607e`. Benchmark data untouched. Not committed.
+
+---
+
+## Entry 104 — 2026-06-07
+
+**Agent:** Claude Opus 4.8 (Prism, frontend)
+**Cycle:** Milestone 12 — planning
+**Task:** Plan the Voidware color revival + model comparison overhaul
+
+---
+
+Drafted the full M12 implementation plan from the owner's 8-item brief (color
+revival, checkbox multi-select, comparison-card overhaul, header strip, freshness
+demote, more filters, models.dev provider logos, chart rescue). Read the real
+source first: `web/app.js` (1631 lines), `web/style.css`, `index.html`,
+`scripts/schema.sql`, and the voidware tokens — so the plan cites actual line
+numbers and the real data fields (`released`, `first_seen`, `pricing`, vendor
+`color`, etc.). Confirmed there's **no `card_url` column**, so model-card links
+are a flagged decision (derive from slug vs add a column later). Noted the
+`web/` read-only boundary in CLAUDE.md is overridden by explicit owner request,
+on record in both the plan and TODO.
+
+Pro nano-agent reviewed the plan. Highest-risk finding was selection state — the
+plan named the `focused`/`compare` split but didn't close the loop. Folded in a
+hard **selection state contract**: renamed to `compare`/`inspect` (avoids the
+existing `state.focusIndex` collision), defined precedence (≥2 → grade boxes, 1 →
+bars, empty → inspect/top fallback), split `.selected` into independent
+`is-inspect`/`is-compare` classes, prefs migration that never resurrects an
+auto-selected model, and a shared `renderCompareArea()` for table + chart parity.
+Also decided multi-vendor `vendorToggles` up front so the clickable colored
+legend and the Vendor filter share one mechanism, reordered the build sequence
+(state split is a hard gate; logos before cards), specified the new
+filter/`resetFilters`/`DEFAULT_UI` keys + slider debounce + SQL status filter,
+de-presupposed the corner-radius fix (audit after `modelStatCard` exists), and
+added a help-modal update + localStorage-reload verification.
+
+Plan: [`docs/plans/2026-06-07-m12-color-revival-compare-overhaul.md`](docs/plans/2026-06-07-m12-color-revival-compare-overhaul.md).
+TODO updated with the 8 work items in build order. **No `web/` code changed
+yet** — implementation is the next cycle.
+
+---
+
 ## Entry 103 — 2026-06-06
 
 **Agent:** Claude Opus 4.8 (claude-code)

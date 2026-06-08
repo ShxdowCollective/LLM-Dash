@@ -1,32 +1,38 @@
-# LLM-Dash — Claude Agent Instructions
+# LLM-Dash — Update Agent Instructions
 
 Local LLM benchmark dashboard with AI-driven daily changelog updates.
+
+**This file is the contract for agents running the daily data update.** If you
+were asked to refresh benchmarks, research models, or produce a changelog,
+follow **[skill/SKILL.md](skill/SKILL.md)** end-to-end — no shortcuts, no partial
+runs. SKILL.md is the source of truth; everything below is a quick reference for
+that task.
+
+> Doing feature work, UI changes, or other development instead? This file does
+> not govern that — follow the request, [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md),
+> and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The rules below are scoped to
+> an update run, not a blanket prohibition on changing the codebase.
 
 ## Entrypoints
 
 | What you need | Where to look |
 |---|---|
+| Update procedure (**source of truth**) | [skill/SKILL.md](skill/SKILL.md) |
 | Quick start & project overview | [README.md](README.md) |
 | System architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | Development & code conventions | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) |
 | Implementation history | [docs/plans/IMPLEMENTATION_PLAN.md](docs/plans/IMPLEMENTATION_PLAN.md) |
-| Update procedure (**source of truth**) | [skill/SKILL.md](skill/SKILL.md) |
 
-## Primary Task — Update the Dashboard
+## Triggers — "follow SKILL.md"
 
-When asked to update, follow **[skill/SKILL.md](skill/SKILL.md)** end-to-end.
-No shortcuts, no partial runs.
-
-### Triggers
-
-Any of these mean "follow SKILL.md":
+Any of these mean run the update via [skill/SKILL.md](skill/SKILL.md):
 
 - "update the dashboard" / "refresh" / "run the daily update"
 - "produce today's changelog"
 - "research new models" / "check for LLM news"
 - the scheduled `/schedule` trigger that fires daily
 
-## Rules
+## Update-Run Rules
 
 ### Data Integrity
 
@@ -46,9 +52,12 @@ harness exposes it (Claude Code `/cost`, or compute from `message.usage` +
 per-model pricing). No budget cap — everything is logged so regressions are
 obvious on the Stats page.
 
-### Boundaries
+### Stay In Your Lane (during an update)
 
-- **Don't touch the static web app** (`web/`). The frontend is read-only.
+A data refresh touches data, not the app. While running the update:
+
+- **Don't edit the web app** (`web/`) as part of a refresh — a changelog run has
+  no reason to. Frontend changes are separate development work.
 - **Don't modify old changelog files.** Today's date owns today's file.
 - **Don't modify old `model_scores` rows.** Score history is append-only.
 
@@ -58,7 +67,7 @@ When writing changelog frontmatter and `run_metrics` rows, identify yourself:
 
 | Field | Example |
 |---|---|
-| `agent` | `claude-opus-4-7`, `claude-sonnet-4-6` |
+| `agent` | `claude-opus-4-8`, `claude-sonnet-4-6` |
 | `agent_runtime` | `claude-code` |
 
 Don't spoof. The Stats page displays these for per-agent analytics.

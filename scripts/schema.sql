@@ -12,6 +12,7 @@ CREATE TABLE models (
     params          TEXT,
     pricing         TEXT,
     notes           TEXT,
+    card_url        TEXT,
     first_seen      TEXT NOT NULL,
     last_seen       TEXT NOT NULL,
     status          TEXT NOT NULL DEFAULT 'active'

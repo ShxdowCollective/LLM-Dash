@@ -347,8 +347,8 @@ def apply_update(
             if not name:
                 raise RunUpdateError("new model missing name")
             con.execute(
-                """INSERT INTO models (name, vendor, color, released, params, pricing, notes, first_seen, last_seen)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, date('now'), date('now'))
+                """INSERT INTO models (name, vendor, color, released, params, pricing, notes, card_url, first_seen, last_seen)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, date('now'), date('now'))
                    ON CONFLICT(name) DO UPDATE SET
                      vendor = excluded.vendor,
                      color = excluded.color,
@@ -356,6 +356,7 @@ def apply_update(
                      params = excluded.params,
                      pricing = excluded.pricing,
                      notes = excluded.notes,
+                     card_url = COALESCE(excluded.card_url, models.card_url),
                      last_seen = date('now')""",
                 (
                     name,
@@ -365,6 +366,7 @@ def apply_update(
                     str(model.get("params") or ""),
                     str(model.get("pricing") or ""),
                     str(model.get("notes") or ""),
+                    (str(model.get("card_url")).strip() or None) if model.get("card_url") else None,
                 ),
             )
             con.execute(

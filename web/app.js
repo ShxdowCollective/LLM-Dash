@@ -16,7 +16,25 @@
   ];
   const TIER_ORDER = ["S", "A", "B", "C", "D", "F"];
   const MAX_COMPARE = 4;
-  const STORE_KEY = "llm-dash-ui-state-v2";
+  const STORE_KEY = "llm-dash-ui-state-v3";
+
+  // Vendor string -> local SVG slug under web/vendor/logos/ (sourced from
+  // models.dev, see logos/SOURCE.md). Vendors without a mapping fall back to a
+  // colored monogram.
+  const VENDOR_LOGO = {
+    "OpenAI": "openai",
+    "Anthropic": "anthropic",
+    "Google": "google",
+    "Alibaba": "alibaba",
+    "Zhipu AI (Z.ai)": "zhipuai",
+    "MiniMax": "minimax",
+    "NVIDIA": "nvidia",
+    "Xiaomi": "xiaomi",
+    "Moonshot AI": "moonshotai",
+    "xAI": "xai",
+    "DeepSeek": "deepseek",
+    "Mistral": "mistral",
+  };
   const META_POLL_MS = 15000;
   const RUN_POLL_MS = 3000;
   const BOOT_POLL_MS = 900;
@@ -25,13 +43,18 @@
     sortKey: "overall",
     sortDir: "desc",
     text: "",
-    vendor: "",
+    vendors: [],
     tier: "",
+    status: "",
+    minOverall: 0,
+    hasPricing: false,
+    releasedAfter: "",
     filtersOpen: false,
     chartMode: "scatter",
     chartX: "cost",
     chartY: "overall",
-    selected: [],
+    compare: [],
+    inspect: "",
     statsAgent: "",
     statsRange: "all",
   };
@@ -39,8 +62,6 @@
   const AREA = {
     models: {
       title: "Models",
-      eyebrow: "Compare model scores",
-      lead: "Sort, filter, and compare the latest local model scores without losing the thread.",
       subpages: [
         ["table", "Table"],
         ["chart", "Chart"],
@@ -48,20 +69,14 @@
     },
     changelog: {
       title: "Changelog",
-      eyebrow: "Update notes",
-      lead: "Read the scored changes behind each run. Changelog history stays append-only.",
       subpages: [],
     },
     stats: {
       title: "Stats",
-      eyebrow: "Update activity",
-      lead: "Watch update cost, duration, tokens, and agent throughput over time.",
       subpages: [],
     },
     settings: {
       title: "Settings",
-      eyebrow: "Local setup",
-      lead: "Choose model access, research keys, and the update cadence for this machine.",
       subpages: [
         ["provider", "Connection"],
         ["models", "Models"],
@@ -262,9 +277,13 @@
     const where = [];
     const params = [];
     const ui = state.ui;
-    if (ui.vendor) {
-      where.push("vendor = ?");
-      params.push(ui.vendor);
+    if (Array.isArray(ui.vendors) && ui.vendors.length) {
+      where.push("vendor IN (" + ui.vendors.map(() => "?").join(", ") + ")");
+      params.push(...ui.vendors);
+    }
+    if (ui.status) {
+      where.push("status = ?");
+      params.push(ui.status);
     }
     if (ui.text.trim()) {
       const q = "%" + ui.text.trim() + "%";
@@ -274,6 +293,9 @@
     state.models = rows("SELECT * FROM v_models_latest" + (where.length ? " WHERE " + where.join(" AND ") : ""), params);
     let list = state.models;
     if (ui.tier) list = list.filter((m) => tier(overall(m)).label === ui.tier);
+    if (Number(ui.minOverall) > 0) list = list.filter((m) => (overall(m) || 0) >= Number(ui.minOverall));
+    if (ui.hasPricing) list = list.filter(hasPricing);
+    if (ui.releasedAfter) list = list.filter((m) => releasedYear(m) >= Number(ui.releasedAfter));
     state.filteredModels = list.sort((a, b) => {
       const av = sortValue(a, ui.sortKey);
       const bv = sortValue(b, ui.sortKey);
@@ -281,9 +303,32 @@
       return delta || String(a.name).localeCompare(String(b.name));
     });
     const ids = new Set(state.filteredModels.map((m) => m.id));
-    state.ui.selected = state.ui.selected.filter((id) => ids.has(id)).slice(0, MAX_COMPARE);
-    if (!state.ui.selected.length && state.filteredModels[0]) state.ui.selected = [state.filteredModels[0].id];
+    // compare = explicit checkbox set (empty by default). inspect = single
+    // row/point click; falls back to the top model so the stat panel is never
+    // blank, but never auto-joins the compare set.
+    state.ui.compare = (state.ui.compare || []).filter((id) => ids.has(id)).slice(0, MAX_COMPARE);
+    if (!ids.has(state.ui.inspect)) state.ui.inspect = state.filteredModels[0] ? state.filteredModels[0].id : "";
     savePrefs();
+  }
+
+  function hasPricing(model) {
+    if (String(model.pricing || "").trim()) return true;
+    return model.cost != null && Number.isFinite(Number(model.cost));
+  }
+
+  function releasedYear(model) {
+    const match = String(model.released || "").match(/\b(19|20)\d{2}\b/);
+    return match ? Number(match[0]) : 0;
+  }
+
+  function releasedYearOptions() {
+    const years = new Set();
+    state.models.forEach((m) => { const y = releasedYear(m); if (y) years.add(y); });
+    rows("SELECT released FROM models").forEach((r) => {
+      const match = String(r.released || "").match(/\b(19|20)\d{2}\b/);
+      if (match) years.add(Number(match[0]));
+    });
+    return [...years].sort((a, b) => b - a);
   }
 
   function overall(model) {
@@ -350,11 +395,7 @@
 
   function renderHeader() {
     const config = AREA[state.area] || AREA.models;
-    els.header.replaceChildren(h("div", { class: "app-page-title" }, [
-      h("p", { class: "shell-kicker" }, config.eyebrow),
-      h("h2", null, config.title),
-      h("p", { class: "app-page-lead" }, config.lead),
-    ]));
+    els.header.replaceChildren(h("h1", { class: "app-page-title" }, config.title));
   }
 
   function renderSubnav() {
@@ -427,38 +468,86 @@
   }
 
   function renderFilters() {
+    const years = releasedYearOptions();
     return h("div", { class: "filter-dock" }, [
-      h("label", { class: "field" }, [
-        h("span", null, "Vendor"),
-        h("select", { value: state.ui.vendor, onchange: (e) => { state.ui.vendor = e.target.value; refreshModels(); render(); } }, [
-          h("option", { value: "" }, "All vendors"),
-          ...state.vendorOptions.map((v) => h("option", { value: v }, v)),
+      h("div", { class: "filter-row" }, [
+        h("label", { class: "field" }, [
+          h("span", null, "Tier"),
+          h("select", { value: state.ui.tier, onchange: (e) => { state.ui.tier = e.target.value; refreshModels(); render(); } }, [
+            h("option", { value: "" }, "All tiers"),
+            ...TIER_ORDER.map((v) => h("option", { value: v }, v)),
+          ]),
+        ]),
+        h("label", { class: "field" }, [
+          h("span", null, "Status"),
+          h("select", { value: state.ui.status, onchange: (e) => { state.ui.status = e.target.value; refreshModels(); render(); } }, [
+            h("option", { value: "" }, "Any status"),
+            h("option", { value: "active" }, "Active"),
+            h("option", { value: "superseded" }, "Superseded"),
+            h("option", { value: "deprecated" }, "Deprecated"),
+          ]),
+        ]),
+        h("label", { class: "field" }, [
+          h("span", null, "Released after"),
+          h("select", { value: state.ui.releasedAfter, onchange: (e) => { state.ui.releasedAfter = e.target.value; refreshModels(); render(); } }, [
+            h("option", { value: "" }, "Any year"),
+            ...years.map((y) => h("option", { value: String(y) }, String(y) + " or later")),
+          ]),
+        ]),
+        h("label", { class: "field minoverall" }, [
+          h("span", null, `Min overall: ${Number(state.ui.minOverall) > 0 ? Number(state.ui.minOverall).toFixed(1) : "any"}`),
+          h("input", {
+            type: "range", min: "0", max: "10", step: "0.5", value: String(state.ui.minOverall || 0),
+            oninput: (e) => { state.ui.minOverall = Number(e.target.value); debounceFilter(); },
+          }),
+        ]),
+        h("label", { class: "field toggle-field" }, [
+          h("input", { type: "checkbox", checked: Boolean(state.ui.hasPricing), onchange: (e) => { state.ui.hasPricing = e.target.checked; refreshModels(); render(); } }),
+          h("span", null, "Has pricing"),
         ]),
       ]),
-      h("label", { class: "field" }, [
-        h("span", null, "Tier"),
-        h("select", { value: state.ui.tier, onchange: (e) => { state.ui.tier = e.target.value; refreshModels(); render(); } }, [
-          h("option", { value: "" }, "All tiers"),
-          ...TIER_ORDER.map((v) => h("option", { value: v }, v)),
-        ]),
+      h("div", { class: "filter-vendors" }, [
+        h("span", { class: "filter-vendors-label" }, "Providers"),
+        h("div", { class: "filter-vendor-chips" }, state.vendorOptions.map((v) => {
+          const active = state.ui.vendors.includes(v);
+          return h("button", { type: "button", class: "vendor-chip" + (active ? " is-active" : ""), "aria-pressed": String(active), onclick: () => toggleVendor(v) }, [providerLogoByVendor(v), v]);
+        })),
       ]),
       h("p", { class: "filter-note" }, `${state.filteredModels.length} of ${state.totalModelCount} models shown`),
     ]);
   }
 
+  function providerLogoByVendor(vendor) {
+    const slug = vendorSlug(vendor);
+    if (slug) return h("img", { class: "provider-logo", src: "vendor/logos/" + slug + ".svg", alt: "", width: 14, height: 14, loading: "lazy", style: { width: "14px", height: "14px" } });
+    return h("span", { class: "vendor-chip-dot" });
+  }
+
+  function debounceFilter() {
+    window.clearTimeout(state.filterDebounce);
+    renderFilterRangeLabel();
+    state.filterDebounce = window.setTimeout(() => { refreshModels(); render(); }, 160);
+  }
+
+  function renderFilterRangeLabel() {
+    const label = document.querySelector(".field.minoverall > span");
+    if (label) label.textContent = `Min overall: ${Number(state.ui.minOverall) > 0 ? Number(state.ui.minOverall).toFixed(1) : "any"}`;
+  }
+
   function renderTable() {
     if (!state.totalModelCount) return emptyState("No models tracked yet", "Run Refresh to discover and score models.", "Run Refresh", handleRefresh);
     if (!state.filteredModels.length) return emptyState("No models match this view", "Clear filters or search for another vendor.", "Reset view", resetFilters);
-    const columns = ["#", "Model", "Intel", "Coding", "Agent", "Speed", "Overall", "Cost", "Value"];
+    const columns = ["#", "Model", "Intel", "Coding", "Agent", "Speed", "Overall", "Cost", "Value", "Compare"];
     return h("section", { class: "model-table-layout" }, [
       h("div", { class: "table-wrap models-table-wrap vw-scroll-shadow" }, [
         h("table", { class: "models" }, [
-          h("thead", null, h("tr", null, columns.map((c) => h("th", { class: c === "#" ? "rank-col" : "" }, c)))),
+          h("thead", null, h("tr", null, columns.map((c) => h("th", { class: c === "#" ? "rank-col" : c === "Compare" ? "compare-col" : "" }, c === "Compare" ? h("span", { class: "sr-only" }, "Compare") : c)))),
           h("tbody", null, state.filteredModels.map((model, index) => h("tr", {
-            class: state.ui.selected.includes(model.id) ? "selected" : "",
+            class: rowClasses(model.id),
             tabindex: "0",
-            onclick: () => setSelected(model.id),
+            onclick: () => setInspect(model.id),
             onkeydown: (e) => rowKey(e, index, model.id),
+            style: { "--model-color": safeColor(model.color) },
           }, [
             h("td", { class: "rank-cell" }, index + 1),
             h("td", null, modelIdentity(model)),
@@ -469,30 +558,84 @@
             scoreTd(overall(model)),
             scoreTd(model.cost),
             scoreTd(valueScore(model)),
+            h("td", { class: "compare-cell" }, compareCheckbox(model)),
           ]))),
         ]),
       ]),
       h("div", { class: "models-mobile-list" }, state.filteredModels.map((model, index) => modelCard(model, index))),
-      renderCompareStrip(),
+      renderCompareArea(),
     ]);
   }
 
+  function rowClasses(id) {
+    return ["model-row",
+      state.ui.inspect === id ? "is-inspect" : "",
+      state.ui.compare.includes(id) ? "is-compare" : "",
+    ].filter(Boolean).join(" ");
+  }
+
+  function compareCheckbox(model) {
+    const checked = state.ui.compare.includes(model.id);
+    const full = !checked && state.ui.compare.length >= MAX_COMPARE;
+    return h("label", { class: "compare-check" + (full ? " is-disabled" : ""), title: full ? `Compare holds up to ${MAX_COMPARE} models` : "Add to comparison", onclick: (e) => e.stopPropagation() }, [
+      h("input", {
+        type: "checkbox",
+        checked,
+        disabled: full,
+        "aria-label": "Compare " + (model.name || "model"),
+        onchange: () => toggleCompare(model.id),
+      }),
+      h("span", { class: "compare-check-box", "aria-hidden": "true" }),
+    ]);
+  }
+
+  function vendorSlug(vendor) {
+    return VENDOR_LOGO[vendor] || null;
+  }
+
+  function providerLogo(model, size) {
+    const px = size || 18;
+    const slug = vendorSlug(model.vendor);
+    if (slug) {
+      return h("img", {
+        class: "provider-logo",
+        src: "vendor/logos/" + slug + ".svg",
+        alt: (model.vendor || "Provider") + " logo",
+        width: px,
+        height: px,
+        loading: "lazy",
+        style: { width: px + "px", height: px + "px" },
+      });
+    }
+    return h("span", {
+      class: "provider-monogram",
+      "aria-hidden": "true",
+      style: { width: px + "px", height: px + "px", "--model-color": safeColor(model.color) },
+    }, String(model.vendor || "?").trim().charAt(0).toUpperCase() || "?");
+  }
+
   function modelCard(model, index) {
-    const selected = state.ui.selected.includes(model.id);
+    const inCompare = state.ui.compare.includes(model.id);
     return h("article", {
-      class: "mobile-model-card" + (selected ? " selected" : ""),
+      class: "mobile-model-card" + (state.ui.inspect === model.id ? " is-inspect" : "") + (inCompare ? " is-compare" : ""),
       style: { "--model-color": safeColor(model.color) },
       tabindex: "0",
-      onclick: () => setSelected(model.id),
+      role: "button",
+      "aria-pressed": String(state.ui.inspect === model.id),
+      onclick: () => setInspect(model.id),
+      onkeydown: (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setInspect(model.id); }
+        if (e.key === "c" || e.key === "x") { e.preventDefault(); toggleCompare(model.id); }
+      },
     }, [
       h("div", { class: "mobile-model-card-head" }, [
         h("span", { class: "mobile-rank" }, index + 1),
-        h("span", { class: "mobile-model-dot" }),
+        providerLogo(model, 22),
         h("div", { class: "mobile-model-title" }, [
           h("strong", { class: "mobile-model-name" }, model.name || "Unknown model"),
           h("span", { class: "mobile-model-sub" }, [model.vendor, model.pricing].filter(Boolean).join(" · ") || "No vendor metadata"),
         ]),
-        h("button", { class: "icon-action compare-add", type: "button", onclick: (e) => { e.stopPropagation(); toggleCompare(model.id); }, "aria-label": "Toggle comparison" }, selected ? "✓" : "+"),
+        compareCheckbox(model),
       ]),
       h("div", { class: "mobile-score-grid" }, [
         scoreBlock("Overall", overall(model)),
@@ -506,7 +649,7 @@
 
   function renderChart() {
     if (!state.filteredModels.length) return emptyState("Nothing to chart", "Reset filters to bring model points back.", "Reset view", resetFilters);
-    const selected = selectedModels();
+    const focusList = compareModels().length ? compareModels() : [inspectModel()].filter(Boolean);
     return h("section", { class: "chart-workbench" }, [
       h("div", { class: "chart-controls" }, [
         state.ui.chartMode === "scatter" ? metricSelect("X axis", "chartX") : null,
@@ -515,13 +658,12 @@
           modeButton("scatter", "Scatter"),
           modeButton("radar", "Radar"),
         ]),
-        h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: () => { state.ui.selected = state.filteredModels.slice(0, 1).map((m) => m.id); render(); } }, "Reset selection"),
+        state.ui.compare.length ? h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: clearCompare }, "Clear comparison") : null,
       ]),
-      h("div", { class: "analysis-grid" }, [
-        h("div", { class: "chart-canvas-panel" }, state.ui.chartMode === "radar" ? renderRadar(selected) : renderScatter()),
-        renderSelectionPanel(selected[0] || state.filteredModels[0]),
+      h("div", { class: "chart-analysis" }, [
+        h("div", { class: "chart-canvas-panel" }, state.ui.chartMode === "radar" ? renderRadar(focusList) : renderScatter()),
+        h("div", { class: "chart-side" }, renderCompareArea()),
       ]),
-      renderCompareStrip(),
     ]);
   }
 
@@ -549,16 +691,18 @@
       h("text", { x: w / 2, y: hgt - 10, class: "chart-axis-title x-title" }, labelFor(xKey)),
       h("text", { x: 16, y: hgt / 2, class: "chart-axis-title y-title", transform: `rotate(-90 16 ${hgt / 2})` }, labelFor(yKey)),
       ...state.filteredModels.map((model) => {
-        const selected = state.ui.selected.includes(model.id);
+        const inCompare = state.ui.compare.includes(model.id);
+        const inspect = state.ui.inspect === model.id;
         return h("circle", {
           cx: sx(metricValue(model, xKey)),
           cy: sy(metricValue(model, yKey)),
-          r: selected ? "9" : "7",
-          class: "model-point" + (selected ? " selected" : ""),
+          r: inCompare || inspect ? "9" : "7",
+          class: "model-point" + (inspect ? " is-inspect" : "") + (inCompare ? " is-compare" : ""),
           tabindex: "0",
           style: { "--model-color": safeColor(model.color) },
           "aria-label": `${model.name}: ${labelFor(xKey)} ${fmtScore(metricValue(model, xKey))}, ${labelFor(yKey)} ${fmtScore(metricValue(model, yKey))}`,
-          onclick: () => toggleCompare(model.id),
+          onclick: () => setInspect(model.id),
+          ondblclick: () => toggleCompare(model.id),
           onkeydown: (e) => pointKey(e, model.id),
         });
       }),
@@ -605,43 +749,151 @@
     ]);
   }
 
-  function renderSelectionPanel(model) {
-    if (!model) return emptyState("Select a model", "Pick a point or row to inspect its score profile.");
-    return h("aside", { class: "selection-panel" }, [
-      h("p", { class: "shell-kicker" }, "Selected model"),
-      h("h3", null, model.name || "Unknown model"),
-      h("p", null, [model.vendor, model.params, model.pricing].filter(Boolean).join(" · ") || "No extra metadata yet."),
-      h("div", { class: "selection-scores" }, [
-        scoreBlock("Overall", overall(model)),
-        scoreBlock("Value", valueScore(model)),
-        scoreBlock("Cost", model.cost),
-      ]),
-      h("p", { class: "selection-metrics-line" },
-        `Intelligence ${fmtScore(model.intelligence)} · Coding ${fmtScore(model.coding)} · Agent ${fmtScore(model.agents)} · Speed ${fmtScore(model.speed)}`),
-      model.notes ? h("p", { class: "model-notes" }, model.notes) : null,
+  // Unified comparison surface shared by the table and chart subpages.
+  // compare set drives it; falls back to the inspected model so it's never blank.
+  // 1 model -> labeled bars, 2+ -> grade boxes.
+  function renderCompareArea() {
+    const compare = compareModels();
+    const showModels = compare.length ? compare : [inspectModel()].filter(Boolean);
+    const heading = h("div", { class: "compare-area-head" }, [
+      h("h2", { class: "compare-area-title" }, compare.length ? `Comparing ${compare.length} ${compare.length === 1 ? "model" : "models"}` : "Model detail"),
+      h("p", { class: "compare-area-hint" }, compare.length
+        ? "Check more rows to stack them side by side, or uncheck to remove."
+        : "Showing the selected model. Check the Compare box on any row to stack models here."),
+    ]);
+    if (!showModels.length) {
+      return h("section", { class: "compare-area", "aria-label": "Model comparison" }, [heading, emptyState("No models to show", "Adjust filters to bring models back.")]);
+    }
+    const mode = showModels.length === 1 ? "bars" : "grade";
+    return h("section", { class: "compare-area", "aria-label": "Model comparison" }, [
+      heading,
+      h("div", { class: "compare-grid mode-" + mode }, showModels.map((model) => modelStatCard(model, mode))),
     ]);
   }
 
-  function renderCompareStrip() {
-    const chosen = selectedModels();
-    if (!chosen.length) return null;
-    return h("section", { class: "compare-strip vw-scroll-shadow", "aria-label": "Selected comparison models" },
-      chosen.map((model) => h("article", { class: "compare-card", style: { "--model-color": safeColor(model.color) } }, [
-        h("button", { class: "compare-remove", type: "button", onclick: () => toggleCompare(model.id), "aria-label": "Remove " + model.name }, "×"),
-        h("strong", null, model.name),
-        h("span", null, model.vendor || "Unknown vendor"),
-        h("div", { class: "compare-card-scores" }, [
-          scoreBlock("Overall", overall(model)),
-          scoreBlock("Value", valueScore(model)),
-        ]),
-      ])));
+  function modelStatCard(model, mode) {
+    const inCompare = state.ui.compare.includes(model.id);
+    const card = modelCardUrl(model);
+    const head = h("header", { class: "stat-card-head" }, [
+      providerLogo(model, 30),
+      h("div", { class: "stat-card-titles" }, [
+        h("strong", { class: "stat-card-name" }, model.name || "Unknown model"),
+        h("span", { class: "stat-card-vendor" }, model.vendor || "Unknown vendor"),
+      ]),
+      h("span", { class: "stat-card-tier " + tier(overall(model)).cls, title: "Overall tier" }, tier(overall(model)).label),
+    ]);
+    const meta = h("dl", { class: "stat-card-meta" }, [
+      metaItem("Cost", model.pricing || (Number.isFinite(Number(model.cost)) ? "Cost score " + fmtScore(model.cost) : "Not listed")),
+      metaItem("Released", model.released || "Unknown"),
+      metaItem("Tracked since", fmtDate(model.first_seen) || "Unknown"),
+      metaItem("Type", model.params || "Unknown"),
+      model.status && model.status !== "active" ? metaItem("Status", titleCaseSlug(model.status)) : null,
+    ]);
+    const notes = model.notes ? h("p", { class: "model-notes" }, model.notes) : null;
+    const link = card.url ? h("a", { class: "stat-card-link", href: card.url, target: "_blank", rel: "noopener noreferrer" }, [card.official ? "Model card" : "Find model card", h("span", { "aria-hidden": "true" }, " ↗")]) : null;
+    const remove = inCompare ? h("button", { class: "compare-remove", type: "button", onclick: () => toggleCompare(model.id), "aria-label": "Remove " + model.name }, "×") : null;
+
+    if (mode === "bars") {
+      // Two columns on wide screens: identity/meta on the left, bars on the
+      // right, so a single model doesn't stretch into one awkward full-bleed row.
+      return h("article", { class: "stat-model-card mode-bars", style: { "--model-color": safeColor(model.color) } }, [
+        remove,
+        h("div", { class: "stat-card-summary" }, [head, meta, notes, link]),
+        h("div", { class: "stat-card-bars-col" }, statBars(model)),
+      ]);
+    }
+    return h("article", { class: "stat-model-card mode-grade", style: { "--model-color": safeColor(model.color) } }, [
+      remove, head, meta, gradeGrid(model), notes, link,
+    ]);
+  }
+
+  function metaItem(label, value) {
+    return h("div", { class: "meta-item" }, [
+      h("dt", null, label),
+      h("dd", null, value),
+    ]);
+  }
+
+  const BAR_METRICS = [
+    ["intelligence", "Intelligence"],
+    ["coding", "Coding"],
+    ["agents", "Agent"],
+    ["speed", "Speed"],
+    ["cost", "Cost"],
+  ];
+
+  // Distinct iridescent hue per metric so the bars read individually instead of
+  // one undifferentiated teal-purple wash.
+  const BAR_COLOR = {
+    overall: "var(--vw-iridescent-6)",
+    value: "var(--vw-iridescent-5)",
+    intelligence: "var(--vw-iridescent-7)",
+    coding: "var(--vw-iridescent-3)",
+    agents: "var(--vw-iridescent-4)",
+    speed: "var(--vw-iridescent-2)",
+    cost: "var(--vw-iridescent-1)",
+  };
+
+  function statBars(model) {
+    const rowsOut = [["overall", "Overall", overall(model)], ["value", "Value", valueScore(model)]]
+      .concat(BAR_METRICS.map(([k, label]) => [k, label, Number(model[k])]));
+    return h("div", { class: "stat-bars" }, rowsOut.map(([key, label, value]) => {
+      const v = Number(value);
+      const pct = Number.isFinite(v) ? clamp(v, 0, 10) * 10 : 0;
+      return h("div", { class: "stat-bar" + (key === "overall" || key === "value" ? " is-headline" : ""), style: { "--bar-color": BAR_COLOR[key] || "var(--model-color)" } }, [
+        h("span", { class: "stat-bar-label" }, label),
+        h("div", { class: "stat-bar-track" }, h("div", { class: "stat-bar-fill", style: { width: pct + "%" } })),
+        h("span", { class: "stat-bar-val" }, fmtScore(value)),
+      ]);
+    }));
+  }
+
+  function gradeGrid(model) {
+    const cells = [["overall", "Overall", overall(model)], ["value", "Value", valueScore(model)]]
+      .concat(BAR_METRICS.map(([k, label]) => [k, label, Number(model[k])]));
+    return h("div", { class: "grade-grid" }, cells.map(([key, label, value]) => {
+      const t = tier(value);
+      return h("div", { class: "grade-box " + t.cls, title: `${label}: ${fmtScore(value)}` }, [
+        h("span", { class: "grade-label" }, label),
+        h("span", { class: "grade-letter" }, t.label),
+        h("span", { class: "grade-score" }, fmtScore(value)),
+      ]);
+    }));
+  }
+
+  // Prefer the official card_url recorded by the update (schema_version 3).
+  // Fall back to a web-search lookup only when a model predates that field.
+  function modelCardUrl(model) {
+    if (!model) return { url: "", official: false };
+    const card = String(model.card_url || "").trim();
+    if (/^https?:\/\//i.test(card)) return { url: card, official: true };
+    if (!model.name) return { url: "", official: false };
+    const q = encodeURIComponent([model.vendor, model.name, "model card"].filter(Boolean).join(" "));
+    return { url: "https://www.google.com/search?q=" + q, official: false };
   }
 
   function renderLegend(list) {
-    const source = list || state.filteredModels.slice(0, 14);
+    const source = list && list.length ? list : state.filteredModels;
     const vendors = new Map();
     source.forEach((m) => { if (!vendors.has(m.vendor || "Other")) vendors.set(m.vendor || "Other", safeColor(m.color)); });
-    return h("div", { class: "chart-legend" }, [...vendors.entries()].map(([name, color]) => h("span", { class: "legend-chip", style: { "--model-color": color } }, name)));
+    return h("div", { class: "chart-legend", role: "group", "aria-label": "Filter by provider" }, [...vendors.entries()].map(([name, color]) => {
+      const active = state.ui.vendors.includes(name);
+      return h("button", {
+        type: "button",
+        class: "legend-chip" + (active ? " is-active" : ""),
+        style: { "--model-color": color },
+        "aria-pressed": String(active),
+        title: active ? "Showing only " + name + " — click to clear" : "Filter to " + name,
+        onclick: () => toggleVendor(name),
+      }, name);
+    }));
+  }
+
+  function toggleVendor(name) {
+    const list = state.ui.vendors || [];
+    state.ui.vendors = list.includes(name) ? list.filter((v) => v !== name) : [...list, name];
+    refreshModels();
+    render();
   }
 
   function renderChangelog() {
@@ -1008,10 +1260,13 @@
     if (state.helpOpen) nodes.push(modal("Keyboard shortcuts", [
       shortcut("/", "Search models"),
       shortcut("j / k", "Move through visible models"),
+      shortcut("Enter", "Inspect the focused model (bars view)"),
+      shortcut("c / x", "Toggle the focused model in compare"),
       shortcut("e", "Export current models"),
       shortcut("r", "Run refresh"),
       shortcut("?", "Open this panel"),
       shortcut("Esc", "Close drawer or dialogs"),
+      h("p", { class: "shortcut-note" }, "Tip: check the Compare box on a row (or double-click a chart point) to stack models. One model shows bars, several show grade boxes. Click a provider in the chart legend to filter."),
     ], () => { state.helpOpen = false; render(); }));
     if (state.manualOpen) nodes.push(modal("Manual update prompt", [
       h("p", null, "The prompt is copied when possible. Use it with Claude, Codex, Gemini, or another agent in this repo."),
@@ -1068,37 +1323,21 @@
 
   function updateFreshness() {
     if (!els.freshness) return;
+    els.freshness.removeAttribute("role");
+    els.freshness.removeAttribute("tabindex");
     if (!state.lastUpdated) {
-      els.freshness.textContent = "No updates yet";
-      els.freshness.dataset.state = "unknown";
-      els.freshness.removeAttribute("role");
-      els.freshness.removeAttribute("tabindex");
+      els.freshness.textContent = "Last update: never";
       els.freshness.title = "No update recorded yet";
       return;
     }
     const age = Date.now() - Date.parse(state.lastUpdated);
-    const hours = age / 3600000;
-    const stale = hours > 24;
-    els.freshness.textContent = stale ? "Data updated " + humanAge(age) + " · Update now" : "Updated " + humanAge(age);
-    els.freshness.dataset.state = stale ? "stale" : "fresh";
-    if (stale) {
-      els.freshness.setAttribute("role", "button");
-      els.freshness.setAttribute("tabindex", "0");
-      els.freshness.title = "Run an update now";
-    } else {
-      els.freshness.removeAttribute("role");
-      els.freshness.removeAttribute("tabindex");
-      els.freshness.title = "Benchmark data is up to date";
-    }
+    els.freshness.textContent = "Last update: " + humanAge(age);
+    els.freshness.title = new Date(state.lastUpdated).toLocaleString();
   }
 
   function bindShell() {
     document.querySelectorAll(".view-btn[data-area]").forEach((btn) => btn.addEventListener("click", () => navigate(btn.dataset.area, btn.dataset.view === "chart" ? "chart" : btn.dataset.area === "models" ? "table" : btn.dataset.area === "settings" ? "provider" : "index")));
     els.refresh.addEventListener("click", handleRefresh);
-    if (els.freshness) {
-      els.freshness.addEventListener("click", () => { if (els.freshness.dataset.state === "stale") handleRefresh(); });
-      els.freshness.addEventListener("keydown", (e) => { if (els.freshness.dataset.state === "stale" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); handleRefresh(); } });
-    }
     els.help.addEventListener("click", () => { state.helpOpen = true; render(); });
     els.toggle.addEventListener("click", () => { state.drawerOpen = true; render(); });
     els.backdrop.addEventListener("click", closeDrawer);
@@ -1164,30 +1403,52 @@
     return "#" + area;
   }
 
-  function selectedModels() {
+  function compareModels() {
     const byId = new Map(state.filteredModels.map((m) => [m.id, m]));
-    return state.ui.selected.map((id) => byId.get(id)).filter(Boolean);
+    return state.ui.compare.map((id) => byId.get(id)).filter(Boolean);
   }
 
-  function setSelected(id) {
-    state.ui.selected = [id, ...state.ui.selected.filter((x) => x !== id)].slice(0, MAX_COMPARE);
+  function inspectModel() {
+    const byId = new Map(state.filteredModels.map((m) => [m.id, m]));
+    return byId.get(state.ui.inspect) || state.filteredModels[0] || null;
+  }
+
+  function setInspect(id) {
+    state.ui.inspect = id;
+    const idx = state.filteredModels.findIndex((m) => m.id === id);
+    if (idx >= 0) state.focusIndex = idx;
     savePrefs();
     render();
   }
 
   function toggleCompare(id) {
-    const list = state.ui.selected;
-    state.ui.selected = list.includes(id) ? list.filter((x) => x !== id) : [id, ...list].slice(0, MAX_COMPARE);
+    const list = state.ui.compare;
+    if (list.includes(id)) {
+      state.ui.compare = list.filter((x) => x !== id);
+    } else if (list.length >= MAX_COMPARE) {
+      toast(`Compare holds up to ${MAX_COMPARE} models. Uncheck one first.`, "warning");
+      return;
+    } else {
+      state.ui.compare = [...list, id];
+    }
+    savePrefs();
+    render();
+  }
+
+  function clearCompare() {
+    state.ui.compare = [];
     savePrefs();
     render();
   }
 
   function pointKey(event, id) {
-    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleCompare(id); }
+    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setInspect(id); }
+    if (event.key === "c" || event.key === "x") { event.preventDefault(); toggleCompare(id); }
   }
 
   function rowKey(event, index, id) {
-    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelected(id); }
+    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setInspect(id); }
+    if (event.key === "c" || event.key === "x") { event.preventDefault(); toggleCompare(id); }
     if (event.key === "j" || event.key === "ArrowDown") { event.preventDefault(); moveFocus(1, index); }
     if (event.key === "k" || event.key === "ArrowUp") { event.preventDefault(); moveFocus(-1, index); }
   }
@@ -1216,20 +1477,31 @@
   }
 
   function resetFilters() {
-    Object.assign(state.ui, { ...DEFAULT_UI, selected: state.ui.selected });
+    Object.assign(state.ui, {
+      text: "", vendors: [], tier: "", status: "", minOverall: 0, hasPricing: false, releasedAfter: "",
+    });
     refreshModels();
     render();
   }
 
   function filterCount() {
-    return [state.ui.text.trim(), state.ui.vendor, state.ui.tier].filter(Boolean).length;
+    const ui = state.ui;
+    return [
+      ui.text.trim(),
+      ui.vendors.length,
+      ui.tier,
+      ui.status,
+      Number(ui.minOverall) > 0,
+      ui.hasPricing,
+      ui.releasedAfter,
+    ].filter(Boolean).length;
   }
 
   function exportModels() {
     if (!state.filteredModels.length) return toast("No models to export. Clear filters or reset the view.", "warning");
-    const headers = ["rank", "model", "vendor", "intelligence", "coding", "agent", "speed", "cost", "overall", "value"];
+    const headers = ["rank", "model", "vendor", "released", "tracked_since", "pricing", "intelligence", "coding", "agent", "speed", "cost", "overall", "value"];
     const lines = [headers.join(",")];
-    state.filteredModels.forEach((m, i) => lines.push([i + 1, m.name, m.vendor, m.intelligence, m.coding, m.agents, m.speed, m.cost, overall(m), valueScore(m)].map(csv).join(",")));
+    state.filteredModels.forEach((m, i) => lines.push([i + 1, m.name, m.vendor, m.released, m.first_seen, m.pricing, m.intelligence, m.coding, m.agents, m.speed, m.cost, overall(m), valueScore(m)].map(csv).join(",")));
     const blob = new Blob([lines.join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = h("a", { href: url, download: "llm-dash-models.csv" });
@@ -1282,7 +1554,14 @@
           if (el instanceof SVGElement) el.setAttribute("class", value);
           else el.className = value;
         }
-        else if (key === "style") Object.assign(el.style, value);
+        else if (key === "style") {
+          // Custom properties (--x) must go through setProperty; direct
+          // assignment / Object.assign silently drops them.
+          for (const [prop, val] of Object.entries(value)) {
+            if (prop.startsWith("--")) el.style.setProperty(prop, val == null ? "" : String(val));
+            else el.style[prop] = val;
+          }
+        }
         else if (key === "value") {
           pendingValue = value;
           if (tag !== "select") el.value = value;
@@ -1313,8 +1592,8 @@
 
   function modelIdentity(model) {
     return h("div", { class: "model-cell", style: { "--model-color": safeColor(model.color) } }, [
-      h("span", { class: "model-dot" }),
-      h("div", null, [
+      providerLogo(model, 22),
+      h("div", { class: "model-cell-text" }, [
         h("strong", { class: "name" }, highlight(model.name || "Unknown model")),
         h("span", { class: "sub" }, [model.vendor, model.pricing].filter(Boolean).join(" · ") || "No metadata"),
       ]),
@@ -1515,8 +1794,21 @@
     try {
       const stored = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
       if (stored && typeof stored === "object") Object.assign(state.ui, stored);
-      state.ui.selected = Array.isArray(state.ui.selected) ? state.ui.selected.slice(0, MAX_COMPARE) : [];
     } catch (_) {}
+    // Normalize against the current shape; never resurrect an auto-selected
+    // compare model from older prefs.
+    const ui = state.ui;
+    ui.compare = Array.isArray(ui.compare) ? ui.compare.slice(0, MAX_COMPARE) : [];
+    ui.inspect = typeof ui.inspect === "string" ? ui.inspect : "";
+    if (!Array.isArray(ui.vendors)) {
+      ui.vendors = typeof ui.vendor === "string" && ui.vendor ? [ui.vendor] : [];
+    }
+    delete ui.vendor;
+    delete ui.selected;
+    ui.minOverall = Number(ui.minOverall) || 0;
+    ui.hasPricing = Boolean(ui.hasPricing);
+    if (typeof ui.status !== "string") ui.status = "";
+    if (typeof ui.releasedAfter !== "string") ui.releasedAfter = "";
   }
 
   function consumeResetFlag() {

@@ -24,8 +24,24 @@ CHANGELOGS_DIR = ROOT / "changelogs"
 
 SEED_DATE = "2026-04-20"
 SEED_TITLE = "April 20, 2026"
-SCHEMA_VERSION = "2"
+SCHEMA_VERSION = "3"
 SEED_VERSION = "1"
+
+# Official model-card / documentation pages per vendor. Used to backfill
+# card_url for seed models; the daily update records an exact per-model URL in
+# each new model's `card_url` when one is found while reading its model card.
+VENDOR_CARD_URL: dict[str, str] = {
+    "OpenAI": "https://platform.openai.com/docs/models",
+    "Anthropic": "https://docs.anthropic.com/en/docs/about-claude/models/overview",
+    "Google": "https://ai.google.dev/gemini-api/docs/models",
+    "Alibaba": "https://qwenlm.github.io/blog/",
+    "MiniMax": "https://platform.minimax.io/docs/guides/text-generation",
+    "Zhipu AI (Z.ai)": "https://docs.z.ai/guides/llm/glm-4.6",
+    "Moonshot AI": "https://platform.moonshot.ai/docs/introduction",
+    "NVIDIA": "https://build.nvidia.com/nvidia",
+    "Xiaomi": "https://huggingface.co/XiaomiMiMo",
+    "xAI": "https://docs.x.ai/docs/models",
+}
 
 SOURCE_NOTE = (
     "references/llm-benchmark-dashboard.jsx — Apr 16, 2026 seed snapshot. "
@@ -214,10 +230,11 @@ def seed(force: bool) -> None:
         for m in MODELS:
             con.execute(
                 """INSERT INTO models (name, vendor, color, released, params,
-                                       pricing, notes, first_seen, last_seen, status)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                       pricing, notes, card_url, first_seen, last_seen, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (m["name"], m["vendor"], m["color"], m["released"], m["params"],
-                 m["pricing"], m["notes"], today, today, m.get("status", "active")),
+                 m["pricing"], m["notes"], m.get("card_url") or VENDOR_CARD_URL.get(m["vendor"]),
+                 today, today, m.get("status", "active")),
             )
             con.execute(
                 """INSERT INTO model_scores (model_id, as_of, intelligence, coding,

@@ -7,7 +7,7 @@
   <link rel="icon" href="data:," />
   <link rel="stylesheet" href="vendor/uPlot.min.css" />
   <link rel="stylesheet" href="vendor/voidware/index.css" />
-  <link rel="stylesheet" href="style.css?v=m11-20260607m" />
+  <link rel="stylesheet" href="style.css?v=m12-20260607g" />
   <script src="vendor/sql-wasm.js"></script>
   <script src="vendor/marked.min.js"></script>
   <script src="vendor/uPlot.iife.min.js"></script>
@@ -30,7 +30,6 @@
         <span class="sr-only">Open navigation</span>
       </button>
       <div>
-        <p class="shell-kicker">LLM-Dash</p>
         <p class="shell-mobile-title">Models</p>
       </div>
     </header>
@@ -103,8 +102,8 @@
         <button id="help-trigger" class="vw-btn vw-btn-secondary help-btn" type="button" title="Keyboard shortcuts" aria-label="Keyboard shortcuts">
           ?
         </button>
-        <span id="freshness" class="vw-status-chip freshness-chip" data-state="unknown" title="No update recorded yet">
-          No updates yet
+        <span id="freshness" class="freshness-chip" title="No update recorded yet">
+          Last update: …
         </span>
       </div>
     </aside>
@@ -126,6 +125,6 @@
   </main>
   <div id="overlay-root" aria-live="polite"></div>
   <div id="toast-root" aria-live="polite"></div>
-  <script type="module" src="app.js?v=m11-20260607m"></script>
+  <script type="module" src="app.js?v=m12-20260607g"></script>
 </body>
 </html>

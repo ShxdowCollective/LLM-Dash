@@ -20,6 +20,33 @@
   --llm-s-6: 24px;
   --llm-s-7: 32px;
   --llm-s-8: 40px;
+
+  /* ── Color revival (M12) ─────────────────────────────────────
+     All derived from the existing Voidware iridescent tokens so the
+     extra color stays on-spec instead of becoming arbitrary neon. */
+  --grad-iridescent: linear-gradient(
+    115deg,
+    var(--vw-iridescent-1),
+    var(--vw-iridescent-2),
+    var(--vw-iridescent-3),
+    var(--vw-iridescent-4),
+    var(--vw-iridescent-5),
+    var(--vw-iridescent-6),
+    var(--vw-iridescent-7)
+  );
+  --grad-accent: linear-gradient(120deg, var(--vw-iridescent-6), var(--vw-iridescent-5) 60%, var(--vw-iridescent-4));
+  --grad-model: linear-gradient(120deg, color-mix(in srgb, var(--model-color) 92%, white 8%), color-mix(in srgb, var(--model-color) 60%, var(--vw-accent)));
+  --lift-fast: 140ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* Less flat: a faint iridescent wash on the page so pure-black panels read
+   as layered rather than a void. */
+body {
+  background:
+    radial-gradient(1200px 600px at 12% -8%, color-mix(in srgb, var(--vw-iridescent-6) 14%, transparent), transparent 60%),
+    radial-gradient(1000px 560px at 100% 0%, color-mix(in srgb, var(--vw-iridescent-4) 9%, transparent), transparent 55%),
+    var(--vw-bg);
+  background-attachment: fixed;
 }
 
 *, *::before, *::after {
@@ -27,14 +54,19 @@
 }
 
 html {
-  scrollbar-gutter: stable;
+  height: 100%;
+  /* The app shell owns the viewport; views rescale or scroll internally so the
+     page itself never grows a vertical scrollbar. Both html and body must lock
+     or the documentElement keeps scrolling. */
+  overflow: hidden;
   scrollbar-color: var(--vw-surface-3) transparent;
   scrollbar-width: thin;
 }
 
 body {
   margin: 0;
-  min-height: 100vh;
+  height: 100%;
+  overflow: hidden;
   background: var(--vw-bg);
   color: var(--vw-text);
   font-family: var(--vw-font-body);
@@ -217,42 +249,18 @@ mark {
   padding: 18px 22px 0;
 }
 
+/* Quiet, non-interactive last-update line. No chip, no CTA. */
 .freshness-chip {
   grid-column: 1 / -1;
   justify-content: center;
-}
-
-.freshness-chip[data-state="fresh"] {
-  color: var(--llm-freshness-ok);
-  box-shadow: 0 0 0 1px var(--vw-success-border);
-}
-
-.freshness-chip[data-state="stale"] {
-  color: var(--vw-text-muted);
-  cursor: pointer;
-}
-
-.freshness-chip[data-state="stale"]::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  margin-right: 2px;
-  border-radius: 999px;
-  background: var(--llm-freshness-stale);
-}
-
-.freshness-chip[data-state="stale"]:hover {
-  color: var(--vw-text);
-  text-decoration: underline;
-}
-
-.freshness-chip[data-state="expired"] {
-  color: var(--llm-freshness-error);
-  box-shadow: 0 0 0 1px var(--vw-error-border);
-}
-
-.freshness-chip[data-state="unknown"] {
+  padding: 2px 0 0;
+  background: none;
+  box-shadow: none;
   color: var(--vw-text-faint);
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
 }
 
 .sidebar-close-btn,
@@ -263,8 +271,39 @@ mark {
 .app-content.vw-page-content {
   width: 100%;
   max-width: none;
+  height: 100dvh;
   margin: 0;
-  padding: 28px 32px 56px;
+  padding: 28px 32px 24px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* content-body fills the space under the header/subnav; the mounted view fills
+   it and manages its own internal scroll (model list) or rescales (chart). */
+#content-body.content-slot {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+#content-body > .models-workbench,
+#content-body > .chart-workbench,
+#content-body > .stats-workbench,
+#content-body > .settings-workbench,
+#content-body > .changelog-view,
+#content-body > .empty-state {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Non-list views that can exceed the viewport scroll inside their own region
+   rather than growing the page. */
+#content-body > .stats-workbench,
+#content-body > .settings-workbench {
+  overflow: auto;
 }
 
 .app-page-header {
@@ -275,24 +314,12 @@ mark {
   border-bottom: 1px solid var(--vw-border);
 }
 
-.app-page-title {
-  display: grid;
-  gap: 5px;
-}
-
-.app-page-title h2 {
+h1.app-page-title {
   margin: 0;
-  font-size: 28px;
-  font-weight: var(--vw-weight-semibold);
-  line-height: 1.15;
-  letter-spacing: 0;
-}
-
-.app-page-lead {
-  max-width: 64ch;
-  margin: 0;
-  color: var(--vw-text-soft);
-  font-size: 14px;
+  font-size: 30px;
+  font-weight: var(--vw-weight-bold);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
 }
 
 .app-content .vw-subpage-nav {
@@ -337,14 +364,13 @@ mark {
 /* Nesting convention: ONE 1px ring per structural region (the containers
    below). Children — chips, pills, icon buttons, legend chips, KPI tiles —
    use fill/tint or a soft shadow instead of a second ring, so no bordered
-   element sits inside a bordered grandparent. tr.selected (inset accent bar +
-   tint) is the reference child pattern. */
+   element sits inside a bordered grandparent. tr.is-inspect / tr.is-compare
+   (inset accent bar + tint) is the reference child pattern. */
 .boot-panel,
 .empty-state.vw-feature-empty-state,
 .panel-card,
 .settings-panel,
 .chart-canvas-panel,
-.selection-panel,
 .changelog-list,
 .changelog-panel,
 .models-toolbar {
@@ -386,8 +412,33 @@ mark {
 }
 
 .models-workbench {
-  display: grid;
-  gap: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+}
+
+.models-workbench > .models-toolbar {
+  flex: 0 0 auto;
+}
+
+/* Table layout fills the remaining height: the table scrolls internally (the
+   one allowed scroll — "the list of models"), the compare area sits below. */
+.model-table-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.model-table-layout > .table-wrap {
+  flex: 1 1 auto;
+  min-height: 120px;
+}
+
+.model-table-layout > .compare-area {
+  flex: 0 0 auto;
 }
 
 .models-toolbar {
@@ -475,11 +526,6 @@ mark {
   font-size: 12px;
 }
 
-.model-table-layout {
-  display: grid;
-  gap: 14px;
-}
-
 .table-wrap {
   overflow: auto;
   border-radius: var(--vw-radius-lg);
@@ -489,15 +535,13 @@ mark {
 }
 
 .models-table-wrap {
-  max-height: clamp(320px, calc(100dvh - 310px), 660px);
   --vw-scroll-shadow-bg: var(--vw-surface-1);
 }
 
 /* Match the scroll fade to each region's actual surface so the bottom cue
    reads cleanly instead of fading toward the page background. */
 .changelog-list,
-.changelog-body,
-.compare-strip {
+.changelog-body {
   --vw-scroll-shadow-bg: color-mix(in srgb, var(--vw-surface-1) 94%, var(--vw-bg));
 }
 
@@ -529,13 +573,28 @@ table.models td {
   vertical-align: middle;
 }
 
-table.models tbody tr:hover td,
-table.models tbody tr.selected td {
-  background: color-mix(in srgb, var(--vw-accent) 9%, var(--vw-surface-2));
+table.models tbody tr {
+  transition: background var(--lift-fast);
 }
 
-table.models tbody tr.selected td:first-child {
-  box-shadow: inset 3px 0 0 var(--vw-accent);
+table.models tbody tr:hover td {
+  background: color-mix(in srgb, var(--model-color, var(--vw-accent)) 12%, var(--vw-surface-2));
+}
+
+table.models tbody tr.is-inspect td {
+  background: color-mix(in srgb, var(--model-color, var(--vw-accent)) 16%, var(--vw-surface-2));
+}
+
+table.models tbody tr.is-inspect td:first-child {
+  box-shadow: inset 3px 0 0 var(--model-color, var(--vw-accent));
+}
+
+table.models tbody tr.is-compare td {
+  background: color-mix(in srgb, var(--model-color, var(--vw-accent)) 20%, var(--vw-surface-2));
+}
+
+table.models tbody tr.is-compare td:last-child {
+  box-shadow: inset -3px 0 0 var(--model-color, var(--vw-accent));
 }
 
 table.models td:first-child {
@@ -544,6 +603,65 @@ table.models td:first-child {
 
 table.models td:last-child {
   border-radius: 0 var(--vw-radius-sm) var(--vw-radius-sm) 0;
+}
+
+.compare-col {
+  width: 64px;
+  text-align: center;
+}
+
+.compare-cell {
+  text-align: center;
+}
+
+.compare-check {
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.compare-check.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.compare-check input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.compare-check-box {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--vw-surface-3);
+  box-shadow: inset 0 0 0 1px var(--vw-border-mid);
+  transition: background var(--lift-fast), box-shadow var(--lift-fast);
+}
+
+.compare-check:hover .compare-check-box {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--model-color, var(--vw-accent)) 70%, var(--vw-border-focus));
+}
+
+.compare-check input:checked + .compare-check-box {
+  background: var(--grad-model, var(--vw-accent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--model-color, var(--vw-accent)) 80%, white);
+}
+
+.compare-check input:checked + .compare-check-box::after {
+  content: "✓";
+  color: #0a0a0a;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.compare-check input:focus-visible + .compare-check-box {
+  outline: 2px solid var(--vw-border-focus);
+  outline-offset: 2px;
 }
 
 .rank-cell {
@@ -568,6 +686,30 @@ table.models td:last-child {
   height: 8px;
   border-radius: 999px;
   background: var(--model-color);
+}
+
+.model-cell-text {
+  min-width: 0;
+}
+
+.provider-logo {
+  flex: 0 0 auto;
+  object-fit: contain;
+  border-radius: 5px;
+  background: color-mix(in srgb, white 90%, transparent);
+  padding: 3px;
+  box-shadow: 0 0 0 1px var(--vw-border);
+}
+
+.provider-monogram {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 5px;
+  background: var(--grad-model, var(--vw-accent));
+  color: #0a0a0a;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .model-cell .name {
@@ -648,13 +790,22 @@ table.models td:last-child {
   text-align: left;
 }
 
-.mobile-model-card.selected {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--model-color) 70%, var(--vw-accent));
+.mobile-model-card {
+  transition: box-shadow var(--lift-fast), background var(--lift-fast), transform var(--lift-fast);
+}
+
+.mobile-model-card.is-inspect {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--model-color) 55%, var(--vw-border-focus));
+}
+
+.mobile-model-card.is-compare {
+  background: color-mix(in srgb, var(--model-color) 16%, var(--vw-surface-1));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--model-color) 80%, white);
 }
 
 .mobile-model-card-head {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
 }
@@ -740,30 +891,6 @@ table.models td:last-child {
   line-height: 1.35;
 }
 
-.compare-strip {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
-  overflow: auto;
-  padding: 4px;
-}
-
-.compare-card {
-  position: relative;
-  display: grid;
-  gap: 8px;
-  min-width: 180px;
-  padding: 12px;
-  border-radius: var(--vw-radius-md);
-  background: color-mix(in srgb, var(--model-color) 8%, var(--vw-surface-1));
-  box-shadow: 0 0 0 1px var(--vw-border);
-}
-
-.compare-card > span {
-  color: var(--vw-text-soft);
-  font-size: 12px;
-}
-
 .compare-remove {
   position: absolute;
   top: 8px;
@@ -776,11 +903,59 @@ table.models td:last-child {
   border-radius: 999px;
   background: var(--vw-surface-3);
   color: var(--vw-text-soft);
+  transition: background var(--lift-fast), color var(--lift-fast);
+}
+
+.compare-remove:hover {
+  background: color-mix(in srgb, var(--vw-error) 30%, var(--vw-surface-3));
+  color: var(--vw-text);
 }
 
 .chart-workbench {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.chart-workbench > .chart-controls {
+  flex: 0 0 auto;
+}
+
+/* Two columns: the chart fills the left at full height (SVG scales to fit, no
+   page scroll), the model detail sits on the right and scrolls internally if
+   it gets tall (e.g. several compared models). */
+.chart-workbench > .chart-analysis {
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
   gap: 14px;
+}
+
+.chart-analysis > .chart-canvas-panel {
+  min-height: 160px;
+  display: flex;
+}
+
+.chart-side {
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+/* In the narrow side column the single-model card stacks (summary then bars)
+   instead of trying to sit two-up. */
+.chart-side .compare-grid.mode-bars {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.chart-side .stat-model-card.mode-bars {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.chart-side .compare-grid.mode-grade {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .chart-controls {
@@ -842,22 +1017,41 @@ table.models td:last-child {
 }
 
 .svg-shell {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
+  width: 100%;
+  min-height: 0;
+}
+
+.svg-shell > .analysis-svg {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .analysis-svg {
   width: 100%;
+  height: 100%;
   max-height: 460px;
 }
 
+.chart-legend {
+  flex: 0 0 auto;
+}
+
+.chart-canvas-panel {
+  background:
+    radial-gradient(120% 120% at 0% 0%, color-mix(in srgb, var(--vw-iridescent-6) 10%, transparent), transparent 55%),
+    color-mix(in srgb, var(--vw-surface-1) 92%, var(--vw-bg));
+}
+
 .chart-plot-bg {
-  fill: color-mix(in srgb, var(--vw-surface-2) 72%, var(--vw-bg));
-  stroke: var(--vw-border);
+  fill: color-mix(in srgb, var(--vw-surface-3) 80%, var(--vw-bg));
+  stroke: var(--vw-border-mid);
 }
 
 .chart-grid-line {
-  stroke: color-mix(in srgb, var(--vw-border) 50%, transparent);
+  stroke: color-mix(in srgb, var(--vw-border-focus) 70%, transparent);
   stroke-width: 1;
 }
 
@@ -883,15 +1077,27 @@ table.models td:last-child {
   stroke: var(--vw-bg);
   stroke-width: 1.5;
   paint-order: stroke;
-  opacity: 0.92;
+  opacity: 0.96;
+  cursor: pointer;
+  transition: stroke-width var(--lift-fast), filter var(--lift-fast);
 }
 
-.model-point:hover,
-.model-point.selected {
-  opacity: 1;
-  stroke: color-mix(in srgb, var(--model-color) 60%, white);
+.model-point:hover {
+  stroke: color-mix(in srgb, var(--model-color) 50%, white);
   stroke-width: 3;
-  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--model-color) 55%, transparent));
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--model-color) 60%, transparent));
+}
+
+.model-point.is-inspect {
+  stroke: white;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--model-color) 70%, transparent));
+}
+
+.model-point.is-compare {
+  stroke: color-mix(in srgb, var(--model-color) 40%, white);
+  stroke-width: 4;
+  filter: drop-shadow(0 0 16px color-mix(in srgb, var(--model-color) 75%, transparent));
 }
 
 .radar-ring {
@@ -922,23 +1128,48 @@ table.models td:last-child {
   align-items: center;
   gap: 6px;
   min-height: 26px;
-  padding: 4px 8px;
+  padding: 4px 10px 4px 8px;
+  border: 0;
   border-radius: 999px;
   background: var(--vw-surface-3);
-  color: var(--vw-text-soft);
+  box-shadow: inset 0 0 0 1px var(--vw-border);
+  color: color-mix(in srgb, var(--model-color) 62%, var(--vw-text));
   font-size: 11px;
+  font-weight: var(--vw-weight-semibold);
+  cursor: pointer;
+  transition: background var(--lift-fast), color var(--lift-fast), box-shadow var(--lift-fast);
+}
+
+.legend-chip::before {
+  box-shadow: 0 0 6px color-mix(in srgb, var(--model-color) 70%, transparent);
+}
+
+.legend-chip:hover {
+  color: var(--vw-text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--model-color) 60%, var(--vw-border-focus));
+}
+
+.legend-chip.is-active {
+  background: linear-gradient(120deg, color-mix(in srgb, var(--model-color) 30%, var(--vw-surface-2)), color-mix(in srgb, var(--model-color) 14%, var(--vw-surface-2)));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--model-color) 75%, white);
+  color: var(--vw-text);
+}
+
+.legend-chip.is-active::before {
+  box-shadow: 0 0 10px color-mix(in srgb, var(--model-color) 90%, transparent);
 }
 
 .changelog-view {
   display: grid;
   grid-template-columns: minmax(230px, 310px) minmax(0, 1fr);
   gap: 16px;
+  min-height: 0;
 }
 
 .changelog-list,
 .changelog-panel {
-  min-height: min(520px, calc(100dvh - 210px));
-  max-height: calc(100dvh - 190px);
+  min-height: 0;
+  height: 100%;
 }
 
 .changelog-list {
@@ -1309,6 +1540,436 @@ kbd {
   color: var(--vw-error);
 }
 
+/* ── M12 color revival: accents on key interactive surfaces ───────── */
+
+.llm-app .vw-btn-primary {
+  background: var(--grad-accent);
+  color: #0a0a0a;
+  font-weight: var(--vw-weight-semibold);
+  box-shadow: 0 1px 0 color-mix(in srgb, white 25%, transparent) inset, var(--vw-shadow-sm);
+  transition: filter var(--lift-fast), transform var(--lift-fast);
+}
+
+.llm-app .vw-btn-primary:hover {
+  filter: brightness(1.08) saturate(1.1);
+  transform: translateY(-1px);
+}
+
+.llm-app .vw-btn-secondary,
+.llm-app .vw-btn-ghost {
+  transition: background var(--lift-fast), box-shadow var(--lift-fast), transform var(--lift-fast);
+}
+
+.llm-app .vw-btn-secondary:hover,
+.llm-app .vw-btn-ghost:hover {
+  transform: translateY(-1px);
+  box-shadow: inset 0 0 0 1px var(--vw-border-focus);
+}
+
+.app-sidebar .vw-sidebar-link.active,
+.app-sidebar .vw-sidebar-link[aria-current="page"] {
+  background: linear-gradient(120deg, color-mix(in srgb, var(--vw-iridescent-6) 22%, var(--vw-surface-2)), color-mix(in srgb, var(--vw-iridescent-5) 12%, var(--vw-surface-2)));
+  box-shadow: inset 3px 0 0 0 transparent;
+  border-image: var(--grad-iridescent) 1;
+}
+
+.app-sidebar .vw-sidebar-link.active::before,
+.app-sidebar .vw-sidebar-link[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--grad-iridescent);
+}
+
+.app-sidebar .vw-sidebar-link {
+  position: relative;
+  transition: background var(--lift-fast), color var(--lift-fast);
+}
+
+.app-sidebar .vw-sidebar-link.active .vw-sidebar-icon,
+.app-sidebar .vw-sidebar-link[aria-current="page"] .vw-sidebar-icon {
+  background: var(--grad-accent);
+  color: #0a0a0a;
+}
+
+.sidebar-brand h1 {
+  background: var(--grad-iridescent);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.app-content .vw-subpage-nav-link[aria-current="page"] {
+  background: linear-gradient(120deg, color-mix(in srgb, var(--vw-iridescent-6) 26%, var(--vw-surface-3)), color-mix(in srgb, var(--vw-iridescent-4) 16%, var(--vw-surface-3)));
+  color: var(--vw-text);
+  box-shadow: inset 0 -2px 0 0 color-mix(in srgb, var(--vw-iridescent-5) 80%, transparent);
+}
+
+.toolbar-filter-btn[aria-expanded="true"] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vw-iridescent-5) 60%, var(--vw-border-focus));
+}
+
+/* ── Expanded filters ─────────────────────────────────────────────── */
+
+.filter-dock {
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.filter-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.field.minoverall input[type="range"] {
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  accent-color: var(--vw-iridescent-5);
+}
+
+.toggle-field {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.toggle-field input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--vw-iridescent-5);
+}
+
+.filter-vendors {
+  display: grid;
+  gap: 8px;
+}
+
+.filter-vendors-label {
+  color: var(--vw-text-faint);
+  font-size: 10px;
+  font-weight: var(--vw-weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.filter-vendor-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.vendor-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 10px 4px 7px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--vw-surface-3);
+  box-shadow: inset 0 0 0 1px var(--vw-border);
+  color: var(--vw-text-soft);
+  font-size: 12px;
+  transition: background var(--lift-fast), box-shadow var(--lift-fast), color var(--lift-fast);
+}
+
+.vendor-chip:hover {
+  color: var(--vw-text);
+  box-shadow: inset 0 0 0 1px var(--vw-border-focus);
+}
+
+.vendor-chip.is-active {
+  background: linear-gradient(120deg, color-mix(in srgb, var(--vw-iridescent-6) 28%, var(--vw-surface-2)), color-mix(in srgb, var(--vw-iridescent-4) 16%, var(--vw-surface-2)));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vw-iridescent-5) 70%, white);
+  color: var(--vw-text);
+}
+
+.vendor-chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--vw-text-faint);
+}
+
+/* ── Comparison area: stat cards with bars (single) / grades (multi) ─ */
+
+.compare-area {
+  display: grid;
+  gap: 12px;
+}
+
+.compare-area-head {
+  display: grid;
+  gap: 2px;
+}
+
+.compare-area-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: var(--vw-weight-bold);
+}
+
+.compare-area-hint {
+  margin: 0;
+  color: var(--vw-text-muted);
+  font-size: 12px;
+}
+
+.compare-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.compare-grid.mode-bars {
+  grid-template-columns: minmax(0, 1040px);
+}
+
+.compare-grid.mode-grade {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+/* Single-model card: two columns on wide screens (identity/meta | bars) so it
+   fills space intentionally instead of one over-long full-bleed row. */
+.stat-model-card.mode-bars {
+  grid-template-columns: minmax(240px, 340px) minmax(0, 1fr);
+  align-items: start;
+  gap: 14px 28px;
+}
+
+.stat-card-summary {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.stat-card-bars-col {
+  min-width: 0;
+  align-self: center;
+}
+
+@media (max-width: 720px) {
+  .stat-model-card.mode-bars {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+}
+
+.stat-model-card {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  overflow: hidden;
+  border-radius: var(--vw-radius-lg);
+  background:
+    linear-gradient(160deg, color-mix(in srgb, var(--model-color) 16%, transparent), transparent 160px),
+    color-mix(in srgb, var(--vw-surface-1) 94%, var(--vw-bg));
+  box-shadow: 0 0 0 1px var(--vw-border), var(--vw-shadow-md);
+  transition: box-shadow var(--lift-fast), transform var(--lift-fast);
+}
+
+.stat-model-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--grad-model);
+}
+
+.stat-model-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--model-color) 40%, var(--vw-border)), var(--vw-shadow-lg);
+}
+
+.stat-card-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.stat-card-titles {
+  min-width: 0;
+}
+
+.stat-card-name {
+  display: block;
+  font-size: 16px;
+  font-weight: var(--vw-weight-bold);
+  overflow-wrap: anywhere;
+}
+
+.stat-card-vendor {
+  display: block;
+  color: color-mix(in srgb, var(--model-color) 60%, var(--vw-text-soft));
+  font-size: 12px;
+  font-weight: var(--vw-weight-semibold);
+}
+
+.stat-card-tier {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--tier-color, var(--vw-surface-3)) 26%, var(--vw-surface-2));
+  color: color-mix(in srgb, var(--tier-color, var(--vw-text)) 82%, var(--vw-text));
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.stat-card-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 14px;
+  margin: 0;
+}
+
+.meta-item {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.meta-item dt {
+  color: var(--vw-text-faint);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.meta-item dd {
+  margin: 0;
+  color: var(--vw-text-soft);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.stat-bars {
+  display: grid;
+  gap: 7px;
+}
+
+.stat-bar {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 10px;
+}
+
+.stat-bar-label {
+  color: var(--vw-text-soft);
+  font-size: 12px;
+}
+
+.stat-bar.is-headline .stat-bar-label {
+  color: var(--vw-text);
+  font-weight: var(--vw-weight-semibold);
+}
+
+.stat-bar-track {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--vw-surface-3);
+  overflow: hidden;
+}
+
+.stat-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--bar-color, var(--model-color)) 70%, var(--vw-surface-4)), var(--bar-color, var(--model-color)));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--bar-color, var(--model-color)) 45%, transparent);
+  transition: width 320ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.stat-bar-val {
+  font-family: var(--vw-font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: var(--vw-weight-semibold);
+  text-align: right;
+}
+
+.grade-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+  gap: 6px;
+}
+
+.grade-box {
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  padding: 8px 4px;
+  border-radius: var(--vw-radius-sm);
+  background: color-mix(in srgb, var(--tier-color, var(--vw-surface-3)) 16%, var(--vw-surface-2));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tier-color, var(--vw-border)) 30%, transparent);
+}
+
+.grade-label {
+  color: var(--vw-text-faint);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.grade-letter {
+  color: color-mix(in srgb, var(--tier-color, var(--vw-text)) 82%, var(--vw-text));
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.grade-score {
+  font-family: var(--vw-font-mono);
+  font-size: 11px;
+  color: var(--vw-text-muted);
+}
+
+.stat-card-link {
+  justify-self: start;
+  color: color-mix(in srgb, var(--model-color) 55%, var(--vw-text));
+  font-size: 12px;
+  font-weight: var(--vw-weight-semibold);
+  text-decoration: none;
+}
+
+.stat-card-link:hover {
+  text-decoration: underline;
+}
+
+.stat-model-card .compare-remove {
+  z-index: 1;
+}
+
+.shortcut-note {
+  margin: 8px 0 0;
+  color: var(--vw-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+@media (max-width: 560px) {
+  .stat-bar {
+    grid-template-columns: 76px minmax(0, 1fr) 30px;
+    gap: 8px;
+  }
+
+  .stat-card-meta {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 1100px) {
   .analysis-grid,
   .settings-workbench,
@@ -1407,10 +2068,36 @@ kbd {
   }
 
   .app-content.vw-page-content {
-    padding: 18px 14px calc(56px + env(safe-area-inset-bottom));
+    height: calc(100dvh - var(--llm-shell-header));
+    padding: 14px 14px calc(12px + env(safe-area-inset-bottom));
   }
 
-  .app-page-title h2 {
+  /* On mobile the model list + its detail scroll together under the fixed
+     toolbar — that's the allowed "list of models" scroll, not a page scrollbar. */
+  .model-table-layout {
+    overflow: auto;
+    display: block;
+  }
+
+  .chart-workbench {
+    overflow: auto;
+  }
+
+  .chart-workbench > .chart-analysis {
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .chart-side {
+    overflow: visible;
+  }
+
+  .chart-analysis > .chart-canvas-panel {
+    height: 46vh;
+    min-height: 240px;
+  }
+
+  h1.app-page-title {
     font-size: 24px;
   }
 
@@ -1438,7 +2125,7 @@ kbd {
   /* The fixed mobile app bar already shows the page title; visually hide the
      duplicate in the page header (kept in the a11y tree as the page heading)
      so each mobile screen shows one title. */
-  .app-page-title h2 {
+  h1.app-page-title {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -1448,6 +2135,12 @@ kbd {
     clip: rect(0 0 0 0);
     clip-path: inset(50%);
     white-space: nowrap;
+  }
+
+  .app-page-header {
+    margin-bottom: 8px;
+    padding-bottom: 0;
+    border-bottom: 0;
   }
 
   .toolbar-actions {
@@ -1527,12 +2220,8 @@ kbd {
     padding-bottom: 8px;
   }
 
-  .app-page-title h2 {
+  h1.app-page-title {
     font-size: 24px;
-  }
-
-  .app-page-title p {
-    display: none;
   }
 
   .models-workbench,
@@ -1591,13 +2280,9 @@ kbd {
     padding: 5px 6px;
   }
 
-  .models-table-wrap {
-    max-height: calc(100dvh - 260px);
-  }
-
   .changelog-list,
   .changelog-panel {
-    max-height: calc(100dvh - 160px);
+    max-height: none;
   }
 }
 

@@ -7,14 +7,53 @@ Use `[ ]` only for still-open work.
 
 ## Now
 
-No active development task is logged.
+No active development task. Optional Milestone 12 follow-ups:
 
+- [ ] Provider logos cover current vendors; add new `<slug>.svg` + a `VENDOR_LOGO`
+  entry when a vendor without a models.dev logo appears (falls back to monogram).
+- [ ] `card_url` backfill uses per-vendor official docs pages; the daily update
+  records exact per-model URLs going forward. Optionally replace seed/back­filled
+  vendor pages with exact per-model cards over time.
 - [ ] Follow-up verification (optional): re-capture the full 22-viewport
   screenshot matrix and re-run the per-screenshot nano review for a clean-sweep
   sign-off. Capture with `agent-browser set viewport <w> <h>` before `open`
   (desktop + mobile spot-checks already verified live this way).
 
+### M12 follow-ups shipped (2026-06-08)
+
+- [x] D1 — official `card_url`: schema column + view + migration (live DB 34/34),
+  `init_db`/`run_update` writers, SKILL.md doc, frontend "Model card ↗" link.
+- [x] Per-metric bar colors in the detail view (distinct iridescent hue each).
+- [x] Single-model card redesigned to 2-col, capped width (no full-bleed/cutoff).
+- [x] Fit-to-viewport shell: no page vertical scrollbar; only the model list
+  scrolls; chart scales; verified desktop 1440 + mobile 390.
+
 ## Recent Completed
+
+**Milestone 12 — Voidware Color Revival + Comparison Overhaul — DONE.**
+Implemented all 8 items live against
+[`docs/plans/2026-06-07-m12-color-revival-compare-overhaul.md`](docs/plans/2026-06-07-m12-color-revival-compare-overhaul.md).
+Frontend-only (`web/`); owner authorized the `web/` change. Verified with
+desktop (1440) + mobile (390) headed screenshots in `e2e/screenshots/m12/`,
+effective-state checks (`getComputedStyle`), and a clean-localStorage reload.
+
+- [x] 1 — Color revival: iridescent gradient accents (sidebar, buttons, subnav,
+  brand), contrast lift, hover/active states, model-color-mapped rows/points/cards.
+- [x] 2 — Right-side checkbox multi-select; `compare` (multi, empty default) vs
+  `inspect` (single click) split; prefs migration; shared `renderCompareArea()`.
+- [x] 3 — Unified `modelStatCard`: bars (single) / grade boxes (multi), full
+  metadata (provider, cost, released, tracked-since, type, notes, card link);
+  rounded corners + gradient top stripe.
+- [x] 4 — Single bold page title; eyebrow/lead removed; mobile kicker dropped.
+- [x] 5 — Freshness chip demoted to quiet gray `Last update: <age>`, no CTA.
+- [x] 6 — Filters: tier, status, min-overall slider, has-pricing, released-after,
+  multi-vendor chips; `filterCount`/`resetFilters`/`DEFAULT_UI` updated.
+- [x] 7 — Provider logos vendored from models.dev under `web/vendor/logos/`
+  (+ `SOURCE.md`); render in table, mobile cards, stat cards, filter + legend.
+- [x] 8 — Chart rescue: lifted plot bg + brighter grid, colored points with
+  inspect/compare glow, colored clickable legend filtering by vendor.
+- [x] Root fix — `h()` now sets CSS custom properties via `setProperty`; model
+  colors had never actually applied (this is why chart points were black).
 
 - Milestone 11 polish — implemented
   [`docs/plans/2026-06-06-m11-polish-implementation-plan.md`](docs/plans/2026-06-06-m11-polish-implementation-plan.md)

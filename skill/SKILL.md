@@ -109,7 +109,8 @@ Build this JSON in memory. Do not hallucinate any field.
       "agents": 9.5,
       "speed": 5.0,
       "cost": 3.5,
-      "notes": "... prose with inline citations ..."
+      "notes": "... prose with inline citations ...",
+      "card_url": "https://docs.anthropic.com/en/docs/about-claude/models/overview"
     }
   ],
   "score_updates": [
@@ -132,6 +133,11 @@ Build this JSON in memory. Do not hallucinate any field.
 Rules:
 - `color`: reuse the vendor's existing color if they're already tracked;
   pick a fresh hex for a new vendor and document it in `notes`.
+- `card_url`: the official model card or vendor docs page for this model — you
+  are already reading it as a primary source, so record its URL. Prefer the
+  exact per-model card; fall back to the vendor's official models/docs page.
+  Optional but strongly preferred; omitting it leaves the dashboard with a
+  generic web-search lookup link instead of the real card.
 - All five scores ∈ [0.0, 10.0]. The schema enforces this with CHECK
   constraints (`schema_version` 2); a write outside the range will fail the
   transaction.
