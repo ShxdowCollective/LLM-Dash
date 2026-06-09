@@ -31,7 +31,8 @@ check that row's `run_metrics.notes` for `llmstats_enriched=true`.
 - **Every score claim cites a URL.** No invented numbers, no hallucinated
   benchmarks.
 - **Prior `changelogs/*.md` files are never modified or deleted.** The audit
-  trail is load-bearing.
+  trail is load-bearing. Settings → Reset with typed confirmation is the one
+  sanctioned deletion exception; normal update runs remain append-only.
 - **Dual metadata.** Every run records metrics in the `## Run Metadata` footer
   of the `.md` and the `run_metrics` SQLite table. Skipping either is a broken
   run.
@@ -75,5 +76,7 @@ Stats dashboard groups by both. Do not spoof.
 
 - Do not touch the static web app (`web/`) during update runs.
 - Do not modify old changelog files. Today's date owns today's file.
-- Do not modify old `model_scores` rows. Score history is append-only.
+- Do not modify old `model_scores` rows. Score history is append-only (Settings
+  → Reset is the deliberate operator exception; normal update runs never delete
+  history).
 - Do not widen scope during an update run.

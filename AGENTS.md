@@ -45,7 +45,9 @@ release prep, use the development instructions below.
   screenshots/probes when layout, responsiveness, or interaction behavior
   changes.
 - Do not modify old `changelogs/*.md` files unless the user explicitly asks for
-  audit-log repair. Changelog history is append-only by default.
+  audit-log repair. Changelog history is append-only by default; Settings → Reset
+  with typed confirmation is the deliberate operator exception, and normal update
+  runs remain append-only.
 - Do not rewrite old `model_scores` history unless the task is explicitly a
   data repair/migration and the plan documents why.
 - Keep credential material out of logs, screenshots, browser responses,

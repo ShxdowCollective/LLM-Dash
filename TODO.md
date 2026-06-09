@@ -7,79 +7,63 @@ Use `[ ]` only for still-open work.
 
 ## Now
 
-**Milestone 13 — Table UX, ranking, reset, and model metadata overhaul — planned.**
-Implementation plan:
-[`docs/plans/2026-06-08-m13-table-ux-data-overhaul.md`](docs/plans/2026-06-08-m13-table-ux-data-overhaul.md).
-No implementation has started yet.
+Nothing active. M12 follow-ups and M13 are shipped (see below). Next data
+refresh runs via [`skill/SKILL.md`](skill/SKILL.md).
 
-- [ ] M13 data layer: `scripts/migrate_model_metadata_v4.py` for
-  `input_capabilities` and `deprecated_on`; wire migration into startup/update
-  paths; update schema, seeds, writer validation, and the full update contract.
-- [ ] M13 ranking formula: implement researched weights
-  (`25/25/25/10/15` Overall, `60/25/15` Value), document in architecture, and
-  verify tier/filter distribution before/after.
-- [ ] M13 table UX: header-click sorting, real Provider column, resizable
-  columns, compact mobile sort, zoom slider, and desktop grade-letter collapse
-  below zoom `0.85`.
-- [ ] M13 metadata UI: capability icons in table/chart/detail, capability
-  filters, deprecation date display, and "Ignore Deprecated Models" toggle.
-- [ ] M13 Settings Reset tab: scoped stats/changelog/models/full reset with
-  server-validated typed `confirm_token`, coherent reseed/CSV/meta behavior,
-  and Voidware credential preservation verification.
-- [ ] M13 spacing/copy cleanup: move Stats single-run CTA top-right, center
-  freshness under Refresh, remove "Local benchmark workbench", tighten empty
-  space, and update notes guidance to avoid raw benchmark numbers.
-- [ ] M13 verification/docs: migration/reset tests, Voidware `1.0.4` verification
-  + auth-secret checks, headed desktop/mobile screenshots, CSV export check,
-  docs/TODO/LOGBOOK updates.
+Open optional follow-ups:
 
-Optional Milestone 12 follow-ups:
-
-- [ ] Provider logos cover current vendors; add new `<slug>.svg` + a `VENDOR_LOGO`
+- [ ] Provider logos cover current vendors; add a new `<slug>.svg` + `VENDOR_LOGO`
   entry when a vendor without a models.dev logo appears (falls back to monogram).
-- [ ] `card_url` backfill uses per-vendor official docs pages; the daily update
-  records exact per-model URLs going forward. Optionally replace seed/back­filled
-  vendor pages with exact per-model cards over time.
-- [ ] Follow-up verification (optional): re-capture the full 22-viewport
-  screenshot matrix and re-run the per-screenshot nano review for a clean-sweep
-  sign-off. Capture with `agent-browser set viewport <w> <h>` before `open`
-  (desktop + mobile spot-checks already verified live this way).
-
-### M12 follow-ups shipped (2026-06-08)
-
-- [x] D1 — official `card_url`: schema column + view + migration (live DB 34/34),
-  `init_db`/`run_update` writers, SKILL.md doc, frontend "Model card ↗" link.
-- [x] Per-metric bar colors in the detail view (distinct iridescent hue each).
-- [x] Single-model card redesigned to 2-col, capped width (no full-bleed/cutoff).
-- [x] Fit-to-viewport shell: no page vertical scrollbar; only the model list
-  scrolls; chart scales; verified desktop 1440 + mobile 390.
+- [ ] Capability/deprecation metadata is honest-by-default (migration backfills
+  nothing; seed sets only documented multimodal models). Update runs fill the
+  rest from cited primary sources over time.
+- [ ] `card_url` backfill uses per-vendor official docs pages; optionally replace
+  with exact per-model cards over time as update runs record them.
 
 ## Recent Completed
 
-**Milestone 12 — Voidware Color Revival + Comparison Overhaul — DONE.**
-Implemented all 8 items live against
-[`docs/plans/2026-06-07-m12-color-revival-compare-overhaul.md`](docs/plans/2026-06-07-m12-color-revival-compare-overhaul.md).
-Frontend-only (`web/`); owner authorized the `web/` change. Verified with
-desktop (1440) + mobile (390) headed screenshots in `e2e/screenshots/m12/`,
-effective-state checks (`getComputedStyle`), and a clean-localStorage reload.
+**Milestone 13 — Table UX, ranking, reset, and model metadata overhaul — DONE.**
+Implemented all 10 items live against
+[`docs/plans/2026-06-08-m13-table-ux-data-overhaul.md`](docs/plans/2026-06-08-m13-table-ux-data-overhaul.md).
+Frontend (`web/`) + data layer (`scripts/`, `server.py`, `skill/`); owner
+authorized. Schema → version 4. Verified: 24 Python tests pass, idempotent
+migration, all reset scopes on DB copies, header-sort/zoom/grade-collapse live,
+desktop 1440 + mobile 390 headed screenshots in `e2e/screenshots/m13/`, pro +
+image nano-agent review.
 
-- [x] 1 — Color revival: iridescent gradient accents (sidebar, buttons, subnav,
-  brand), contrast lift, hover/active states, model-color-mapped rows/points/cards.
-- [x] 2 — Right-side checkbox multi-select; `compare` (multi, empty default) vs
-  `inspect` (single click) split; prefs migration; shared `renderCompareArea()`.
-- [x] 3 — Unified `modelStatCard`: bars (single) / grade boxes (multi), full
-  metadata (provider, cost, released, tracked-since, type, notes, card link);
-  rounded corners + gradient top stripe.
-- [x] 4 — Single bold page title; eyebrow/lead removed; mobile kicker dropped.
-- [x] 5 — Freshness chip demoted to quiet gray `Last update: <age>`, no CTA.
-- [x] 6 — Filters: tier, status, min-overall slider, has-pricing, released-after,
-  multi-vendor chips; `filterCount`/`resetFilters`/`DEFAULT_UI` updated.
-- [x] 7 — Provider logos vendored from models.dev under `web/vendor/logos/`
-  (+ `SOURCE.md`); render in table, mobile cards, stat cards, filter + legend.
-- [x] 8 — Chart rescue: lifted plot bg + brighter grid, colored points with
-  inspect/compare glow, colored clickable legend filtering by vendor.
-- [x] Root fix — `h()` now sets CSS custom properties via `setProperty`; model
-  colors had never actually applied (this is why chart points were black).
+- [x] Data layer (items 8+9): `scripts/migrate_model_metadata_v4.py` adds
+  `input_capabilities` (canonical JSON text/image/audio/video) + `deprecated_on`;
+  wired into server startup + `run_update` (COALESCE so runs never wipe), schema,
+  seed, writer validation, full SKILL.md contract sweep. No prose backfill.
+- [x] Ranking (item 3): Overall `25/25/25/10/15`, Value `60/25/15`; cost now
+  counts. Distribution re-checked; documented in `docs/ARCHITECTURE.md`.
+- [x] Notes guidance (item 7): SKILL.md `notes` = plain strengths/weaknesses,
+  no raw benchmark numbers.
+- [x] Table (items 1+2): header-click sort + `aria-sort`, real Provider column,
+  pointer-drag resizable columns (persisted), zoom slider, desktop grade collapse
+  below `0.85`, compact mobile sort select.
+- [x] Metadata UI (items 8+9): capability icon chips in table/detail/filters +
+  mobile cards, deprecation badge + date, "Ignore deprecated" toggle (Status=
+  Deprecated wins), CSV export adds status/deprecated_on/capabilities.
+- [x] Settings Reset tab (item 4): `POST /api/reset` scoped stats/changelog/
+  models/full with server-validated typed `confirm_token`; scoped functions in
+  `scripts/reset_local_state.py`; reseed/CSV/meta coherent; credentials untouched
+  by construction (config is metadata-only).
+- [x] Spacing/copy (items 5, 6, 10): Stats CTA top-right + freshness centered,
+  "Local benchmark workbench" kicker removed, app-wide density pass (fixed the
+  stretched Stats KPI cards via `align-content:start`), wider Reset panel.
+
+**Milestone 12 follow-ups — DONE (2026-06-08).** Official `card_url` (schema +
+migration, live 34/34), per-metric bar colors, 2-col capped single-model card,
+fit-to-viewport shell (only the model list scrolls).
+
+**Milestone 12 — Voidware Color Revival + Comparison Overhaul — DONE.**
+All 8 items live against
+[`docs/plans/2026-06-07-m12-color-revival-compare-overhaul.md`](docs/plans/2026-06-07-m12-color-revival-compare-overhaul.md):
+iridescent gradient accents, checkbox multi-select (`compare` vs `inspect`),
+unified `modelStatCard`, single bold title, quiet freshness chip, full filter
+set, vendored provider logos, chart rescue, and the `h()` `setProperty` root fix
+that made model colors actually apply.
 
 - Milestone 11 polish — implemented
   [`docs/plans/2026-06-06-m11-polish-implementation-plan.md`](docs/plans/2026-06-06-m11-polish-implementation-plan.md)

@@ -29,6 +29,7 @@ try:
         redact_value,
     )
     from scripts.migrate_score_checks import migrate as migrate_score_checks
+    from scripts.migrate_model_metadata_v4 import migrate as migrate_metadata_v4
 except ModuleNotFoundError:
     from config import (  # type: ignore
         LLMSTATS_BASE_URL,
@@ -42,8 +43,10 @@ except ModuleNotFoundError:
         redact_value,
     )
     from migrate_score_checks import migrate as migrate_score_checks  # type: ignore
+    from migrate_model_metadata_v4 import migrate as migrate_metadata_v4  # type: ignore
 
 ROOT = Path(__file__).resolve().parent.parent
+CAPABILITY_VOCAB = ("text", "image", "audio", "video")
 DB_PATH = ROOT / "data" / "dash.sqlite"
 SKILL_PATH = ROOT / "skill" / "SKILL.md"
 CHANGELOGS_DIR = ROOT / "changelogs"
@@ -214,6 +217,28 @@ def coerce_score(value: Any, field: str) -> float | None:
     return number
 
 
+def canonical_capabilities(value: Any) -> str | None:
+    """Validate update-supplied input_capabilities as a sorted, unique subset of
+    the fixed vocabulary. Returns canonical JSON text, or None when unspecified
+    (so a run never wipes an existing value via COALESCE)."""
+    if value in (None, ""):
+        return None
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError:
+            value = [value]
+    items = [str(v).strip().lower() for v in (value or [])]
+    bad = [c for c in items if c not in CAPABILITY_VOCAB]
+    if bad:
+        raise RunUpdateError(f"input_capabilities has unknown modality: {bad[0]}")
+    ordered = [c for c in CAPABILITY_VOCAB if c in items]
+    if "text" not in ordered:
+        ordered = ["text"] + ordered
+        ordered = [c for c in CAPABILITY_VOCAB if c in ordered]
+    return json.dumps(ordered)
+
+
 def latest_scores(con: sqlite3.Connection, model_name: str) -> dict[str, Any]:
     row = con.execute(
         """SELECT m.id, s.intelligence, s.coding, s.agents, s.speed, s.cost, s.source_notes
@@ -347,8 +372,8 @@ def apply_update(
             if not name:
                 raise RunUpdateError("new model missing name")
             con.execute(
-                """INSERT INTO models (name, vendor, color, released, params, pricing, notes, card_url, first_seen, last_seen)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, date('now'), date('now'))
+                """INSERT INTO models (name, vendor, color, released, params, pricing, notes, card_url, input_capabilities, first_seen, last_seen)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, '["text"]'), date('now'), date('now'))
                    ON CONFLICT(name) DO UPDATE SET
                      vendor = excluded.vendor,
                      color = excluded.color,
@@ -357,6 +382,7 @@ def apply_update(
                      pricing = excluded.pricing,
                      notes = excluded.notes,
                      card_url = COALESCE(excluded.card_url, models.card_url),
+                     input_capabilities = COALESCE(?, models.input_capabilities),
                      last_seen = date('now')""",
                 (
                     name,
@@ -367,6 +393,8 @@ def apply_update(
                     str(model.get("pricing") or ""),
                     str(model.get("notes") or ""),
                     (str(model.get("card_url")).strip() or None) if model.get("card_url") else None,
+                    canonical_capabilities(model.get("input_capabilities")),
+                    canonical_capabilities(model.get("input_capabilities")),
                 ),
             )
             con.execute(
@@ -431,7 +459,24 @@ def apply_update(
             name = str(item.get("name") or "").strip()
             if status not in {"active", "superseded", "deprecated"}:
                 raise RunUpdateError(f"Invalid status: {status}")
-            cur = con.execute("UPDATE models SET status = ?, last_seen = date('now') WHERE name = ?", (status, name))
+            # Stamp deprecated_on when a model first goes deprecated; clear it
+            # only when explicitly reactivated to active.
+            if status == "deprecated":
+                cur = con.execute(
+                    "UPDATE models SET status = ?, "
+                    "deprecated_on = COALESCE(deprecated_on, ?), last_seen = date('now') WHERE name = ?",
+                    (status, as_of, name),
+                )
+            elif status == "active":
+                cur = con.execute(
+                    "UPDATE models SET status = ?, deprecated_on = NULL, last_seen = date('now') WHERE name = ?",
+                    (status, name),
+                )
+            else:
+                cur = con.execute(
+                    "UPDATE models SET status = ?, last_seen = date('now') WHERE name = ?",
+                    (status, name),
+                )
             if cur.rowcount == 0:
                 raise RunUpdateError(f"Status change references unknown model: {name}")
 
@@ -800,6 +845,8 @@ def main() -> int:
             raise RunUpdateError(f"Missing database: {db_path}")
         if migrate_score_checks(db_path):
             write_log(log_path, "score_check_migration_applied")
+        if migrate_metadata_v4(db_path):
+            write_log(log_path, "metadata_v4_migration_applied")
 
         enriched = False
         if args.diff_json:

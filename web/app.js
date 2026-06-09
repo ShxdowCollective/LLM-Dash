@@ -16,7 +16,40 @@
   ];
   const TIER_ORDER = ["S", "A", "B", "C", "D", "F"];
   const MAX_COMPARE = 4;
-  const STORE_KEY = "llm-dash-ui-state-v3";
+  const STORE_KEY = "llm-dash-ui-state-v4";
+  const ZOOM_MIN = 0.7, ZOOM_MAX = 1.3, GRADE_ZOOM = 0.85;
+
+  // Fixed input-modality vocabulary (schema_version 4). Each modality gets an
+  // inline glyph + distinct iridescent hue (no emoji per Voidware spec).
+  const CAPABILITY = {
+    text: { label: "Text", color: "var(--vw-iridescent-2)", glyph: "M4 5h12M4 9h9M4 13h12M4 17h7" },
+    image: { label: "Image", color: "var(--vw-iridescent-4)", glyph: "M3 4h14v12H3zM3 13l4-4 3 3 3-4 4 5M12.5 7.5a1 1 0 100-2 1 1 0 000 2" },
+    audio: { label: "Audio", color: "var(--vw-iridescent-6)", glyph: "M4 8v4h3l4 3V5L7 8zM14 7a4 4 0 010 6M16 5a7 7 0 010 10" },
+    video: { label: "Video", color: "var(--vw-iridescent-1)", glyph: "M3 5h10v10H3zM13 8l4-2v8l-4-2z" },
+  };
+  const CAPABILITY_ORDER = ["text", "image", "audio", "video"];
+
+  // Table columns. sort=null means non-sortable; score=true routes through the
+  // grade-collapse chip path.
+  const COLUMNS = [
+    { key: "rank", label: "#", sort: null, w: 46 },
+    { key: "provider", label: "Provider", sort: "vendor", w: 150 },
+    { key: "model", label: "Model", sort: "name", w: null },
+    { key: "intelligence", label: "Intel", sort: "intelligence", score: true, w: 88 },
+    { key: "coding", label: "Coding", sort: "coding", score: true, w: 88 },
+    { key: "agents", label: "Agent", sort: "agents", score: true, w: 88 },
+    { key: "speed", label: "Speed", sort: "speed", score: true, w: 88 },
+    { key: "overall", label: "Overall", sort: "overall", score: true, w: 90 },
+    { key: "cost", label: "Cost", sort: "cost", score: true, w: 88 },
+    { key: "value", label: "Value", sort: "value", score: true, w: 88 },
+    { key: "compare", label: "Compare", sort: null, w: 64 },
+  ];
+  const SORT_KEYS = new Set(["overall", "value", "intelligence", "coding", "agents", "speed", "cost", "name", "vendor"]);
+  const MOBILE_SORTS = [
+    ["overall", "Overall"], ["value", "Value"], ["vendor", "Provider"], ["name", "Model"],
+    ["intelligence", "Intelligence"], ["coding", "Coding"], ["agents", "Agent"],
+    ["speed", "Speed"], ["cost", "Cost"],
+  ];
 
   // Vendor string -> local SVG slug under web/vendor/logos/ (sourced from
   // models.dev, see logos/SOURCE.md). Vendors without a mapping fall back to a
@@ -49,6 +82,10 @@
     minOverall: 0,
     hasPricing: false,
     releasedAfter: "",
+    inputCapabilities: [],
+    hideDeprecated: false,
+    tableZoom: 1,
+    colWidths: {},
     filtersOpen: false,
     chartMode: "scatter",
     chartX: "cost",
@@ -82,6 +119,7 @@
         ["models", "Models"],
         ["research", "Research"],
         ["schedule", "Schedule"],
+        ["reset", "Reset"],
       ],
     },
   };
@@ -114,6 +152,8 @@
     drawerOpen: false,
     helpOpen: false,
     manualOpen: false,
+    resetTokens: {},
+    resetBusy: "",
     prompt: "",
     provider: {},
     credentials: [],
@@ -296,12 +336,13 @@
     if (Number(ui.minOverall) > 0) list = list.filter((m) => (overall(m) || 0) >= Number(ui.minOverall));
     if (ui.hasPricing) list = list.filter(hasPricing);
     if (ui.releasedAfter) list = list.filter((m) => releasedYear(m) >= Number(ui.releasedAfter));
-    state.filteredModels = list.sort((a, b) => {
-      const av = sortValue(a, ui.sortKey);
-      const bv = sortValue(b, ui.sortKey);
-      const delta = ui.sortDir === "asc" ? av - bv : bv - av;
-      return delta || String(a.name).localeCompare(String(b.name));
-    });
+    if (Array.isArray(ui.inputCapabilities) && ui.inputCapabilities.length) {
+      list = list.filter((m) => { const caps = modelCapabilities(m); return ui.inputCapabilities.every((c) => caps.includes(c)); });
+    }
+    // hideDeprecated hides deprecated rows, but an explicit Status=Deprecated
+    // filter wins (the user asked to see exactly those).
+    if (ui.hideDeprecated && ui.status !== "deprecated") list = list.filter((m) => m.status !== "deprecated");
+    state.filteredModels = list.sort((a, b) => compareBy(a, b, ui.sortKey, ui.sortDir));
     const ids = new Set(state.filteredModels.map((m) => m.id));
     // compare = explicit checkbox set (empty by default). inspect = single
     // row/point click; falls back to the top model so the stat panel is never
@@ -331,12 +372,15 @@
     return [...years].sort((a, b) => b - a);
   }
 
+  // M13 ranking weights (documented in docs/ARCHITECTURE.md). Capability is 75%
+  // of Overall, but cost now counts so the leaderboard isn't price-blind. Value
+  // is the practical-buyer sort: mostly Overall, then cost, then speed.
   function overall(model) {
-    return weighted([[model.intelligence, 0.3], [model.coding, 0.3], [model.agents, 0.3], [model.speed, 0.1]]);
+    return weighted([[model.intelligence, 0.25], [model.coding, 0.25], [model.agents, 0.25], [model.speed, 0.10], [model.cost, 0.15]]);
   }
 
   function valueScore(model) {
-    return weighted([[overall(model), 0.8], [model.cost, 0.2]]);
+    return weighted([[overall(model), 0.60], [model.cost, 0.25], [model.speed, 0.15]]);
   }
 
   function metricValue(model, key) {
@@ -366,6 +410,26 @@
     if (key === "overall") return overall(model) || 0;
     if (key === "value") return valueScore(model) || 0;
     return Number(model[key]) || 0;
+  }
+
+  // String columns (name, vendor) compare lexically; everything else numerically.
+  function compareBy(a, b, key, dir) {
+    let delta;
+    if (key === "name" || key === "vendor") {
+      delta = String(a[key] || "").localeCompare(String(b[key] || ""), undefined, { sensitivity: "base" });
+    } else {
+      delta = sortValue(a, key) - sortValue(b, key);
+    }
+    if (dir === "desc") delta = -delta;
+    return delta || String(a.name || "").localeCompare(String(b.name || ""));
+  }
+
+  function modelCapabilities(model) {
+    let raw = model.input_capabilities;
+    if (typeof raw === "string") { try { raw = JSON.parse(raw); } catch (_) { raw = [raw]; } }
+    const items = Array.isArray(raw) ? raw.map((v) => String(v).toLowerCase()) : [];
+    const keep = CAPABILITY_ORDER.filter((c) => items.includes(c));
+    return keep.length ? keep : ["text"];
   }
 
   function render() {
@@ -428,20 +492,9 @@
 
   function renderModelToolbar() {
     const count = filterCount();
+    const isTable = state.subpage.models === "table";
     return h("section", { class: "models-toolbar", "aria-label": "Model controls" }, [
       h("div", { class: "toolbar-primary" }, [
-        h("label", { class: "field compact" }, [
-          h("span", null, "Sort"),
-          h("select", { value: state.ui.sortKey, onchange: (e) => setSort(e.target.value) },
-            MODEL_SORTS.map(([key, label]) => h("option", { value: key }, label))),
-        ]),
-        h("button", {
-          class: "icon-action",
-          type: "button",
-          title: "Toggle sort direction",
-          "aria-label": "Toggle sort direction",
-          onclick: () => { state.ui.sortDir = state.ui.sortDir === "desc" ? "asc" : "desc"; refreshModels(); render(); },
-        }, state.ui.sortDir === "desc" ? "↓" : "↑"),
         h("label", { class: "search-field" }, [
           h("span", { class: "sr-only" }, "Search models"),
           h("input", {
@@ -452,6 +505,13 @@
             oninput: (e) => debounceSearch(e.target.value),
           }),
         ]),
+        // Compact sort select only on mobile (the desktop table sorts via header
+        // clicks). CSS reveals it under the table breakpoint.
+        isTable ? h("label", { class: "field compact mobile-sort-field" }, [
+          h("span", null, "Sort"),
+          h("select", { value: state.ui.sortKey, onchange: (e) => setSort(e.target.value) },
+            MOBILE_SORTS.map(([key, label]) => h("option", { value: key }, label))),
+        ]) : null,
         h("button", {
           class: "vw-btn vw-btn-secondary toolbar-filter-btn",
           type: "button",
@@ -460,11 +520,41 @@
         }, count ? `Filters (${count})` : "Filters"),
       ]),
       h("div", { class: "toolbar-actions" }, [
+        isTable ? zoomControl() : null,
         h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: exportModels }, "Export CSV"),
         count && state.filteredModels.length ? h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: resetFilters }, "Reset view") : null,
       ]),
       state.ui.filtersOpen ? renderFilters() : null,
     ]);
+  }
+
+  function zoomControl() {
+    const z = clampZoom(state.ui.tableZoom);
+    return h("label", { class: "field compact zoom-field", title: "Table density. Below " + GRADE_ZOOM + " scores collapse to grades." }, [
+      h("span", { class: "zoom-label" }, "Zoom " + Math.round(z * 100) + "%"),
+      h("input", {
+        type: "range", min: String(ZOOM_MIN), max: String(ZOOM_MAX), step: "0.05", value: String(z),
+        "aria-label": "Table zoom",
+        oninput: (e) => { state.ui.tableZoom = clampZoom(Number(e.target.value)); applyZoomLive(); },
+        onchange: (e) => { state.ui.tableZoom = clampZoom(Number(e.target.value)); savePrefs(); render(); },
+      }),
+    ]);
+  }
+
+  function clampZoom(v) { const n = Number(v); return Number.isFinite(n) ? clamp(n, ZOOM_MIN, ZOOM_MAX) : 1; }
+
+  // Live-scale without re-rendering so the slider keeps focus through the drag.
+  // Grade collapse is pure CSS (.is-graded hides .score-num), so crossing the
+  // 0.85 threshold only needs a class toggle, not a render that rebuilds the
+  // toolbar out from under the dragging thumb.
+  function applyZoomLive() {
+    const z = clampZoom(state.ui.tableZoom);
+    const layout = document.querySelector(".model-table-layout");
+    const label = document.querySelector(".zoom-label");
+    if (label) label.textContent = "Zoom " + Math.round(z * 100) + "%";
+    if (!layout) return;
+    layout.style.setProperty("--table-zoom", String(z));
+    layout.classList.toggle("is-graded", z < GRADE_ZOOM);
   }
 
   function renderFilters() {
@@ -505,6 +595,23 @@
           h("input", { type: "checkbox", checked: Boolean(state.ui.hasPricing), onchange: (e) => { state.ui.hasPricing = e.target.checked; refreshModels(); render(); } }),
           h("span", null, "Has pricing"),
         ]),
+        h("label", { class: "field toggle-field", title: state.ui.status === "deprecated" ? "Status filter is set to Deprecated, so this is ignored." : null }, [
+          h("input", { type: "checkbox", checked: Boolean(state.ui.hideDeprecated), disabled: state.ui.status === "deprecated", onchange: (e) => { state.ui.hideDeprecated = e.target.checked; refreshModels(); render(); } }),
+          h("span", null, "Ignore deprecated"),
+        ]),
+      ]),
+      h("div", { class: "filter-capabilities" }, [
+        h("span", { class: "filter-vendors-label" }, "Inputs"),
+        h("div", { class: "filter-cap-chips" }, CAPABILITY_ORDER.map((c) => {
+          const active = state.ui.inputCapabilities.includes(c);
+          const meta = CAPABILITY[c];
+          return h("button", { type: "button", class: "cap-filter-chip" + (active ? " is-active" : ""), style: { "--cap-color": meta.color }, "aria-pressed": String(active), onclick: () => toggleCapability(c) }, [
+            h("span", { class: "cap-chip", style: { "--cap-color": meta.color } }, [
+              h("svg", { viewBox: "0 0 20 20", "aria-hidden": "true", fill: "none", stroke: "currentColor", "stroke-width": "1.7", "stroke-linecap": "round", "stroke-linejoin": "round" }, [h("path", { d: meta.glyph })]),
+            ]),
+            meta.label,
+          ]);
+        })),
       ]),
       h("div", { class: "filter-vendors" }, [
         h("span", { class: "filter-vendors-label" }, "Providers"),
@@ -537,33 +644,106 @@
   function renderTable() {
     if (!state.totalModelCount) return emptyState("No models tracked yet", "Run Refresh to discover and score models.", "Run Refresh", handleRefresh);
     if (!state.filteredModels.length) return emptyState("No models match this view", "Clear filters or search for another vendor.", "Reset view", resetFilters);
-    const columns = ["#", "Model", "Intel", "Coding", "Agent", "Speed", "Overall", "Cost", "Value", "Compare"];
-    return h("section", { class: "model-table-layout" }, [
+    const zoom = clampZoom(state.ui.tableZoom);
+    const graded = zoom < GRADE_ZOOM;
+    const widths = state.ui.colWidths || {};
+    return h("section", {
+      class: "model-table-layout" + (graded ? " is-graded" : ""),
+      style: { "--table-zoom": String(zoom) },
+    }, [
       h("div", { class: "table-wrap models-table-wrap vw-scroll-shadow" }, [
         h("table", { class: "models" }, [
-          h("thead", null, h("tr", null, columns.map((c) => h("th", { class: c === "#" ? "rank-col" : c === "Compare" ? "compare-col" : "" }, c === "Compare" ? h("span", { class: "sr-only" }, "Compare") : c)))),
+          h("colgroup", null, COLUMNS.map((col) => {
+            const w = Number(widths[col.key]) || col.w;
+            return h("col", w ? { style: { width: w + "px" } } : null);
+          })),
+          h("thead", null, h("tr", null, COLUMNS.map(headerCell))),
           h("tbody", null, state.filteredModels.map((model, index) => h("tr", {
             class: rowClasses(model.id),
             tabindex: "0",
             onclick: () => setInspect(model.id),
             onkeydown: (e) => rowKey(e, index, model.id),
             style: { "--model-color": safeColor(model.color) },
-          }, [
-            h("td", { class: "rank-cell" }, index + 1),
-            h("td", null, modelIdentity(model)),
-            scoreTd(model.intelligence),
-            scoreTd(model.coding),
-            scoreTd(model.agents),
-            scoreTd(model.speed),
-            scoreTd(overall(model)),
-            scoreTd(model.cost),
-            scoreTd(valueScore(model)),
-            h("td", { class: "compare-cell" }, compareCheckbox(model)),
-          ]))),
+          }, COLUMNS.map((col) => bodyCell(col, model, index))))),
         ]),
       ]),
       h("div", { class: "models-mobile-list" }, state.filteredModels.map((model, index) => modelCard(model, index))),
       renderCompareArea(),
+    ]);
+  }
+
+  function headerCell(col) {
+    const active = col.sort && state.ui.sortKey === col.sort;
+    const ariaSort = active ? (state.ui.sortDir === "asc" ? "ascending" : "descending") : (col.sort ? "none" : null);
+    const cls = (col.key === "rank" ? "rank-col" : col.key === "compare" ? "compare-col" : "") + (col.sort ? " is-sortable" : "");
+    const inner = [];
+    if (col.key === "compare") inner.push(h("span", { class: "sr-only" }, "Compare"));
+    else if (col.sort) {
+      inner.push(h("button", {
+        class: "th-sort" + (active ? " is-active" : ""),
+        type: "button",
+        onclick: () => setSort(col.sort),
+        title: "Sort by " + col.label,
+      }, [col.label, h("span", { class: "sort-caret", "aria-hidden": "true" }, active ? (state.ui.sortDir === "asc" ? "▲" : "▼") : "")]));
+    } else inner.push(h("span", { class: "th-label", "aria-label": col.key === "rank" ? "Rank in current sort order" : null }, col.label));
+    // Resize handle (not on the last column).
+    if (col.key !== "compare") inner.push(resizeHandle(col));
+    return h("th", { class: cls.trim() || null, "aria-sort": ariaSort, scope: "col" }, inner);
+  }
+
+  function resizeHandle(col) {
+    return h("span", {
+      class: "col-resize",
+      "aria-hidden": "true",
+      title: "Drag to resize, double-click to reset",
+      onclick: (e) => e.stopPropagation(),
+      ondblclick: (e) => { e.stopPropagation(); const w = { ...(state.ui.colWidths || {}) }; delete w[col.key]; state.ui.colWidths = w; savePrefs(); render(); },
+      onpointerdown: (e) => startColResize(e, col),
+    });
+  }
+
+  function startColResize(event, col) {
+    event.preventDefault();
+    event.stopPropagation();
+    const th = event.target.closest("th");
+    const startX = event.clientX;
+    const startW = th ? th.getBoundingClientRect().width : (col.w || 90);
+    const move = (e) => {
+      const next = Math.max(46, Math.round(startW + (e.clientX - startX)));
+      const widths = { ...(state.ui.colWidths || {}) };
+      widths[col.key] = next;
+      state.ui.colWidths = widths;
+      const idx = COLUMNS.findIndex((c) => c.key === col.key);
+      const colEl = document.querySelectorAll("table.models colgroup col")[idx];
+      if (colEl) colEl.style.width = next + "px";
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      document.body.classList.remove("is-col-resizing");
+      savePrefs();
+    };
+    document.body.classList.add("is-col-resizing");
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  }
+
+  function bodyCell(col, model, index) {
+    if (col.key === "rank") return h("td", { class: "rank-cell" }, index + 1);
+    if (col.key === "provider") return h("td", { class: "provider-cell" }, providerCell(model));
+    if (col.key === "model") return h("td", null, modelIdentity(model));
+    if (col.key === "compare") return h("td", { class: "compare-cell" }, compareCheckbox(model));
+    if (col.key === "overall") return scoreTd(overall(model));
+    if (col.key === "value") return scoreTd(valueScore(model));
+    return scoreTd(model[col.key]);
+  }
+
+  function providerCell(model) {
+    return h("div", { class: "provider-cell-inner", style: { "--model-color": safeColor(model.color) } }, [
+      providerLogo(model, 18),
+      h("span", { class: "provider-cell-name" }, model.vendor || "Unknown"),
     ]);
   }
 
@@ -632,8 +812,14 @@
         h("span", { class: "mobile-rank" }, index + 1),
         providerLogo(model, 22),
         h("div", { class: "mobile-model-title" }, [
-          h("strong", { class: "mobile-model-name" }, model.name || "Unknown model"),
-          h("span", { class: "mobile-model-sub" }, [model.vendor, model.pricing].filter(Boolean).join(" · ") || "No vendor metadata"),
+          h("div", { class: "mobile-model-name-row" }, [
+            h("strong", { class: "mobile-model-name" }, model.name || "Unknown model"),
+            model.status === "deprecated" ? h("span", { class: "deprecated-badge", title: depTitle(model) }, "Deprecated") : null,
+          ]),
+          h("div", { class: "mobile-model-meta" }, [
+            h("span", { class: "mobile-model-sub" }, [model.vendor, model.pricing].filter(Boolean).join(" · ") || "No vendor metadata"),
+            capabilityChips(model, 14),
+          ]),
         ]),
         compareCheckbox(model),
       ]),
@@ -787,7 +973,9 @@
       metaItem("Released", model.released || "Unknown"),
       metaItem("Tracked since", fmtDate(model.first_seen) || "Unknown"),
       metaItem("Type", model.params || "Unknown"),
+      h("div", { class: "meta-item meta-item-caps" }, [h("dt", null, "Inputs"), h("dd", null, capabilityChips(model, 16))]),
       model.status && model.status !== "active" ? metaItem("Status", titleCaseSlug(model.status)) : null,
+      model.deprecated_on ? metaItem("Deprecated", fmtDate(model.deprecated_on)) : null,
     ]);
     const notes = model.notes ? h("p", { class: "model-notes" }, model.notes) : null;
     const link = card.url ? h("a", { class: "stat-card-link", href: card.url, target: "_blank", rel: "noopener noreferrer" }, [card.official ? "Model card" : "Find model card", h("span", { "aria-hidden": "true" }, " ↗")]) : null;
@@ -889,6 +1077,13 @@
     }));
   }
 
+  function toggleCapability(cap) {
+    const list = state.ui.inputCapabilities || [];
+    state.ui.inputCapabilities = list.includes(cap) ? list.filter((c) => c !== cap) : [...list, cap];
+    refreshModels();
+    render();
+  }
+
   function toggleVendor(name) {
     const list = state.ui.vendors || [];
     state.ui.vendors = list.includes(name) ? list.filter((v) => v !== name) : [...list, name];
@@ -957,10 +1152,17 @@
       acc.duration += Number(row.duration_sec) || 0;
       return acc;
     }, { runs: 0, cost: 0, tokens: 0, words: 0, duration: 0 });
+    const single = filtered.length < 2;
     return h("section", { class: "stats-workbench" }, [
       h("div", { class: "stats-toolbar" }, [
-        h("label", { class: "field compact" }, [h("span", null, "Agent"), agentSelect()]),
-        h("label", { class: "field compact" }, [h("span", null, "Range"), rangeSelect()]),
+        h("div", { class: "stats-toolbar-controls" }, [
+          h("label", { class: "field compact" }, [h("span", null, "Agent"), agentSelect()]),
+          h("label", { class: "field compact" }, [h("span", null, "Range"), rangeSelect()]),
+        ]),
+        single ? h("div", { class: "stats-inline-cta" }, [
+          h("span", { class: "stats-inline-cta-text" }, "One run so far — refresh again to unlock trends."),
+          h("button", { class: "vw-btn vw-btn-primary vw-btn-sm", type: "button", onclick: handleRefresh }, "Run Refresh"),
+        ]) : null,
       ]),
       h("div", { class: "stats-grid" }, [
         statCard("Runs", totals.runs ? String(totals.runs) : "—", totals.runs === 1 ? "1 update run" : `${totals.runs} update runs`),
@@ -968,19 +1170,11 @@
         statCard("Tokens", totals.tokens ? compact.format(totals.tokens) : "—", "Input, output, and cached"),
         statCard("Words", totals.words ? int.format(totals.words) : "—", "Changelog body length"),
       ]),
-      filtered.length < 2
-        ? h("div", { class: "analytics-grid" }, [
-            h("section", { class: "panel-card stats-single-cta" }, [
-              h("h3", null, "One run so far"),
-              h("p", null, "Run Refresh again to unlock duration trends, cost-per-run history, and the agent leaderboard."),
-              h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: handleRefresh }, "Run Refresh"),
-            ]),
-          ])
-        : h("div", { class: "analytics-grid" }, [
-            h("section", { class: "panel-card" }, [h("h3", null, "Run duration"), miniBars(filtered, "duration_sec", "Duration seconds")]),
-            h("section", { class: "panel-card" }, [h("h3", null, "Cost per run"), miniBars(filtered, "cost_usd", "Cost USD")]),
-            h("section", { class: "panel-card" }, [h("h3", null, "Agent leaderboard"), leaderboard(filtered)]),
-          ]),
+      single ? null : h("div", { class: "analytics-grid" }, [
+        h("section", { class: "panel-card" }, [h("h3", null, "Run duration"), miniBars(filtered, "duration_sec", "Duration seconds")]),
+        h("section", { class: "panel-card" }, [h("h3", null, "Cost per run"), miniBars(filtered, "cost_usd", "Cost USD")]),
+        h("section", { class: "panel-card" }, [h("h3", null, "Agent leaderboard"), leaderboard(filtered)]),
+      ]),
     ]);
   }
 
@@ -994,7 +1188,95 @@
     if (state.subpage.settings === "models") return settingsModels();
     if (state.subpage.settings === "research") return settingsResearch();
     if (state.subpage.settings === "schedule") return settingsSchedule();
+    if (state.subpage.settings === "reset") return settingsReset();
     return settingsProvider();
+  }
+
+  const RESET_SCOPES = [
+    { scope: "stats", token: "STATS", title: "Reset stats", copy: "Clear run telemetry (tokens, cost, duration, agent leaderboard) and regenerate the metrics CSV. Models, scores, and changelogs stay." },
+    { scope: "changelog", token: "CHANGELOG", title: "Reset changelog", copy: "Delete every changelog entry and its run metrics. This is the only sanctioned exception to the append-only rule — update runs never delete history." },
+    { scope: "models", token: "MODELS", title: "Reset models", copy: "Clear all models and scores, then re-seed the bootstrap model set so the dashboard isn't empty. Changelogs and stats stay." },
+    { scope: "full", token: "RESET", title: "Full reset", copy: "Wipe the local database, metrics CSV, run logs, app config, and schedule, then re-seed on reload." },
+  ];
+
+  function settingsReset() {
+    return h("section", { class: "settings-panel panel-card reset-panel", "aria-label": "Reset" }, [
+      h("p", { class: "settings-summary" }, "Destructive, local-only actions. Each needs its typed confirmation."),
+      h("p", { class: "reset-safe-note" }, [
+        h("span", { class: "reset-safe-dot", "aria-hidden": "true" }),
+        "Voidware credentials, saved provider keys, and broker grants are not affected by any reset.",
+      ]),
+      h("div", { class: "reset-actions" }, RESET_SCOPES.map(resetCard)),
+    ]);
+  }
+
+  function resetCard(item) {
+    const typed = (state.resetTokens && state.resetTokens[item.scope]) || "";
+    const ready = typed === item.token;
+    const busy = state.resetBusy === item.scope;
+    return h("div", { class: "reset-card" + (item.scope === "full" ? " is-danger" : "") }, [
+      h("div", { class: "reset-card-text" }, [
+        h("strong", { class: "reset-card-title" }, item.title),
+        h("p", { class: "reset-card-copy" }, item.copy),
+      ]),
+      h("div", { class: "reset-card-action" }, [
+        h("label", { class: "field reset-confirm-field" }, [
+          h("span", { class: "sr-only" }, "Type " + item.token + " to confirm"),
+          h("input", {
+            type: "text",
+            value: typed,
+            placeholder: "Type " + item.token,
+            "aria-label": "Type " + item.token + " to confirm " + item.title,
+            autocomplete: "off",
+            spellcheck: "false",
+            oninput: (e) => { state.resetTokens = { ...(state.resetTokens || {}), [item.scope]: e.target.value }; updateResetButton(item); },
+          }),
+        ]),
+        h("button", {
+          class: "vw-btn " + (item.scope === "full" ? "vw-btn-danger" : "vw-btn-secondary") + " reset-run-btn",
+          type: "button",
+          "data-scope": item.scope,
+          disabled: !ready || busy,
+          onclick: () => performReset(item),
+        }, busy ? "Resetting…" : "Reset"),
+      ]),
+    ]);
+  }
+
+  // Live-toggle the button without a full re-render so the input keeps focus.
+  function updateResetButton(item) {
+    const typed = (state.resetTokens && state.resetTokens[item.scope]) || "";
+    const btn = document.querySelector(`.reset-run-btn[data-scope="${item.scope}"]`);
+    if (btn) btn.disabled = typed !== item.token || state.resetBusy === item.scope;
+  }
+
+  async function performReset(item) {
+    state.resetBusy = item.scope;
+    render();
+    try {
+      const data = await api("/api/reset", { method: "POST", body: { scope: item.scope, confirm_token: item.token } });
+      state.resetBusy = "";
+      state.resetTokens = { ...(state.resetTokens || {}), [item.scope]: "" };
+      await applyResetAftermath(item.scope, data);
+      toast(item.title + " complete", "success");
+    } catch (error) {
+      state.resetBusy = "";
+      toast(message(error), "error");
+      render();
+    }
+  }
+
+  async function applyResetAftermath(scope, data) {
+    if (scope === "full") {
+      location.assign(location.pathname + "?reset=1");
+      return;
+    }
+    if (scope === "changelog") { state.changelogBodies = {}; state.activeChangelogDate = ""; }
+    if (scope === "models") { state.ui.compare = []; state.ui.inspect = ""; state.focusIndex = 0; }
+    await loadDatabase();
+    await pollMeta();
+    refreshModels();
+    render();
   }
 
   function settingsProvider() {
@@ -1479,6 +1761,7 @@
   function resetFilters() {
     Object.assign(state.ui, {
       text: "", vendors: [], tier: "", status: "", minOverall: 0, hasPricing: false, releasedAfter: "",
+      inputCapabilities: [], hideDeprecated: false,
     });
     refreshModels();
     render();
@@ -1494,14 +1777,16 @@
       Number(ui.minOverall) > 0,
       ui.hasPricing,
       ui.releasedAfter,
+      ui.inputCapabilities.length,
+      ui.hideDeprecated,
     ].filter(Boolean).length;
   }
 
   function exportModels() {
     if (!state.filteredModels.length) return toast("No models to export. Clear filters or reset the view.", "warning");
-    const headers = ["rank", "model", "vendor", "released", "tracked_since", "pricing", "intelligence", "coding", "agent", "speed", "cost", "overall", "value"];
+    const headers = ["rank", "model", "vendor", "status", "deprecated_on", "input_capabilities", "released", "tracked_since", "pricing", "intelligence", "coding", "agent", "speed", "cost", "overall", "value"];
     const lines = [headers.join(",")];
-    state.filteredModels.forEach((m, i) => lines.push([i + 1, m.name, m.vendor, m.released, m.first_seen, m.pricing, m.intelligence, m.coding, m.agents, m.speed, m.cost, overall(m), valueScore(m)].map(csv).join(",")));
+    state.filteredModels.forEach((m, i) => lines.push([i + 1, m.name, m.vendor, m.status, m.deprecated_on || "", modelCapabilities(m).join("|"), m.released, m.first_seen, m.pricing, m.intelligence, m.coding, m.agents, m.speed, m.cost, overall(m), valueScore(m)].map(csv).join(",")));
     const blob = new Blob([lines.join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = h("a", { href: url, download: "llm-dash-models.csv" });
@@ -1542,7 +1827,7 @@
   }
 
   function h(tag, attrs, children) {
-    const svgTags = new Set(["svg", "rect", "line", "text", "circle", "polygon", "g"]);
+    const svgTags = new Set(["svg", "rect", "line", "text", "circle", "polygon", "g", "path"]);
     const el = svgTags.has(tag)
       ? document.createElementNS("http://www.w3.org/2000/svg", tag)
       : document.createElement(tag);
@@ -1591,13 +1876,36 @@
   }
 
   function modelIdentity(model) {
+    const deprecated = model.status === "deprecated";
     return h("div", { class: "model-cell", style: { "--model-color": safeColor(model.color) } }, [
-      providerLogo(model, 22),
       h("div", { class: "model-cell-text" }, [
-        h("strong", { class: "name" }, highlight(model.name || "Unknown model")),
-        h("span", { class: "sub" }, [model.vendor, model.pricing].filter(Boolean).join(" · ") || "No metadata"),
+        h("div", { class: "model-cell-name-row" }, [
+          h("strong", { class: "name" }, highlight(model.name || "Unknown model")),
+          deprecated ? h("span", { class: "deprecated-badge", title: depTitle(model) }, "Deprecated") : null,
+        ]),
+        h("div", { class: "model-cell-meta" }, [
+          model.pricing ? h("span", { class: "sub" }, model.pricing) : null,
+          capabilityChips(model, 13),
+        ]),
       ]),
     ]);
+  }
+
+  function depTitle(model) {
+    return model.deprecated_on ? "Deprecated " + fmtDate(model.deprecated_on) : "Deprecated";
+  }
+
+  function capabilityChips(model, size) {
+    const caps = modelCapabilities(model);
+    const px = size || 14;
+    return h("span", { class: "cap-chips", "aria-label": "Inputs: " + caps.map((c) => CAPABILITY[c].label).join(", ") }, caps.map((c) => {
+      const meta = CAPABILITY[c];
+      return h("span", { class: "cap-chip", style: { "--cap-color": meta.color, width: px + "px", height: px + "px" }, title: meta.label }, [
+        h("svg", { viewBox: "0 0 20 20", "aria-hidden": "true", fill: "none", stroke: "currentColor", "stroke-width": "1.7", "stroke-linecap": "round", "stroke-linejoin": "round" }, [
+          h("path", { d: meta.glyph }),
+        ]),
+      ]);
+    }));
   }
 
   function highlight(text) {
@@ -1622,7 +1930,7 @@
 
   function scoreChip(score) {
     const t = tier(score);
-    return h("span", { class: "score-chip " + t.cls, title: t.label + " tier" }, [
+    return h("span", { class: "score-chip " + t.cls, title: fmtScore(score) + " · " + t.label + " tier" }, [
       h("span", { class: "score-num" }, fmtScore(score)),
       h("span", { class: "tier-square" }, t.label),
     ]);
@@ -1809,6 +2117,14 @@
     ui.hasPricing = Boolean(ui.hasPricing);
     if (typeof ui.status !== "string") ui.status = "";
     if (typeof ui.releasedAfter !== "string") ui.releasedAfter = "";
+    ui.inputCapabilities = Array.isArray(ui.inputCapabilities)
+      ? ui.inputCapabilities.filter((c) => CAPABILITY_ORDER.includes(c)) : [];
+    ui.hideDeprecated = Boolean(ui.hideDeprecated);
+    ui.tableZoom = clampZoom(ui.tableZoom);
+    ui.colWidths = ui.colWidths && typeof ui.colWidths === "object" && !Array.isArray(ui.colWidths)
+      ? Object.fromEntries(Object.entries(ui.colWidths).filter(([, v]) => Number.isFinite(Number(v)))) : {};
+    if (!SORT_KEYS.has(ui.sortKey)) ui.sortKey = "overall";
+    if (ui.sortDir !== "asc" && ui.sortDir !== "desc") ui.sortDir = "desc";
   }
 
   function consumeResetFlag() {

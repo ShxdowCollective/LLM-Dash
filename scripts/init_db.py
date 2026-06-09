@@ -24,8 +24,28 @@ CHANGELOGS_DIR = ROOT / "changelogs"
 
 SEED_DATE = "2026-04-20"
 SEED_TITLE = "April 20, 2026"
-SCHEMA_VERSION = "3"
+SCHEMA_VERSION = "4"
 SEED_VERSION = "1"
+
+# Fixed input-modality vocabulary (schema_version 4). Stored as canonical JSON
+# text on models.input_capabilities, e.g. '["text","image"]'. Default ["text"].
+CAPABILITY_VOCAB = ("text", "image", "audio", "video")
+
+
+def canonical_capabilities(value) -> str:
+    """Sorted, unique, vocabulary-checked JSON text. Defaults to ["text"]."""
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError:
+            value = [value]
+    items = [str(v).strip().lower() for v in (value or [])]
+    keep = [c for c in CAPABILITY_VOCAB if c in items]
+    if "text" not in keep:
+        keep = ["text"] + keep
+    # Preserve vocabulary order (text, image, audio, video) for stable display.
+    ordered = [c for c in CAPABILITY_VOCAB if c in keep]
+    return json.dumps(ordered)
 
 # Official model-card / documentation pages per vendor. Used to backfill
 # card_url for seed models; the daily update records an exact per-model URL in
@@ -77,15 +97,15 @@ MODELS: list[dict] = [
     {"name": "Nemotron 3 Super", "vendor": "NVIDIA", "color": "#76b900", "released": "Mar 11, 2026", "params": "120B / 12B active", "pricing": "$0.12 / $0.12 (open-weight)", "intelligence": 6.8, "coding": 6.8, "agents": 7.0, "speed": 9.2, "cost": 9.0, "notes": "399 t/s (#3 fastest). Mamba-Attention hybrid. Multi-agent orchestrator. ~$0.12 blended. Free tier on some providers."},
     {"name": "Nemotron-Cascade 2", "vendor": "NVIDIA", "color": "#76b900", "released": "Mar 19, 2026", "params": "30B / 3B active", "pricing": "$0.05 / $0.10 (open-weight)", "intelligence": 5.8, "coding": 7.5, "agents": 5.0, "speed": 9.0, "cost": 9.5, "notes": "IMO/IOI/ICPC Gold medals. LCBv6 87.2%. Only 3B active. Math/code specialist. ~$0.05/$0.10 via providers."},
     {"name": "MiMo-V2-Pro", "vendor": "Xiaomi", "color": "#ff6900", "released": "Mar 18, 2026", "params": "1T+ / 42B active", "pricing": "$1.00 / $3.00", "intelligence": 8.6, "coding": 8.8, "agents": 8.5, "speed": 6.0, "cost": 7.5, "notes": "AA Index 49. SWE-V 78%. ClawEval 61.5. PinchBench 81. 1M ctx. Ex-Hunter Alpha."},
-    {"name": "MiMo-V2-Omni", "vendor": "Xiaomi", "color": "#ff6900", "released": "Mar 18, 2026", "params": "Multimodal variant", "pricing": "$0.40 / $2.00", "intelligence": 7.7, "coding": 7.3, "agents": 7.0, "speed": 7.0, "cost": 8.5, "notes": "Multimodal: image, video, audio. 262K ctx. Companion to V2-Pro."},
+    {"name": "MiMo-V2-Omni", "vendor": "Xiaomi", "color": "#ff6900", "released": "Mar 18, 2026", "params": "Multimodal variant", "pricing": "$0.40 / $2.00", "intelligence": 7.7, "coding": 7.3, "agents": 7.0, "speed": 7.0, "cost": 8.5, "input_capabilities": ["text", "image", "audio", "video"], "notes": "Multimodal: image, video, audio. 262K ctx. Companion to V2-Pro."},
     {"name": "GPT-OSS 120B", "vendor": "OpenAI", "color": "#10a37f", "released": "Sep 2025", "params": "120B (open-weight)", "pricing": "$0.10 / $0.30 (open-weight)", "intelligence": 6.5, "coding": 7.3, "agents": 6.0, "speed": 9.0, "cost": 9.0, "notes": "Open-weight from OpenAI. 120B / 5.1B active MoE. Apache 2.0. ~$0.10/$0.30 via providers. Up to 3000 t/s on Cerebras."},
     {"name": "GPT-5.1-Codex-Mini", "vendor": "OpenAI", "color": "#10a37f", "released": "Nov 2025", "params": "Proprietary", "pricing": "$1.25 / $10.00", "intelligence": 6.3, "coding": 7.0, "agents": 5.5, "speed": 7.0, "cost": 6.0, "notes": "Codex-optimized; works poorly outside OpenAI Codex harness. 400K ctx."},
     {"name": "Grok Code Fast 1", "vendor": "xAI", "color": "#1da1f2", "released": "Aug 2025", "params": "314B MoE", "pricing": "$0.20 / $1.50", "intelligence": 4.9, "coding": 6.2, "agents": 5.0, "speed": 9.3, "cost": 9.5, "notes": "92 t/s. $0.20/$1.50. Speed-optimized coding model. 256K ctx."},
     {"name": "GPT-5 mini", "vendor": "OpenAI", "color": "#10a37f", "released": "Aug 2025", "params": "Proprietary", "pricing": "$0.25 / $2.00", "intelligence": 6.1, "coding": 6.5, "agents": 5.5, "speed": 7.0, "cost": 8.5, "notes": "Prior-gen. Superseded by GPT-5.4 mini. Being phased out.", "status": "superseded"},
     {"name": "GPT-4.1", "vendor": "OpenAI", "color": "#10a37f", "released": "Apr 2025", "params": "Proprietary", "pricing": "$3.00 / $12.00", "intelligence": 5.8, "coding": 6.2, "agents": 5.0, "speed": 7.0, "cost": 5.5, "notes": "Legacy. 1M ctx. Tool-calling issues >300K tokens. Being superseded.", "status": "superseded"},
-    {"name": "Gemma 4 31B Dense", "vendor": "Google", "color": "#4285f4", "released": "Apr 2, 2026", "params": "31B Dense", "pricing": "$0.08 / $0.16 (open-weight)", "intelligence": 7.5, "coding": 7.2, "agents": 7.0, "speed": 8.5, "cost": 9.5, "notes": "GPQA 84.3%. #3 open on Arena AI. 31B dense. Apache 2.0. 256K ctx. Multimodal. ~$0.08/$0.16 via providers."},
+    {"name": "Gemma 4 31B Dense", "vendor": "Google", "color": "#4285f4", "released": "Apr 2, 2026", "params": "31B Dense", "pricing": "$0.08 / $0.16 (open-weight)", "intelligence": 7.5, "coding": 7.2, "agents": 7.0, "speed": 8.5, "cost": 9.5, "input_capabilities": ["text", "image"], "notes": "GPQA 84.3%. #3 open on Arena AI. 31B dense. Apache 2.0. 256K ctx. Multimodal. ~$0.08/$0.16 via providers."},
     {"name": "Gemma 4 26B MoE", "vendor": "Google", "color": "#4285f4", "released": "Apr 2, 2026", "params": "26B / 3.8B active", "pricing": "$0.05 / $0.10 (open-weight)", "intelligence": 7.0, "coding": 6.8, "agents": 6.5, "speed": 9.3, "cost": 9.5, "notes": "#6 open on Arena AI. 26B MoE, only 3.8B active. Ultra-fast. Apache 2.0. 256K ctx. ~$0.05/$0.10 via providers."},
-    {"name": "Gemma 4 E4B", "vendor": "Google", "color": "#4285f4", "released": "Apr 2, 2026", "params": "E4B (4B effective)", "pricing": "$0.02 / $0.04 (open-weight)", "intelligence": 3.8, "coding": 3.5, "agents": 4.0, "speed": 9.8, "cost": 9.8, "notes": "On-device edge model. 4B effective. 128K ctx. Multimodal (vision+audio+text). Runs on phones. Apache 2.0. ~$0.02/$0.04 via providers."},
+    {"name": "Gemma 4 E4B", "vendor": "Google", "color": "#4285f4", "released": "Apr 2, 2026", "params": "E4B (4B effective)", "pricing": "$0.02 / $0.04 (open-weight)", "intelligence": 3.8, "coding": 3.5, "agents": 4.0, "speed": 9.8, "cost": 9.8, "input_capabilities": ["text", "image", "audio"], "notes": "On-device edge model. 4B effective. 128K ctx. Multimodal (vision+audio+text). Runs on phones. Apache 2.0. ~$0.02/$0.04 via providers."},
 ]
 
 assert len(MODELS) == 34, f"expected 34 seed models, got {len(MODELS)}"
@@ -132,6 +152,13 @@ Three models are marked as already-superseded per the JSX notes:
 Claude Opus 4.6 (replaced by Opus 4.7), GPT-5 mini (replaced by GPT-5.4 mini),
 and GPT-4.1 (legacy).
 """
+
+
+def _rel(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
 
 
 def word_count(body: str) -> int:
@@ -230,10 +257,12 @@ def seed(force: bool) -> None:
         for m in MODELS:
             con.execute(
                 """INSERT INTO models (name, vendor, color, released, params,
-                                       pricing, notes, card_url, first_seen, last_seen, status)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                       pricing, notes, card_url, input_capabilities,
+                                       deprecated_on, first_seen, last_seen, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (m["name"], m["vendor"], m["color"], m["released"], m["params"],
                  m["pricing"], m["notes"], m.get("card_url") or VENDOR_CARD_URL.get(m["vendor"]),
+                 canonical_capabilities(m.get("input_capabilities")), m.get("deprecated_on"),
                  today, today, m.get("status", "active")),
             )
             con.execute(
@@ -301,12 +330,12 @@ def seed(force: bool) -> None:
 
     export_metrics_csv()
 
-    print(f"seeded {DB_PATH.relative_to(ROOT)}")
+    print(f"seeded {_rel(DB_PATH)}")
     print(f"  models:        {len(MODELS)}")
     print(f"  scores:        {len(MODELS)} @ {SEED_DATE}")
-    print(f"  changelog:     {md_path.relative_to(ROOT)} ({changelog_status}, {wc} words)")
+    print(f"  changelog:     {_rel(md_path)} ({changelog_status}, {wc} words)")
     print(f"  run_metrics:   1 row (synthetic bootstrap timestamps)")
-    print(f"  metrics csv:   {CSV_PATH.relative_to(ROOT)}")
+    print(f"  metrics csv:   {_rel(CSV_PATH)}")
 
 
 def export_metrics_csv() -> None:

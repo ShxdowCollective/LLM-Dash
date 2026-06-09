@@ -13,6 +13,8 @@ CREATE TABLE models (
     pricing         TEXT,
     notes           TEXT,
     card_url        TEXT,
+    input_capabilities TEXT NOT NULL DEFAULT '["text"]',
+    deprecated_on   TEXT,
     first_seen      TEXT NOT NULL,
     last_seen       TEXT NOT NULL,
     status          TEXT NOT NULL DEFAULT 'active'

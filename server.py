@@ -41,6 +41,7 @@ from scripts.config import (
     save_provider,
 )
 from scripts.migrate_score_checks import migrate as migrate_score_checks
+from scripts.migrate_model_metadata_v4 import migrate as migrate_metadata_v4
 from scripts.schedule_job import ScheduleError, apply_schedule, remove_schedule, status as schedule_status
 
 ROOT = Path(__file__).resolve().parent
@@ -112,6 +113,11 @@ class SchedulePayload(BaseModel):
     time_local: str = "09:00"
     day_of_week: int = 1
     day_of_month: int = 1
+
+
+class ResetPayload(BaseModel):
+    scope: str
+    confirm_token: str = ""
 
 
 def _set_bootstrap_state(state: str, message: str, detail: str = "") -> None:
@@ -407,9 +413,10 @@ def _startup() -> None:
     if DB_PATH.exists():
         try:
             migrate_score_checks(DB_PATH)
+            migrate_metadata_v4(DB_PATH)
         except Exception as exc:
             import logging
-            logging.getLogger("llm-dash").warning("score-check migration skipped: %s", exc)
+            logging.getLogger("llm-dash").warning("startup migration skipped: %s", exc)
             raise
 
 
@@ -802,6 +809,30 @@ def run_update_status(job_id: str) -> dict[str, Any]:
     if job["state"] == "running":
         job["tail"] = _safe_tail(log_path)
     return job
+
+
+@app.post("/api/reset")
+def post_reset(payload: ResetPayload) -> dict[str, Any]:
+    """Scoped destructive reset for the same local operator who can run
+    ./run.sh --reset. Requires a scope-specific typed confirm_token. Never
+    touches Voidware credentials, keyring secrets, or broker grants."""
+    from scripts.reset_local_state import RESET_TOKENS, run_scope
+
+    scope = (payload.scope or "").strip().lower()
+    if scope not in RESET_TOKENS:
+        raise HTTPException(status_code=400, detail="Unknown reset scope.")
+    if (payload.confirm_token or "").strip() != RESET_TOKENS[scope]:
+        raise HTTPException(status_code=400, detail=f"Type {RESET_TOKENS[scope]} to confirm this reset.")
+    try:
+        summary = run_scope(scope)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(status_code=500, detail=str(exc))
+    if scope == "full":
+        # The DB was deleted; let the next request re-seed it.
+        ensure_bootstrap_started()
+    return {"ok": True, **summary}
 
 
 @app.get("/api/meta")

@@ -88,8 +88,10 @@ All persistent state lives in `data/dash.sqlite`. Schema definition:
 
 Canonical identity for every tracked LLM. One row per model, keyed by unique
 `name`. Fields include vendor, color (for UI), release date, parameter count,
-pricing string, status (`active` / `superseded` / `deprecated`), and
-first/last seen dates.
+pricing string, status (`active` / `superseded` / `deprecated`),
+`input_capabilities` (canonical JSON array of `text` / `image` / `audio` /
+`video`, default `["text"]`), `deprecated_on` (ISO date stamped when status
+becomes `deprecated`, cleared on reactivation), and first/last seen dates.
 
 #### `model_scores`
 
@@ -100,9 +102,11 @@ pair. Re-running an update for the same date upserts via the `UNIQUE` constraint
 Scores are normalized to a 0.0–10.0 scale. Every score claim in a changelog
 must cite a source URL.
 
-The dashboard computes Overall as a weighted composite: 30% intelligence, 30%
-coding, 30% agent capability, and 10% speed. Value weights Overall at 80% and
-cost at 20%.
+The dashboard computes composite scores client-side from raw sub-scores stored
+in `model_scores` (see `overall()` and `valueScore()` in `web/app.js`). Overall
+is a weighted composite: 25% intelligence, 25% coding, 25% agents, 10% speed,
+and 15% cost — cost now contributes to Overall so the leaderboard is no longer
+price-blind. Value weights Overall at 60%, cost at 25%, and speed at 15%.
 
 #### `changelogs`
 
@@ -125,17 +129,22 @@ Key-value store for housekeeping. Current keys: `last_updated` (ISO datetime),
 #### Schema Versioning
 
 `meta.schema_version` tracks the on-disk DDL contract. The current version is
-**2** (Phase 8.11): every `model_scores` benchmark column carries a
-`CHECK (col IS NULL OR (col BETWEEN 0 AND 10))` constraint, so any score
-outside that range fails the transaction at write time, not just the agent
-contract.
+**4** (Milestone 13): the `models` table carries `input_capabilities`
+(TEXT NOT NULL DEFAULT `'["text"]'`, a canonical JSON array subset of
+text/image/audio/video) and `deprecated_on` (TEXT nullable, stamped when a
+model's status becomes `deprecated`, cleared on reactivation). Every
+`model_scores` benchmark column still carries a `CHECK (col IS NULL OR
+(col BETWEEN 0 AND 10))` constraint from version 2.
 
-Migration is automatic and idempotent. `scripts/migrate_score_checks.py` runs
-on FastAPI startup (`server.py`) and at the top of `scripts/run_update.py`,
-validates existing rows, rebuilds the table with the constraints in place,
-recreates the `v_models_latest` view and indexes, and bumps
-`meta.schema_version` to 2. Fresh installs from `scripts/init_db.py` already
-seed at version 2.
+Migration is automatic and idempotent. `scripts/migrate_score_checks.py` and
+`scripts/migrate_model_metadata_v4.py` run on FastAPI startup (`server.py`)
+and at the top of `scripts/run_update.py`. Score-check migration validates
+existing rows, rebuilds `model_scores` with constraints, and bumps older DBs
+to version 2. Metadata migration adds the new `models` columns if missing,
+recreates `v_models_latest`, and bumps `meta.schema_version` to 4. Fresh
+installs from `scripts/init_db.py` already seed at version 4. No backfill:
+`input_capabilities` defaults to `["text"]` and `deprecated_on` stays NULL;
+update runs populate both from cited primary sources.
 
 ### Views
 
@@ -167,9 +176,9 @@ changelogs 1──1 run_metrics (via changelog_date)
 |---|---|---|
 | **Table** | Sortable model leaderboard with tier-letter score cells, compact mobile cards, comparison selection, search, filters, and CSV export | `v_models_latest`, `model_scores` |
 | **Chart** | SVG scatter/radar analysis surface with axis selectors, keyboard-focusable model points, selection panel, legend, and comparison strip | `v_models_latest`, `model_scores` |
-| **Changelog** | Date list + rendered Markdown body. The older Compare tab is intentionally removed; changelog files remain append-only. | `changelogs` table + `changelogs/*.md` |
+| **Changelog** | Date list + rendered Markdown body. The older Compare tab is intentionally removed; changelog files remain append-only (Settings → Reset with typed confirmation is the deliberate operator exception; normal update runs never delete history). | `changelogs` table + `changelogs/*.md` |
 | **Stats** | Token/cost/duration analytics, Agent Provider Leaderboard, per-agent breakdowns, and compact trend bars | `run_metrics` |
-| **Settings** | Provider, Models, Research, and Schedule subpages, plus a Manual Update card on the Provider subpage and a sidebar-footer Refresh trigger | `/api/provider`, `/api/exa`, `/api/llmstats`, `/api/schedule`, `/api/run-update` |
+| **Settings** | Provider, Models, Research, Schedule, and Reset subpages, plus a Manual Update card on the Provider subpage and a sidebar-footer Refresh trigger | `/api/provider`, `/api/exa`, `/api/llmstats`, `/api/schedule`, `/api/run-update`, `/api/reset` |
 
 ### State Management
 
@@ -243,6 +252,7 @@ Three explicit mounts maintain the frontend's fetch contract:
 | `/api/schedule` | GET/POST/DELETE | Manage OS-level scheduled update jobs |
 | `/api/run-update` | POST | Kick off a background update via Agents SDK |
 | `/api/run-update/{id}` | GET | Poll update job status + log tail |
+| `/api/reset` | POST | Scoped destructive reset (`stats` / `changelog` / `models` / `full`) with typed `confirm_token`; never touches Voidware credentials, keyring secrets, or broker grants |
 
 ### 3. First-Run Bootstrap
 

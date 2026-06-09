@@ -109,8 +109,9 @@ Build this JSON in memory. Do not hallucinate any field.
       "agents": 9.5,
       "speed": 5.0,
       "cost": 3.5,
-      "notes": "... prose with inline citations ...",
-      "card_url": "https://docs.anthropic.com/en/docs/about-claude/models/overview"
+      "notes": "Plain-language strengths/weaknesses/capabilities — no raw scores.",
+      "card_url": "https://docs.anthropic.com/en/docs/about-claude/models/overview",
+      "input_capabilities": ["text", "image"]
     }
   ],
   "score_updates": [
@@ -133,13 +134,23 @@ Build this JSON in memory. Do not hallucinate any field.
 Rules:
 - `color`: reuse the vendor's existing color if they're already tracked;
   pick a fresh hex for a new vendor and document it in `notes`.
+- `notes`: a 1-3 sentence **plain-language** summary of the model's strengths,
+  weaknesses, and standout capabilities (e.g. "Strong agentic coder with very
+  large context; weaker on raw reasoning than frontier peers; multimodal").
+  **Do not put raw benchmark scores or percentages in `notes`.** Numeric claims
+  and their citations belong in the changelog body; the 0-10 sub-scores already
+  carry the quantitative ranking.
 - `card_url`: the official model card or vendor docs page for this model — you
   are already reading it as a primary source, so record its URL. Prefer the
   exact per-model card; fall back to the vendor's official models/docs page.
   Optional but strongly preferred; omitting it leaves the dashboard with a
   generic web-search lookup link instead of the real card.
+- `input_capabilities`: the model's accepted input modalities, as a subset of
+  the fixed vocabulary `["text", "image", "audio", "video"]` (sorted, unique).
+  Default `["text"]`. Only list a modality the model card documents — do not
+  guess. `text` is always included.
 - All five scores ∈ [0.0, 10.0]. The schema enforces this with CHECK
-  constraints (`schema_version` 2); a write outside the range will fail the
+  constraints (`schema_version` 4); a write outside the range will fail the
   transaction.
 - `changelog_markdown` is the **body** of the `.md` (no frontmatter — that's
   step 6; no Run Metadata footer — that's step 6 too).
@@ -152,8 +163,8 @@ Single transaction. All writes succeed together or not at all.
 BEGIN;
 
 -- Upsert each new_models entry
-INSERT INTO models (name, vendor, color, released, params, pricing, notes, first_seen, last_seen)
-VALUES (?, ?, ?, ?, ?, ?, ?, date('now'), date('now'))
+INSERT INTO models (name, vendor, color, released, params, pricing, notes, card_url, input_capabilities, first_seen, last_seen)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, '["text"]'), date('now'), date('now'))
 ON CONFLICT(name) DO UPDATE SET
   vendor    = excluded.vendor,
   color     = excluded.color,
@@ -161,6 +172,8 @@ ON CONFLICT(name) DO UPDATE SET
   params    = excluded.params,
   pricing   = excluded.pricing,
   notes     = excluded.notes,
+  card_url  = COALESCE(excluded.card_url, models.card_url),
+  input_capabilities = COALESCE(excluded.input_capabilities, models.input_capabilities),
   last_seen = date('now');
 
 -- Insert (or replace) a score row per (model, date) for every new_models entry
@@ -176,8 +189,11 @@ ON CONFLICT(model_id, as_of) DO UPDATE SET
   cost         = excluded.cost,
   source_notes = excluded.source_notes;
 
--- Status changes
-UPDATE models SET status = ? WHERE name = ?;
+-- Status changes. When a model goes 'deprecated', stamp deprecated_on with the
+-- change date (keep the earliest); clear it only on reactivation to 'active'.
+UPDATE models SET status = ?,
+  deprecated_on = COALESCE(deprecated_on, ?)  -- only when to = 'deprecated'
+WHERE name = ?;
 
 -- Changelog index row
 INSERT INTO changelogs (date, title, path, summary, new_models_json, changed_json)
@@ -335,7 +351,9 @@ Exa metrics:
 
 - **Don't invent scores.** Every score change needs a URL citation.
 - **Don't delete or edit prior changelog files.** The audit trail is
-  load-bearing.
+  load-bearing. (The only sanctioned deletion path is the app's
+  **Settings → Reset** tab, a deliberate, typed-confirmation operator action —
+  never something an update run does.)
 - **Don't modify old `model_scores` rows.** Append-only.
 - **Don't skip the metadata step.** A run without a `run_metrics` row is
   a broken run — rerun the whole skill if you realize you missed it.

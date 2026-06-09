@@ -3,6 +3,122 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 109 — 2026-06-08
+
+**Agent:** Claude Opus 4.8 (Vega, full-stack)
+**Cycle:** Milestone 13 — implementation + M12 follow-up close-out
+**Task:** Ship all of M13 (table UX, ranking, reset, schema v4 metadata) + full
+screenshot-led UX pass, no follow-ups left
+
+---
+
+Implemented M13 end to end against
+[`docs/plans/2026-06-08-m13-table-ux-data-overhaul.md`](docs/plans/2026-06-08-m13-table-ux-data-overhaul.md).
+Picked up the uncommitted data-layer drift Entry 108 flagged and finished it
+(no double-applied migration — `migrate_model_metadata_v4` is idempotent).
+Per the goal, routed delegatable work through nano-agents: a pro nano reviewed
+the data-layer diff (clean), a pro nano did the docs sweep (verified), an image
+nano ran the screenshot UI/UX review, and a final pro nano reviewed the app.js
+diff (verdict: shippable). Tightly-coupled JS stayed native for one mental model.
+
+**Data layer (schema v4).** `scripts/migrate_model_metadata_v4.py` adds
+`input_capabilities` (canonical JSON subset of text/image/audio/video, default
+`["text"]`) and `deprecated_on` (nullable; stamped on status→deprecated, cleared
+on reactivation). Idempotent, recreates `v_models_latest`, bumps 3→4. Wired into
+`server.py` startup + top of `run_update.py`; upsert uses COALESCE so a run never
+wipes either field; status_changes loop stamps `deprecated_on`. schema.sql +
+init_db seed (3 documented multimodal models) + writer validation + full SKILL.md
+contract sweep. No prose backfill (data-honesty rule). Ran clean + idempotent on
+the live DB; applied the 3 documented multimodal rows to live so the UI shows
+real variety (modalities from each model's own card, not invented).
+
+**Ranking (frontend-only).** Overall = 25/25/25/10/15 (cost now counts),
+Value = 60/25/15. Re-checked distribution (A:13 B:13 C:5 D:3, top 8.6 — empty S
+is the deliberate cost-weighting consequence). Documented in ARCHITECTURE.
+
+**Table (items 1+2).** Header-click sort (`COLUMNS` model, `aria-sort`, caret)
+replacing the dropdown; real Provider column; pointer-drag resizable columns via
+`<colgroup>` persisted to `colWidths`; zoom slider scaling `--table-zoom`;
+desktop grade-letter collapse <0.85 (reuses `tier()`, CSS-only number→letter so
+it keeps numeric in title for a11y); compact mobile sort `<select>`. `STORE_KEY`
+→ `-v4` with full `loadPrefs` normalization + `sortKey` whitelist.
+
+**Metadata UI (items 8+9).** Inline-SVG capability chips (distinct hue, no emoji)
+in table/detail/filters/mobile; deprecation badge + date; "Ignore deprecated"
+toggle (yields to explicit Status=Deprecated); CSV adds status/deprecated_on/
+capabilities. Added `path` to the `h()` SVG tag set — the exact gap Entry 108's
+review predicted; without it the glyphs render as HTML and vanish.
+
+**Settings Reset (item 4).** `POST /api/reset` + server-validated typed
+`confirm_token`. Scoped functions in `reset_local_state.py`: stats (run_metrics
++ CSV + logs, keep freshness), changelog (FK-ordered run_metrics→changelogs + md;
+the one sanctioned append-only exception, now documented across CLAUDE/AGENTS/
+SKILL/docs), models (clear + reseed bootstrap), full (all-or-nothing; server
+re-seeds on reload). Credentials safe by construction — config is metadata-only,
+zero keyring/broker calls. New Reset tab: four typed-confirm cards, danger-styled
+full reset, explicit "credentials not affected" note.
+
+**Spacing/copy (items 5, 6, 10).** Stats CTA top-right beside the filters;
+freshness centered under Refresh (`text-align`, the prior `justify-content` was
+inert on inline text); kicker removed; app-wide density pass. The image nano
+caught stretched Stats KPI cards — grid rows defaulting to stretch in the
+flex-grown shell; fixed with `align-content:start` (card 423→115px). Wider Reset
+panel, filter-row toggles aligned to the control baseline, brighter KPI labels.
+
+**Verification.** New `tests/test_m13.py` (14) + existing auth suite = 24 passing
+(migration idempotency, capability order/dedupe/unknown-rejection, all reset
+scopes on throwaway DBs, FK ordering, freshness preservation). Endpoint token
+gating tested live (wrong token → 400). Header sort, zoom/grade collapse, column
+resize, capability filter, prefs persistence verified live via agent-browser
+(`getComputedStyle`, not attributes). Final nano review fixes applied: zoom
+slider now keeps focus across the grade threshold (class toggle, not a re-render
+that rebuilt the toolbar mid-drag) and resize cleans up on `pointercancel`.
+Headed 1440 + 390 screenshots in `e2e/screenshots/m13/`. Hardened `init_db` path
+prints against out-of-root seeding (surfaced by the harness). `?v=` →
+`m13-20260608c`. Not committed.
+
+---
+
+## Entry 108 — 2026-06-08
+
+**Agent:** Claude Opus 4.8 (shxdowflow orchestrator)
+**Cycle:** Milestone 13 — planning (Codex review pass + tree-state reconciliation)
+**Task:** Final Codex review of the M13 plan; flag working-tree drift
+
+---
+
+Ran the requested final Codex review of
+[`docs/plans/2026-06-08-m13-table-ux-data-overhaul.md`](docs/plans/2026-06-08-m13-table-ux-data-overhaul.md)
+after the pro nano-agent review. Codex returned and I verified:
+
+- **OWNER_SIGNOFF needed:** (a) item 4 changelog reset deletes `changelogs/*.md`,
+  which conflicts with the append-only rule (`AGENTS.md:47`, `CLAUDE.md:39`); (b)
+  item 3 ranking formula folds cost into `overall` with new weights — reshuffles
+  the leaderboard.
+- **MISSING_WIRING:** the hand-rolled `h()` (`web/app.js:1544`) only namespaces a
+  fixed set of SVG tags (`svg`,`rect`,`line`,`text`,`circle`,`polygon`,`g`) —
+  capability icons using `path`/`use`/`polyline` won't render unless that set is
+  extended. Items 8/9 frontend (defaults, filters, table/detail render, CSV
+  export) is still unwired.
+- **RISK:** item 7 — seed notes in `init_db.py` still embed raw benchmark numbers,
+  which would violate the new notes guidance on any post-M13 model reset; rewrite
+  seeds or grandfather legacy entries.
+
+**⚠️ Tree-state drift discovered.** The plan and Entry 107 both say "no
+implementation has started," but the working tree already carries uncommitted
+data-layer implementation for items 7/8/9:
+- Modified: `scripts/schema.sql` (adds `input_capabilities`, `deprecated_on`),
+  `scripts/init_db.py`, `scripts/run_update.py`, `server.py`, `skill/SKILL.md`.
+- New (untracked): `scripts/migrate_model_metadata_v4.py`.
+
+These appear to be from the parallel Codex/Vesper background process that also
+revised the plan. **Left untouched** — not reverted, not committed, not pushed —
+pending the owner's call. The plan/TODO "no implementation yet" wording is now
+stale and should be reconciled before the coding pass to avoid double-applying the
+v4 migration. No frontend (`web/`) implementation exists yet.
+
+---
+
 ## Entry 107 — 2026-06-08
 
 **Agent:** Codex GPT-5 (Vesper, planning)

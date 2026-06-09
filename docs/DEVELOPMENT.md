@@ -52,7 +52,8 @@ To return a local install to first-run state, use `./run.sh --reset` or
 | Run logs | `logs/run-update-*.log`, `logs/server.log`, `logs/scheduled-run.log` |
 | UI state | `localStorage` (cleared via `?reset=1` on next load) |
 
-**Not removed:** `changelogs/*.md` (append-only audit history),
+**Not removed:** `changelogs/*.md` (append-only audit history; Settings → Reset
+with typed confirmation is the deliberate operator exception),
 Voidware broker grants/secrets, reusable provider credentials,
 keyring/keystore secrets, `web/` static assets, Python virtual environment.
 
@@ -91,6 +92,7 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 | `scripts/launch_server.py` | Silent-mode server lifecycle (detach, readiness poll) |
 | `scripts/schema.sql` | DDL source of truth for `data/dash.sqlite` |
 | `scripts/migrate_score_checks.py` | Idempotent migration that adds 0–10 CHECK constraints to `model_scores` and bumps `meta.schema_version` to 2 |
+| `scripts/migrate_model_metadata_v4.py` | Idempotent migration that adds `models.input_capabilities` and `models.deprecated_on` and bumps `meta.schema_version` to 4 |
 
 ### Frontend (`web/`)
 
@@ -171,6 +173,8 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 - No comments unless the *why* is non-obvious
 - No dead code — delete it, don't comment it out
 - Changelog files are append-only and must never be modified after creation
+  (Settings → Reset with typed confirmation is the deliberate operator exception;
+  normal update runs remain append-only)
 - All SQL writes use transactions (`BEGIN` / `COMMIT`)
 
 ---
@@ -181,12 +185,13 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 
 1. Update `scripts/schema.sql` with the new DDL.
 2. If existing DBs need migration, ship a focused migration module under
-   `scripts/`. Use `scripts/migrate_score_checks.py` as the reference: it
-   validates existing rows, rebuilds the affected table inside a single
-   transaction, recreates indexes/views, and bumps `meta.schema_version`.
+   `scripts/`. Use `scripts/migrate_score_checks.py` or
+   `scripts/migrate_model_metadata_v4.py` as references: each validates or
+   alters existing rows, rebuilds affected tables/views inside a single
+   transaction, and bumps `meta.schema_version`.
 3. Wire the migration into both `server.py` startup and the top of
    `scripts/run_update.py` so fresh-install and update-run paths converge.
-4. Bump `meta.schema_version` (the current target is `2`).
+4. Bump `meta.schema_version` (the current target is `4`).
 5. Test with both fresh DB creation and migration from the previous version.
 
 ### Querying from the Browser

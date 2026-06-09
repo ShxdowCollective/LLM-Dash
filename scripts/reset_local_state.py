@@ -1,9 +1,25 @@
 #!/usr/bin/env python3
-"""Reset local LLM-Dash state without touching auth stores or changelogs."""
+"""Reset local LLM-Dash state.
+
+Two layers:
+
+1. `reset_local_state()` — the original all-or-nothing CLI reset: deletes the DB
+   + sidecars + CSV + run logs + app config + schedule. Auth stores (Voidware
+   credentials, keyring secrets, broker grants) are never touched.
+2. Scoped resets — `reset_stats`, `reset_changelog`, `reset_models`,
+   `reset_full` — power the in-app **Settings → Reset** tab via `POST /api/reset`.
+   These are deliberate, typed-confirmation operator actions. The changelog reset
+   is the one sanctioned exception to the append-only rule (documented in
+   CLAUDE.md / AGENTS.md / SKILL.md / docs/ARCHITECTURE.md); update runs stay
+   append-only. None of these touch credentials.
+"""
 
 from __future__ import annotations
 
 import argparse
+import csv as _csv
+import json
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -15,6 +31,7 @@ from scripts.schedule_job import SCHEDULE_PATH, remove_schedule, status as sched
 
 DB_PATH = ROOT / "data" / "dash.sqlite"
 CSV_PATH = ROOT / "data" / "run_metrics.csv"
+CHANGELOGS_DIR = ROOT / "changelogs"
 LOGS_DIR = ROOT / "logs"
 DB_SIDECARS = (
     DB_PATH,
@@ -23,6 +40,14 @@ DB_SIDECARS = (
     DB_PATH.with_name(DB_PATH.name + "-journal"),
     CSV_PATH,
 )
+
+# Scope -> required typed confirmation token (validated server-side).
+RESET_TOKENS = {"stats": "STATS", "changelog": "CHANGELOG", "models": "MODELS", "full": "RESET"}
+METRICS_COLUMNS = [
+    "changelog_date", "started_at", "completed_at", "duration_sec", "agent_name",
+    "agent_runtime", "tokens_input", "tokens_output", "tokens_cached", "cost_usd",
+    "exa_searches", "exa_fetches", "word_count", "notes",
+]
 
 
 def _delete_file(path: Path, removed: list[str], *, dry_run: bool = False) -> None:
@@ -66,10 +91,134 @@ def reset_local_state(*, dry_run: bool = False) -> tuple[list[str], list[str]]:
     return removed, warnings
 
 
+def _export_metrics_csv(con: sqlite3.Connection) -> None:
+    rows = con.execute(
+        "SELECT changelog_date, started_at, completed_at, duration_sec, agent_name, "
+        "agent_runtime, tokens_input, tokens_output, tokens_cached, cost_usd, "
+        "exa_searches, exa_fetches, word_count, notes FROM run_metrics ORDER BY changelog_date"
+    ).fetchall()
+    CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with CSV_PATH.open("w", newline="", encoding="utf-8") as f:
+        writer = _csv.writer(f)
+        writer.writerow(METRICS_COLUMNS)
+        writer.writerows(rows)
+
+
+def _delete_run_logs(removed: list[str]) -> None:
+    for log_file in sorted(LOGS_DIR.glob("run-update-*.log")):
+        _delete_file(log_file, removed)
+    _delete_file(LOGS_DIR / "scheduled-run.log", removed)
+
+
+def reset_stats() -> dict:
+    """Clear run telemetry only. Models, scores, changelogs, and
+    meta.last_updated are untouched."""
+    if not DB_PATH.exists():
+        raise FileNotFoundError("dash.sqlite not found")
+    removed: list[str] = []
+    con = sqlite3.connect(DB_PATH)
+    try:
+        con.execute("DELETE FROM run_metrics")
+        _export_metrics_csv(con)
+        con.commit()
+    finally:
+        con.close()
+    _delete_run_logs(removed)
+    return {"scope": "stats", "cleared": ["run_metrics", "run logs"], "removed_files": removed}
+
+
+def reset_changelog() -> dict:
+    """Delete all changelog entries and their run metrics. This is the one
+    sanctioned exception to the append-only rule. last_updated is preserved
+    because model data still reflects the last update."""
+    if not DB_PATH.exists():
+        raise FileNotFoundError("dash.sqlite not found")
+    removed: list[str] = []
+    con = sqlite3.connect(DB_PATH)
+    try:
+        con.execute("PRAGMA foreign_keys = OFF")
+        # run_metrics.changelog_date references changelogs(date): clear it first.
+        con.execute("DELETE FROM run_metrics")
+        con.execute("DELETE FROM changelogs")
+        _export_metrics_csv(con)
+        con.commit()
+    finally:
+        con.close()
+    for md in sorted(CHANGELOGS_DIR.glob("*.md")):
+        _delete_file(md, removed)
+    _delete_run_logs(removed)
+    return {"scope": "changelog", "cleared": ["changelogs", "run_metrics"], "removed_files": removed}
+
+
+def reset_models() -> dict:
+    """Clear models + scores, then re-seed the bootstrap model set so the
+    dashboard's first screen is never broken. Changelogs and stats are left
+    alone. last_updated is reset to the reseed date."""
+    if not DB_PATH.exists():
+        raise FileNotFoundError("dash.sqlite not found")
+    # Imported lazily so the CLI path doesn't pull seed data unless needed.
+    from scripts.init_db import MODELS, SOURCE_NOTE, VENDOR_CARD_URL, canonical_capabilities, SEED_DATE
+    con = sqlite3.connect(DB_PATH)
+    try:
+        con.execute("PRAGMA foreign_keys = ON")
+        con.execute("BEGIN")
+        con.execute("DELETE FROM model_scores")
+        con.execute("DELETE FROM models")
+        today = SEED_DATE
+        for m in MODELS:
+            con.execute(
+                """INSERT INTO models (name, vendor, color, released, params, pricing,
+                       notes, card_url, input_capabilities, deprecated_on, first_seen, last_seen, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (m["name"], m["vendor"], m["color"], m["released"], m["params"], m["pricing"],
+                 m["notes"], m.get("card_url") or VENDOR_CARD_URL.get(m["vendor"]),
+                 canonical_capabilities(m.get("input_capabilities")), m.get("deprecated_on"),
+                 today, today, m.get("status", "active")),
+            )
+            con.execute(
+                """INSERT INTO model_scores (model_id, as_of, intelligence, coding, agents, speed, cost, source_notes)
+                   SELECT id, ?, ?, ?, ?, ?, ?, ? FROM models WHERE name = ?""",
+                (today, m["intelligence"], m["coding"], m["agents"], m["speed"], m["cost"], SOURCE_NOTE, m["name"]),
+            )
+        con.execute(
+            "INSERT INTO meta (key, value) VALUES ('last_updated', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (f"{today}T00:00:00Z",),
+        )
+        con.execute("COMMIT")
+    except Exception:
+        con.execute("ROLLBACK")
+        raise
+    finally:
+        con.close()
+    return {"scope": "models", "cleared": ["models", "model_scores"], "reseeded": len(MODELS)}
+
+
+def reset_full() -> dict:
+    """Full local reset: delete the DB + sidecars + CSV + logs + app config +
+    schedule. The server re-seeds on next launch. Voidware credentials, keyring
+    secrets, and broker grants are NOT affected."""
+    removed, warnings = reset_local_state(dry_run=False)
+    return {"scope": "full", "removed_files": removed, "warnings": warnings}
+
+
+def run_scope(scope: str) -> dict:
+    fns = {"stats": reset_stats, "changelog": reset_changelog, "models": reset_models, "full": reset_full}
+    if scope not in fns:
+        raise ValueError(f"unknown reset scope: {scope}")
+    return fns[scope]()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Reset local LLM-Dash settings and generated data.")
     parser.add_argument("--dry-run", action="store_true", help="List files that would be removed without deleting them")
+    parser.add_argument("--scope", choices=list(RESET_TOKENS), help="Scoped reset: stats|changelog|models|full (destructive, no dry-run)")
     args = parser.parse_args()
+
+    if args.scope:
+        summary = run_scope(args.scope)
+        print(f"reset scope={args.scope}: {json.dumps(summary)}")
+        return 0
 
     removed, warnings = reset_local_state(dry_run=args.dry_run)
     prefix = "dry-run: would remove" if args.dry_run else "reset: removed"
