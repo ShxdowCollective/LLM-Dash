@@ -66,9 +66,11 @@ def test_seed_multimodal_capabilities(tmp_path):
     db = _seed(tmp_path)
     c = sqlite3.connect(db)
     omni = c.execute("SELECT input_capabilities FROM models WHERE name='MiMo-V2-Omni'").fetchone()[0]
-    default = c.execute("SELECT input_capabilities FROM models WHERE name='GPT-5.4'").fetchone()[0]
+    documented = c.execute("SELECT input_capabilities FROM models WHERE name='GPT-5.4'").fetchone()[0]
+    default = c.execute("SELECT input_capabilities FROM models WHERE name='MiniMax M2.5'").fetchone()[0]
     c.close()
     assert json.loads(omni) == ["text", "image", "audio", "video"]
+    assert json.loads(documented) == ["text", "image"]
     assert json.loads(default) == ["text"]
 
 

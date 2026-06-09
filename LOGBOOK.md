@@ -3,6 +3,64 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 110 — 2026-06-09
+
+**Agent:** Claude Fable 5 (Iris, orchestrator)
+**Cycle:** M13 follow-up close-out — metadata backfill
+**Task:** Close the three open TODO follow-ups (logo audit, capability
+backfill, per-model card_urls) via nano-agent research + implementation
+
+---
+
+Ran the whole thing through nano-agents per the goal — four flash research
+batches (queued, two tracks max), one pro implementation nano, one pro final
+reviewer — with every claim re-verified by the main agent before it touched
+anything durable. Plan + full verified research table with citations:
+`docs/plans/2026-06-09-open-followups-metadata-backfill-nanoagent-plan.md`
+(local-only, like the other milestone plans).
+
+**Logo audit (follow-up 1).** Closed as audit-only: all 10 DB vendors map in
+`VENDOR_LOGO` and all 12 slugs have SVGs in `web/vendor/logos/` (DeepSeek +
+Mistral are spares). No edits.
+
+**Capabilities (follow-up 2).** 21 of 34 rows upgraded from the `["text"]`
+default, every one backed by a fetched primary source (vendor model cards,
+DeepMind/Gemma cards, vendor-org HF cards): OpenAI GPT-5.x/4.1 + all Claude
+text+image; Gemini 3.x text+image+audio+video; Qwen3.5/3.6 + Kimi K2.5
+text+image+video (HF cards have image-text-to-text tags + image/video chat
+templates); Gemma 26B MoE text+image. Ten models stay text-only because their
+cards document nothing else (GLM, MiniMax, Nemotron, Qwen3-Coder-Next,
+MiMo-V2-Pro, GPT-OSS — the last is documented text-only, now explicit).
+Rejected two nano over-reads: Gemma E4B "video" (the card's spec table says
+Text/Image/Audio only) and a Gemini 3.1 Flash-Lite "deprecation" that is just
+Google's routine 1-year lifecycle table.
+
+**Deprecations.** Two real ones found and stamped with citations:
+Grok Code Fast 1 (`deprecated_on` 2026-05-15 — retired from the xAI API,
+requests now redirect to grok-build-0.1) and GPT-5.1-Codex-Mini (2026-04-22
+announce, 2026-07-23 shutdown, replacement gpt-5.4-mini). GPT-5 mini, GPT-4.1,
+Opus 4.6 stay `superseded` — absent from vendor deprecation pages.
+
+**card_urls (follow-up 3).** 32 of 34 upgraded to exact per-model pages, all
+curl-verified (Anthropic news links swapped for the per-model docs pages;
+Qwen3.6 Plus blog verified by rendering the JS page via agent-browser). MiMo
+x2 keep the vendor org page — the nano returned MiMo-V2.5 cards (wrong
+version) and the real V2 repos are 401-gated, so the fallback is the honest
+choice.
+
+**Mechanics.** Seed (`scripts/init_db.py` MODELS) is the durable, committable
+source of truth — fresh clones/reseeds get everything. One-off
+`scripts/backfill_metadata_20260609.py` (`--db-path`, `--dry-run`, protected-
+row guard, deprecation allowlist, single transaction) synced the live DB:
+matched=34 card_url=32 capabilities=21 status=2. This is deliberate dev-time
+maintenance with citations, not an update run — no changelog, no run_metrics
+row, no `meta.last_updated` bump; scores/notes untouched (verified by full-
+column diff against a pre-apply copy). Updated the stale
+`test_seed_multimodal_capabilities` example (GPT-5.4 is now a *documented*
+text+image model; MiniMax M2.5 is the new default example). 24/24 tests pass.
+
+---
+
 ## Entry 109 — 2026-06-08
 
 **Agent:** Claude Opus 4.8 (Vega, full-stack)
