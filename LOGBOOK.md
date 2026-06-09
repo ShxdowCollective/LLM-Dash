@@ -3,6 +3,49 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 107 — 2026-06-08
+
+**Agent:** Codex GPT-5 (Vesper, planning)
+**Cycle:** Milestone 13 — planning
+**Task:** Plan the table UX, ranking, reset, metadata, and Voidware/auth follow-up
+
+---
+
+Planned M13 from the owner's 12-item brief without implementation changes.
+Used shxdowflow + nano-agents as requested: ran nano-agent preflight, dispatched
+two read-only repo explorers, verified their file claims directly, used Exa for
+current ranking-methodology research, drafted/revised the plan, sent it through a
+pro nano-agent plan review, and folded in the actionable findings.
+
+Plan:
+[`docs/plans/2026-06-08-m13-table-ux-data-overhaul.md`](docs/plans/2026-06-08-m13-table-ux-data-overhaul.md).
+TODO now has M13 as the active planned work with implementation checkboxes.
+
+Key decisions recorded:
+- Header-click sorting gets a real Provider column; Model sorts by model name,
+  Provider sorts by provider then model.
+- Ranking formula proposal is researched and concrete: Overall =
+  25% intelligence, 25% coding, 25% agents, 10% speed, 15% cost; Value =
+  60% Overall, 25% cost, 15% speed.
+- Schema v4 combines `input_capabilities` JSON text and `deprecated_on`, with
+  one migration file (`scripts/migrate_model_metadata_v4.py`) and runtime wiring
+  required in both server startup and update runs. Migration backfill must not
+  guess modality/deprecation values from prose.
+- Reset tab is explicitly destructive and typed-confirmed; full reset may clear
+  LLM-Dash app config/schedule, but must not touch Voidware credentials,
+  reusable provider credentials, keyring/keystore secrets, or broker grants. The
+  server endpoint must validate a scope-specific `confirm_token`, not just trust
+  frontend confirmation.
+- Table density decisions are pinned: desktop grade collapse happens below zoom
+  `0.85`; mobile gets a compact sort select, not resize/grade-collapse.
+- Voidware package check: `npm view @shxdowcollective/voidware version` returned
+  `1.0.4`, matching `package.json` and `web/vendor/voidware/VERSION.md`.
+
+No app implementation, DB mutation, benchmark update, changelog reset, or
+credential operation was performed.
+
+---
+
 ## Entry 106 — 2026-06-08
 
 **Agent:** Claude Opus 4.8 (Prism, frontend)

@@ -7,7 +7,33 @@ Use `[ ]` only for still-open work.
 
 ## Now
 
-No active development task. Optional Milestone 12 follow-ups:
+**Milestone 13 — Table UX, ranking, reset, and model metadata overhaul — planned.**
+Implementation plan:
+[`docs/plans/2026-06-08-m13-table-ux-data-overhaul.md`](docs/plans/2026-06-08-m13-table-ux-data-overhaul.md).
+No implementation has started yet.
+
+- [ ] M13 data layer: `scripts/migrate_model_metadata_v4.py` for
+  `input_capabilities` and `deprecated_on`; wire migration into startup/update
+  paths; update schema, seeds, writer validation, and the full update contract.
+- [ ] M13 ranking formula: implement researched weights
+  (`25/25/25/10/15` Overall, `60/25/15` Value), document in architecture, and
+  verify tier/filter distribution before/after.
+- [ ] M13 table UX: header-click sorting, real Provider column, resizable
+  columns, compact mobile sort, zoom slider, and desktop grade-letter collapse
+  below zoom `0.85`.
+- [ ] M13 metadata UI: capability icons in table/chart/detail, capability
+  filters, deprecation date display, and "Ignore Deprecated Models" toggle.
+- [ ] M13 Settings Reset tab: scoped stats/changelog/models/full reset with
+  server-validated typed `confirm_token`, coherent reseed/CSV/meta behavior,
+  and Voidware credential preservation verification.
+- [ ] M13 spacing/copy cleanup: move Stats single-run CTA top-right, center
+  freshness under Refresh, remove "Local benchmark workbench", tighten empty
+  space, and update notes guidance to avoid raw benchmark numbers.
+- [ ] M13 verification/docs: migration/reset tests, Voidware `1.0.4` verification
+  + auth-secret checks, headed desktop/mobile screenshots, CSV export check,
+  docs/TODO/LOGBOOK updates.
+
+Optional Milestone 12 follow-ups:
 
 - [ ] Provider logos cover current vendors; add new `<slug>.svg` + a `VENDOR_LOGO`
   entry when a vendor without a models.dev logo appears (falls back to monogram).
