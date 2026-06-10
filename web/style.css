@@ -711,6 +711,8 @@ table.models td:last-child {
 
 .provider-logo {
   flex: 0 0 auto;
+  width: var(--provider-logo-size, 24px);
+  height: var(--provider-logo-size, 24px);
   object-fit: contain;
   border-radius: 7px;
   background: color-mix(in srgb, white 96%, var(--model-color, var(--vw-accent)) 4%);
@@ -722,6 +724,8 @@ table.models td:last-child {
   display: inline-grid;
   flex: 0 0 auto;
   place-items: center;
+  width: var(--provider-logo-size, 24px);
+  height: var(--provider-logo-size, 24px);
   border-radius: 7px;
   background: var(--grad-model, var(--vw-accent));
   color: #fff;
@@ -754,7 +758,7 @@ table.models td:last-child {
   align-items: center;
   justify-content: space-between;
   gap: 9px;
-  min-width: 82px;
+  min-width: 88px;
   padding: 6px 7px 6px 10px;
   border-radius: var(--vw-radius-sm);
   background: color-mix(in srgb, var(--tier-color) 24%, var(--vw-surface-2));
@@ -767,7 +771,7 @@ table.models td:last-child {
   font-family: var(--vw-font-body);
   font-variant-numeric: tabular-nums;
   font-weight: 800;
-  font-size: calc(13px * var(--table-zoom, 1));
+  font-size: clamp(13px, calc(13px * var(--table-zoom, 1)), 18px);
 }
 
 .tier-square,
@@ -780,7 +784,7 @@ table.models td:last-child {
   background: color-mix(in srgb, var(--tier-color) 34%, var(--vw-surface-2));
   color: color-mix(in srgb, var(--tier-color) 88%, var(--vw-text));
   font-style: normal;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -869,22 +873,29 @@ body.is-col-resizing .model-row { pointer-events: none; }
 .model-table-layout.is-graded .score-num { display: none; }
 .model-table-layout.is-graded .score-td { min-width: 0; }
 .model-table-layout.is-graded .score-chip {
-  min-width: 0;
+  min-width: 38px;
   gap: 0;
-  padding: 6px;
+  padding: 7px;
   justify-content: center;
 }
 
+.model-table-layout.is-graded .tier-square {
+  width: 32px;
+  height: 30px;
+  font-size: 14px;
+}
+
 .provider-cell-inner {
+  --provider-logo-size: clamp(32px, calc(32px * var(--table-zoom)), 42px);
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 .provider-cell-name {
-  font-weight: var(--vw-weight-medium);
+  font-weight: 800;
   color: var(--vw-text);
-  font-size: calc(13px * var(--table-zoom));
+  font-size: clamp(15px, calc(15px * var(--table-zoom)), 19px);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2034,18 +2045,23 @@ kbd {
 .compare-area-head {
   display: grid;
   gap: 2px;
+  justify-self: center;
+  width: 100%;
+  text-align: center;
+}
+
+.compare-area.mode-bars .compare-area-head {
+  max-width: 1080px;
+}
+
+.compare-area.mode-grade .compare-area-head {
+  max-width: 100%;
 }
 
 .compare-area-title {
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: var(--vw-weight-bold);
-}
-
-.compare-area-hint {
-  margin: 0;
-  color: var(--vw-text-muted);
-  font-size: 13px;
 }
 
 .compare-grid {
@@ -2227,30 +2243,31 @@ kbd {
 
 .grade-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
+  gap: 8px;
 }
 
 .grade-box {
   display: grid;
   justify-items: center;
-  gap: 1px;
-  padding: 8px 4px;
+  gap: 3px;
+  padding: 10px 7px;
   border-radius: var(--vw-radius-sm);
-  background: color-mix(in srgb, var(--tier-color, var(--vw-surface-3)) 16%, var(--vw-surface-2));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tier-color, var(--vw-border)) 30%, transparent);
+  background: color-mix(in srgb, var(--tier-color, var(--vw-surface-3)) 22%, var(--vw-surface-2));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tier-color, var(--vw-border)) 42%, transparent);
 }
 
 .grade-label {
-  color: var(--vw-text-faint);
-  font-size: 9px;
-  letter-spacing: 0.04em;
+  color: var(--vw-text-soft);
+  font-size: 11px;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
+  font-weight: 800;
 }
 
 .grade-letter {
   color: color-mix(in srgb, var(--tier-color, var(--vw-text)) 82%, var(--vw-text));
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 800;
   line-height: 1;
 }
@@ -2259,8 +2276,8 @@ kbd {
   font-family: var(--vw-font-body);
   font-variant-numeric: tabular-nums;
   font-weight: 700;
-  font-size: 11px;
-  color: var(--vw-text-muted);
+  font-size: 13px;
+  color: var(--vw-text-soft);
 }
 
 .stat-card-link {

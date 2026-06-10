@@ -33,7 +33,7 @@
   // grade-collapse chip path.
   const COLUMNS = [
     { key: "rank", label: "#", sort: null, w: 46 },
-    { key: "provider", label: "Provider", sort: "vendor", w: 178 },
+    { key: "provider", label: "Provider", sort: "vendor", w: 210 },
     { key: "model", label: "Model", sort: "name", w: null },
     { key: "intelligence", label: "Intel", sort: "intelligence", score: true, w: 102 },
     { key: "coding", label: "Coding", sort: "coding", score: true, w: 102 },
@@ -626,7 +626,7 @@
 
   function providerLogoByVendor(vendor) {
     const slug = vendorSlug(vendor);
-    if (slug) return h("img", { class: "provider-logo", src: "vendor/logos/" + slug + ".svg", alt: "", width: 20, height: 20, loading: "lazy", style: { width: "20px", height: "20px" } });
+    if (slug) return h("img", { class: "provider-logo", src: "vendor/logos/" + slug + ".svg", alt: "", width: 24, height: 24, loading: "lazy", style: { "--provider-logo-size": "24px" } });
     return h("span", { class: "vendor-chip-dot" });
   }
 
@@ -742,7 +742,7 @@
 
   function providerCell(model) {
     return h("div", { class: "provider-cell-inner", style: { "--model-color": safeColor(model.color) } }, [
-      providerLogo(model, 24),
+      providerLogo(model, 32),
       h("span", { class: "provider-cell-name" }, model.vendor || "Unknown"),
     ]);
   }
@@ -784,13 +784,13 @@
         width: px,
         height: px,
         loading: "lazy",
-        style: { width: px + "px", height: px + "px" },
+        style: { "--provider-logo-size": px + "px" },
       });
     }
     return h("span", {
       class: "provider-monogram",
       "aria-hidden": "true",
-      style: { width: px + "px", height: px + "px", "--model-color": safeColor(model.color) },
+      style: { "--provider-logo-size": px + "px", "--model-color": safeColor(model.color) },
     }, String(model.vendor || "?").trim().charAt(0).toUpperCase() || "?");
   }
 
@@ -810,7 +810,7 @@
     }, [
       h("div", { class: "mobile-model-card-head" }, [
         h("span", { class: "mobile-rank" }, index + 1),
-        providerLogo(model, 22),
+        providerLogo(model, 28),
         h("div", { class: "mobile-model-title" }, [
           h("div", { class: "mobile-model-name-row" }, [
             h("strong", { class: "mobile-model-name" }, model.name || "Unknown model"),
@@ -943,15 +943,12 @@
     const showModels = compare.length ? compare : [inspectModel()].filter(Boolean);
     const heading = h("div", { class: "compare-area-head" }, [
       h("h2", { class: "compare-area-title" }, compare.length ? `Comparing ${compare.length} ${compare.length === 1 ? "model" : "models"}` : "Model detail"),
-      h("p", { class: "compare-area-hint" }, compare.length
-        ? "Check more rows to stack them side by side, or uncheck to remove."
-        : "Showing the selected model. Check the Compare box on any row to stack models here."),
     ]);
     if (!showModels.length) {
       return h("section", { class: "compare-area", "aria-label": "Model comparison" }, [heading, emptyState("No models to show", "Adjust filters to bring models back.")]);
     }
     const mode = showModels.length === 1 ? "bars" : "grade";
-    return h("section", { class: "compare-area", "aria-label": "Model comparison" }, [
+    return h("section", { class: "compare-area mode-" + mode, "aria-label": "Model comparison" }, [
       heading,
       h("div", { class: "compare-grid mode-" + mode }, showModels.map((model) => modelStatCard(model, mode))),
     ]);
@@ -961,7 +958,7 @@
     const inCompare = state.ui.compare.includes(model.id);
     const card = modelCardUrl(model);
     const head = h("header", { class: "stat-card-head" }, [
-      providerLogo(model, 38),
+      providerLogo(model, 42),
       h("div", { class: "stat-card-titles" }, [
         h("strong", { class: "stat-card-name" }, model.name || "Unknown model"),
         h("span", { class: "stat-card-vendor" }, model.vendor || "Unknown vendor"),

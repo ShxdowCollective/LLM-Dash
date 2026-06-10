@@ -23,13 +23,14 @@ runs):
 
 **Desktop scale and color polish — DONE (2026-06-09).** Enlarged the desktop
 Models workbench for 1440p displays without changing the vanilla app structure:
-larger sidebar/nav, bigger provider logos and labels, stronger score chips with
-UI-font tabular numbers, brighter selected rows, white text on iridescent
-buttons, centered single-model detail card, and centered/wider Stats and
-Settings work surfaces. Bumped UI prefs to `llm-dash-ui-state-v5` so stale
-zoom/column widths do not hide the new defaults. Verified with syntax/diff
-checks and headed/fixed-viewport screenshots at 2560x1440, 1440x900, and
-390x844.
+larger sidebar/nav, bigger provider logos and labels at every table zoom,
+stronger score chips with UI-font tabular numbers, brighter selected rows,
+white text on iridescent buttons, centered single/comparison detail titles
+without helper subtitles, more readable comparison-card grade labels, and
+centered/wider Stats and Settings work surfaces. Bumped UI prefs to
+`llm-dash-ui-state-v5` so stale zoom/column widths do not hide the new
+defaults. Verified with syntax/diff checks and headed/fixed-viewport screenshots
+at 2560x1440, 1440x900, 390x844, 70% table zoom, and comparison mode.
 
 **Install-over Voidware auth retention hardening — DONE (2026-06-09).**
 Hardened LLM-Dash against old install-over verification marker artifacts:

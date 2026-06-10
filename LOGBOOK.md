@@ -22,17 +22,22 @@ Stats work surfaces so they no longer feel pinned to the upper-left corner.
 `web/app.js` bumps the UI prefs key to `llm-dash-ui-state-v5` so old persisted
 zoom/column widths do not mask the new defaults, raises default table zoom to
 112%, widens the score/provider columns, and requests larger provider logo sizes
-in the table/filter/detail surfaces. Table score/rank numerals now use the
-body/UI font with tabular numbers instead of the mono stack for better
-readability. Mobile verification caught a collapsed subpage tab strip and a
-crowded filter row; both were patched before handoff.
+in the table/filter/mobile/detail surfaces. Table score/rank numerals now use
+the body/UI font with tabular numbers instead of the mono stack for better
+readability. A follow-up low-zoom pass made provider logos/text readable at 70%
+and every other table zoom, enlarged collapsed grade letters, removed the model
+detail helper subtitle, centered the detail/comparison title over the displayed
+card grid, and increased comparison-card grade-label contrast. Mobile
+verification caught a collapsed subpage tab strip and a crowded filter row; both
+were patched before handoff.
 
 Verification: `node --check web/app.js`, `python3 -m py_compile server.py
 scripts/*.py`, `git diff --check`, local `./run.sh --silent`, Agent Browser
 headed smoke, and fixed-viewport Chrome screenshots saved under
-`e2e/screenshots/desktop-scale/` at 2560x1440, 1440x900, and 390x844. A pro
-nano-agent plan review flagged stale prefs, double-scaling risk, mobile
-coverage, and ambiguous viewport targets; the useful findings were applied.
+`e2e/screenshots/desktop-scale/` at 2560x1440, 1440x900, 390x844, 70% table
+zoom, and multi-card comparison mode. A pro nano-agent plan review flagged stale
+prefs, double-scaling risk, mobile coverage, and ambiguous viewport targets; the
+useful findings were applied.
 
 ---
 
