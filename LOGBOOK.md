@@ -3,6 +3,46 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 113 — 2026-06-10
+
+**Agent:** Codex GPT-5 (Sable, planning)
+**Cycle:** Reset + Voidware credential remediation planning
+**Task:** Scope broken Settings reset and Voidware credential flows without implementation
+
+---
+
+Created the planning-only remediation spec at
+`docs/plans/2026-06-10-reset-voidware-credentials-nanoagent-plan.md`. No app
+code, tests, database files, credentials, or Voidware auth stores were changed.
+
+Used `shxdowflow` with nano-agents exactly for scoping/review: one flash nano
+explored Settings reset/setup behavior, one flash nano explored Voidware
+credential/broker behavior, and one pro nano reviewed the plan. Main-agent
+verification checked the relevant files directly before writing the plan:
+`web/app.js`, `server.py`, `scripts/reset_local_state.py`,
+`scripts/config.py`, `scripts/voidware_auth.py`,
+`scripts/voidware_app_broker.mjs`, launcher reset paths, tests, and Voidware
+1.0.4 runtime guidance. Voidware spec check matched the repo dependency.
+
+Key findings captured in the plan: the frontend posts the baked reset token
+instead of the typed token; the old setup wizard no longer exists and full reset
+only routes to Connection settings; reset currently preserves broker grants
+despite the new desired policy; Exa and LLM Stats do not have selectable
+credential slots; credential discovery is provider-only and name-collapsed; the
+approval modal always shows both password and secret; process-lifetime approved
+secret cache and legacy grant cache need reset cleanup; and ref-bound Voidware
+selection is needed to avoid same-name keyring/auth.json ambiguity.
+
+The pro review findings were folded into the plan: add separate `setupMode`
+instead of reusing `resetMode`, clear `_APPROVED_SECRET_CACHE`, make reset busy
+state global, name the concrete `voidware auth grants list|revoke|cleanup`
+strategy, bump app config to version 2 for three credential slots, add ref-layer
+bridge commands with safe fallback, enforce external credential mutation
+server-side, scrub approval modal state on close/deny, add FastAPI reset tests,
+and include dry-run grant cleanup preview.
+
+---
+
 ## Entry 112 — 2026-06-09
 
 **Agent:** Codex GPT-5 (Luma, UI polish)

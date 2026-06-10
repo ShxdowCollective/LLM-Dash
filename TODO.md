@@ -7,8 +7,18 @@ Use `[ ]` only for still-open work.
 
 ## Now
 
-Nothing active. All M12/M13 follow-ups are closed. Next data refresh runs via
-[`skill/SKILL.md`](skill/SKILL.md).
+**Reset + Voidware credential remediation — PLANNED (2026-06-10).**
+Implementation plan:
+[`docs/plans/2026-06-10-reset-voidware-credentials-nanoagent-plan.md`](docs/plans/2026-06-10-reset-voidware-credentials-nanoagent-plan.md).
+Scope: fix janky Settings reset feedback, send typed reset confirmations, add
+post-full-reset setup mode, clear LLM-Dash broker grants/tokens without deleting
+Voidware credentials, and replace the Connection/Exa/LLM Stats raw-key flows
+with selectable/editable Voidware credential slots. No implementation has been
+done yet; plan was scoped with two flash nano-agent explorers and reviewed by a
+pro nano-agent.
+
+All M12/M13 follow-ups are closed. Next data refresh runs via
+[`skill/SKILL.md`](skill/SKILL.md) unless development work is active.
 
 Standing maintenance notes (not tasks — handled as they come up during update
 runs):
