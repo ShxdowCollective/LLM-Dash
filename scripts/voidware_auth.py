@@ -1048,10 +1048,39 @@ def discover_credential_candidates() -> dict[str, Any]:
     warnings = _same_name_ambiguity_warnings(ref_rows)
     if not refs_available:
         warnings.append("Exact-source credential refs are unavailable; name-only selection may be ambiguous.")
+
+    refs_by_name: dict[str, list[dict[str, Any]]] = {}
+    for row in ref_rows:
+        if not row.get("has_secret"):
+            continue
+        name = str(row.get("name") or "")
+        if not name:
+            continue
+        refs_by_name.setdefault(name, []).append(row)
+
+    provider_candidates: list[dict[str, Any]] = []
+    for provider_row in provider_rows:
+        name = str(provider_row.get("name") or "")
+        matching_refs = refs_by_name.get(name, [])
+        if matching_refs:
+            for ref_row in matching_refs:
+                merged = dict(provider_row)
+                merged["ref"] = ref_row["ref"]
+                merged["source"] = ref_row["source"]
+                merged["source_label"] = ref_row["source_label"]
+                merged["managed_by_llmdash"] = ref_row["managed_by_llmdash"]
+                merged["locked"] = ref_row["locked"]
+                merged["unreadable"] = ref_row["unreadable"]
+                if not provider_row.get("label"):
+                    merged["label"] = ref_row["label"]
+                provider_candidates.append(merged)
+        else:
+            provider_candidates.append(provider_row)
+
     return {
         "refs_available": refs_available,
         "same_name_warnings": warnings,
-        "provider_candidates": provider_rows,
+        "provider_candidates": provider_candidates,
         "generic_candidates": generic_rows,
         "auth_refs": ref_rows,
     }

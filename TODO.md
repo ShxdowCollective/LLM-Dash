@@ -13,9 +13,6 @@ All M12/M13 follow-ups are closed. Next data refresh runs via
 Deferred follow-ups from the 2026-06-10 reset/credential work (see plan Status
 section for context; pick up when credential UX gets another pass):
 
-- [ ] Provider slot exact-source ref candidates — Connection candidates are
-  still name-collapsed provider-discovery rows; Exa/LLM Stats already use
-  `discoverAuthRefs` rows.
 - [ ] Ref-bound write/delete broker operations (`auth:ref:write|delete`) so
   same-name multi-source credentials cannot be mutated on the wrong source;
   mutations are currently name-bound with ref identity used for reads only.
@@ -33,6 +30,18 @@ runs):
 - Prefer exact per-model `card_url`s as update runs read new model cards.
 
 ## Recent Completed
+
+**Provider slot exact-source ref candidates — DONE (2026-06-10).** Connection
+candidates now join provider-discovery metadata (base URL, models URL,
+endpoint mode) onto exact-source `discoverAuthRefs` rows, so same-name
+provider credentials in different stores (keyring vs `auth.json`) are
+individually selectable like the Exa/LLM Stats slots. Name-only fallback when
+refs are unavailable. Frontend candidate keys use ref identity
+(`authFilePath`/`envVar`) and dropdown labels disambiguate same-name auth-file
+duplicates by basename. Plan:
+[`docs/plans/2026-06-10-provider-slot-ref-candidates.md`](docs/plans/2026-06-10-provider-slot-ref-candidates.md).
+57 tests. Remaining credential follow-ups (ref-bound mutations, stale cache
+purge) stay in Now — both partly blocked on Voidware 1.0.5.
 
 **Reset + Voidware credential remediation — DONE (2026-06-10).** Implemented
 [`docs/plans/2026-06-10-reset-voidware-credentials-nanoagent-plan.md`](docs/plans/2026-06-10-reset-voidware-credentials-nanoagent-plan.md):

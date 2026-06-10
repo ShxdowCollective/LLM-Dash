@@ -597,7 +597,7 @@ def _provider_candidate(candidate: dict[str, Any]) -> dict[str, Any] | None:
     chat_url = str(candidate.get("chatURL") or candidate.get("chat_url") or "").strip().rstrip("/")
     safe_custom = candidate.get("safeCustom") if isinstance(candidate.get("safeCustom"), dict) else {}
     safe_custom = _safe_provider_credential_meta({"safeCustom": safe_custom}).get("safeCustom", {})
-    return {
+    shaped: dict[str, Any] = {
         "name": name,
         "label": str(candidate.get("label") or name),
         "source": str(candidate.get("source") or ""),
@@ -614,6 +614,19 @@ def _provider_candidate(candidate: dict[str, Any]) -> dict[str, Any] | None:
         "endpoint_mode": _infer_candidate_endpoint_mode(base_url),
         "safe_custom": safe_custom,
     }
+    ref = voidware_auth.safe_credential_ref(candidate.get("ref"))
+    if ref:
+        shaped["ref"] = ref
+    source_label = str(candidate.get("source_label") or "").strip()
+    if source_label:
+        shaped["source_label"] = source_label
+    if "managed_by_llmdash" in candidate:
+        shaped["managed_by_llmdash"] = bool(candidate["managed_by_llmdash"])
+    if "locked" in candidate:
+        shaped["locked"] = bool(candidate["locked"])
+    if "unreadable" in candidate:
+        shaped["unreadable"] = bool(candidate["unreadable"])
+    return shaped
 
 
 def discover_provider_credentials() -> dict[str, Any]:

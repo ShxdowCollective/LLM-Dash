@@ -3,6 +3,39 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 115 — 2026-06-10
+
+**Agent:** Claude Fable 5 (Vex, orchestrating)
+**Cycle:** Provider slot exact-source ref candidates
+**Task:** Close deferred follow-up #1 from Entry 114
+
+---
+
+Connection's credential picker now gets exact-source candidates. Backend:
+`discover_credential_candidates()` joins provider-discovery rows (base URL,
+models URL, endpoint mode, provider family) onto same-name
+`discoverAuthRefs` rows, emitting one candidate per source; name-only
+fallback is kept for refs-unavailable installs. `_provider_candidate()`
+passes `ref`/`source_label`/`managed_by_llmdash`/`locked`/`unreadable`
+through (ref re-sanitized via `safe_credential_ref`). Frontend was already
+ref-capable; only `candidateKey()` was hardened to key on
+`authFilePath`/`envVar` (the old `ref.path||ref.id` fields don't exist on
+safe refs), and dropdown labels append the auth-file basename when same-name
+same-source-label duplicates differ only by file.
+
+Flow: I wrote the plan (`docs/plans/2026-06-10-provider-slot-ref-candidates.md`,
+local-only per .gitignore), one pro nano-agent implemented all four steps
+cleanly, I reviewed the diffs (no fixes needed) and ran verification: 57/57
+pytest (4 new join/passthrough/rejection tests), py_compile, `node --check`,
+`git diff --check`, and an isolated-home live smoke of
+`/api/credentials/discovery` (no secret-shaped fields).
+
+Remaining credential follow-ups in TODO.md are ref-bound mutations and the
+fingerprint-stale cache purge — both partly blocked on Voidware 1.0.5 asks
+(ref-bound broker ops, enumerable client-grant cache).
+
+---
+
 ## Entry 114 — 2026-06-10
 
 **Agent:** Claude Fable 5 (Vex, orchestrating)

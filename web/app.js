@@ -1415,7 +1415,12 @@
     if (!candidate) return "";
     if (candidate.ref && typeof candidate.ref === "object") {
       const ref = candidate.ref;
-      return [ref.name || candidate.name || "", ref.source || candidate.source || "", ref.path || ref.id || ""].join("\0");
+      return [
+        ref.name || candidate.name || "",
+        ref.source || candidate.source || "",
+        ref.authFilePath || "",
+        ref.envVar || "",
+      ].join("\0");
     }
     return [candidate.name || "", candidate.source || candidate.source_label || ""].join("\0");
   }
@@ -1466,10 +1471,25 @@
     if (candidate.endpoint_mode) f.endpoint_mode = candidate.endpoint_mode;
   }
 
-  function candidateOptionLabel(candidate) {
+  function candidateOptionLabel(candidate, allCandidates) {
     const name = candidate.label || candidate.name || "Unknown";
     const source = candidate.source_label || candidate.source || "";
-    return source ? `${name} (${source})` : name;
+    let label = source ? `${name} (${source})` : name;
+    const ref = candidate.ref;
+    if (ref && ref.authFilePath && Array.isArray(allCandidates)) {
+      const sourceKey = `${candidate.name || ""}\0${source}`;
+      const hasDuplicate = allCandidates.some((other) => {
+        if (other === candidate) return false;
+        const otherSource = other.source_label || other.source || "";
+        if (`${other.name || ""}\0${otherSource}` !== sourceKey) return false;
+        return Boolean(other.ref && other.ref.authFilePath && other.ref.authFilePath !== ref.authFilePath);
+      });
+      if (hasDuplicate) {
+        const basename = String(ref.authFilePath).split(/[/\\]/).pop() || ref.authFilePath;
+        label += ` · ${basename}`;
+      }
+    }
+    return label;
   }
 
   function grantStatusCopy(selected) {
@@ -1534,7 +1554,7 @@
           },
         }, [
           h("option", { value: "" }, candidates.length ? "Choose an existing credential…" : "No saved credentials yet"),
-          ...candidates.map((item) => h("option", { value: candidateKey(item) }, candidateOptionLabel(item))),
+          ...candidates.map((item) => h("option", { value: candidateKey(item) }, candidateOptionLabel(item, candidates))),
           h("option", { value: "__new__" }, "New key…"),
         ]),
       ]));

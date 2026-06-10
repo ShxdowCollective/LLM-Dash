@@ -822,6 +822,120 @@ console.log(JSON.stringify({ auth, raw }))
         self.assertEqual(summary["revoked"], [])
         self.assertTrue(any("broker unavailable" in item for item in summary["warnings"]))
 
+    def test_discover_credential_candidates_joins_provider_rows_with_ref_sources(self) -> None:
+        provider_row = {
+            "name": "my-key",
+            "label": "My Key",
+            "hasSecret": True,
+            "baseURL": "https://api.example.com/v1",
+            "modelsURL": "https://api.example.com/v1/models",
+            "providerFamily": "openai",
+        }
+        ref_rows = [
+            {
+                "name": "my-key",
+                "label": "My Key",
+                "source": "keyring",
+                "source_label": "keyring",
+                "ref": {"name": "my-key", "source": "keyring", "hasSecret": True},
+                "has_secret": True,
+                "managed_by_llmdash": False,
+                "locked": False,
+                "unreadable": False,
+            },
+            {
+                "name": "my-key",
+                "label": "My Key",
+                "source": "user-file",
+                "source_label": "auth.json",
+                "ref": {
+                    "name": "my-key",
+                    "source": "user-file",
+                    "authFilePath": "/home/user/.shxdow/auth.json",
+                    "hasSecret": True,
+                },
+                "has_secret": True,
+                "managed_by_llmdash": True,
+                "locked": False,
+                "unreadable": False,
+            },
+            {
+                "name": "exa-key",
+                "label": "Exa",
+                "source": "keyring",
+                "source_label": "keyring",
+                "ref": {"name": "exa-key", "source": "keyring", "hasSecret": True},
+                "has_secret": True,
+                "managed_by_llmdash": False,
+                "locked": False,
+                "unreadable": False,
+            },
+        ]
+
+        with (
+            patch.object(voidware_auth, "discover_provider_credentials", return_value=[provider_row]),
+            patch.object(voidware_auth, "discover_auth_refs", return_value=(ref_rows, True)),
+        ):
+            result = voidware_auth.discover_credential_candidates()
+
+        provider_candidates = result["provider_candidates"]
+        self.assertEqual(len(provider_candidates), 2)
+        self.assertEqual(provider_candidates[0]["baseURL"], "https://api.example.com/v1")
+        self.assertEqual(provider_candidates[0]["ref"]["source"], "keyring")
+        self.assertEqual(provider_candidates[0]["source_label"], "keyring")
+        self.assertFalse(provider_candidates[0]["managed_by_llmdash"])
+        self.assertEqual(provider_candidates[1]["baseURL"], "https://api.example.com/v1")
+        self.assertEqual(provider_candidates[1]["ref"]["authFilePath"], "/home/user/.shxdow/auth.json")
+        self.assertEqual(provider_candidates[1]["source_label"], "auth.json")
+        self.assertTrue(provider_candidates[1]["managed_by_llmdash"])
+        self.assertEqual([item["name"] for item in result["generic_candidates"]], ["exa-key"])
+
+    def test_discover_credential_candidates_falls_back_when_refs_unavailable(self) -> None:
+        provider_row = {
+            "name": "my-key",
+            "label": "My Key",
+            "hasSecret": True,
+            "baseURL": "https://api.example.com/v1",
+        }
+
+        with (
+            patch.object(voidware_auth, "discover_provider_credentials", return_value=[provider_row]),
+            patch.object(voidware_auth, "discover_auth_refs", return_value=([], False)),
+        ):
+            result = voidware_auth.discover_credential_candidates()
+
+        self.assertEqual(len(result["provider_candidates"]), 1)
+        self.assertNotIn("ref", result["provider_candidates"][0])
+        self.assertTrue(
+            any("Exact-source credential refs are unavailable" in item for item in result["same_name_warnings"])
+        )
+
+    def test_provider_candidate_passes_ref_fields_through(self) -> None:
+        candidate = {
+            "name": "my-key",
+            "hasSecret": True,
+            "baseURL": "https://api.example.com/v1",
+            "ref": {"name": "my-key", "source": "keyring", "hasSecret": True},
+            "source_label": "keyring",
+            "managed_by_llmdash": True,
+            "locked": False,
+            "unreadable": False,
+        }
+        shaped = config._provider_candidate(candidate)
+        self.assertIsNotNone(shaped)
+        self.assertEqual(shaped["ref"]["source"], "keyring")
+        self.assertEqual(shaped["source_label"], "keyring")
+        self.assertTrue(shaped["managed_by_llmdash"])
+        self.assertEqual(shaped["base_url"], "https://api.example.com/v1")
+        self.assertEqual(shaped["endpoint_mode"], config.ENDPOINT_MODE_ROOT)
+
+    def test_provider_candidate_rejects_rows_without_required_fields(self) -> None:
+        self.assertIsNone(config._provider_candidate({"hasSecret": True, "baseURL": "https://api.example.com/v1"}))
+        self.assertIsNone(config._provider_candidate({"name": "my-key", "baseURL": "https://api.example.com/v1"}))
+        self.assertIsNone(
+            config._provider_candidate({"name": "my-key", "hasSecret": True, "baseURL": "file:///tmp/not-http"})
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
