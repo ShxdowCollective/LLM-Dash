@@ -16,8 +16,8 @@
   ];
   const TIER_ORDER = ["S", "A", "B", "C", "D", "F"];
   const MAX_COMPARE = 4;
-  const STORE_KEY = "llm-dash-ui-state-v4";
-  const ZOOM_MIN = 0.7, ZOOM_MAX = 1.3, GRADE_ZOOM = 0.85;
+  const STORE_KEY = "llm-dash-ui-state-v5";
+  const ZOOM_MIN = 0.7, ZOOM_MAX = 1.4, GRADE_ZOOM = 0.85;
 
   // Fixed input-modality vocabulary (schema_version 4). Each modality gets an
   // inline glyph + distinct iridescent hue (no emoji per Voidware spec).
@@ -33,16 +33,16 @@
   // grade-collapse chip path.
   const COLUMNS = [
     { key: "rank", label: "#", sort: null, w: 46 },
-    { key: "provider", label: "Provider", sort: "vendor", w: 150 },
+    { key: "provider", label: "Provider", sort: "vendor", w: 178 },
     { key: "model", label: "Model", sort: "name", w: null },
-    { key: "intelligence", label: "Intel", sort: "intelligence", score: true, w: 88 },
-    { key: "coding", label: "Coding", sort: "coding", score: true, w: 88 },
-    { key: "agents", label: "Agent", sort: "agents", score: true, w: 88 },
-    { key: "speed", label: "Speed", sort: "speed", score: true, w: 88 },
-    { key: "overall", label: "Overall", sort: "overall", score: true, w: 90 },
-    { key: "cost", label: "Cost", sort: "cost", score: true, w: 88 },
-    { key: "value", label: "Value", sort: "value", score: true, w: 88 },
-    { key: "compare", label: "Compare", sort: null, w: 64 },
+    { key: "intelligence", label: "Intel", sort: "intelligence", score: true, w: 102 },
+    { key: "coding", label: "Coding", sort: "coding", score: true, w: 102 },
+    { key: "agents", label: "Agent", sort: "agents", score: true, w: 102 },
+    { key: "speed", label: "Speed", sort: "speed", score: true, w: 102 },
+    { key: "overall", label: "Overall", sort: "overall", score: true, w: 106 },
+    { key: "cost", label: "Cost", sort: "cost", score: true, w: 102 },
+    { key: "value", label: "Value", sort: "value", score: true, w: 102 },
+    { key: "compare", label: "Compare", sort: null, w: 74 },
   ];
   const SORT_KEYS = new Set(["overall", "value", "intelligence", "coding", "agents", "speed", "cost", "name", "vendor"]);
   const MOBILE_SORTS = [
@@ -84,7 +84,7 @@
     releasedAfter: "",
     inputCapabilities: [],
     hideDeprecated: false,
-    tableZoom: 1,
+    tableZoom: 1.12,
     colWidths: {},
     filtersOpen: false,
     chartMode: "scatter",
@@ -626,7 +626,7 @@
 
   function providerLogoByVendor(vendor) {
     const slug = vendorSlug(vendor);
-    if (slug) return h("img", { class: "provider-logo", src: "vendor/logos/" + slug + ".svg", alt: "", width: 14, height: 14, loading: "lazy", style: { width: "14px", height: "14px" } });
+    if (slug) return h("img", { class: "provider-logo", src: "vendor/logos/" + slug + ".svg", alt: "", width: 20, height: 20, loading: "lazy", style: { width: "20px", height: "20px" } });
     return h("span", { class: "vendor-chip-dot" });
   }
 
@@ -742,7 +742,7 @@
 
   function providerCell(model) {
     return h("div", { class: "provider-cell-inner", style: { "--model-color": safeColor(model.color) } }, [
-      providerLogo(model, 18),
+      providerLogo(model, 24),
       h("span", { class: "provider-cell-name" }, model.vendor || "Unknown"),
     ]);
   }
@@ -961,7 +961,7 @@
     const inCompare = state.ui.compare.includes(model.id);
     const card = modelCardUrl(model);
     const head = h("header", { class: "stat-card-head" }, [
-      providerLogo(model, 30),
+      providerLogo(model, 38),
       h("div", { class: "stat-card-titles" }, [
         h("strong", { class: "stat-card-name" }, model.name || "Unknown model"),
         h("span", { class: "stat-card-vendor" }, model.vendor || "Unknown vendor"),

@@ -3,6 +3,39 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 112 — 2026-06-09
+
+**Agent:** Codex GPT-5 (Luma, UI polish)
+**Cycle:** Desktop scale and color remediation
+**Task:** Make the dashboard read properly on 1440p desktop displays
+
+---
+
+Fixed the desktop scale/color complaint across the static frontend without
+changing the zero-build architecture. `web/style.css` now applies the larger
+body scale only on desktop, bumps sidebar/nav sizing, restores the iridescent
+page wash that had been overwritten by a later `body` rule, strengthens selected
+row and score-chip color, flips iridescent primary/action text to white, centers
+the single-model card under the leaderboard, and centers/widens Settings and
+Stats work surfaces so they no longer feel pinned to the upper-left corner.
+
+`web/app.js` bumps the UI prefs key to `llm-dash-ui-state-v5` so old persisted
+zoom/column widths do not mask the new defaults, raises default table zoom to
+112%, widens the score/provider columns, and requests larger provider logo sizes
+in the table/filter/detail surfaces. Table score/rank numerals now use the
+body/UI font with tabular numbers instead of the mono stack for better
+readability. Mobile verification caught a collapsed subpage tab strip and a
+crowded filter row; both were patched before handoff.
+
+Verification: `node --check web/app.js`, `python3 -m py_compile server.py
+scripts/*.py`, `git diff --check`, local `./run.sh --silent`, Agent Browser
+headed smoke, and fixed-viewport Chrome screenshots saved under
+`e2e/screenshots/desktop-scale/` at 2560x1440, 1440x900, and 390x844. A pro
+nano-agent plan review flagged stale prefs, double-scaling risk, mobile
+coverage, and ambiguous viewport targets; the useful findings were applied.
+
+---
+
 ## Entry 111 — 2026-06-09
 
 **Agent:** Codex GPT-5 (Mica, auth hardening)
