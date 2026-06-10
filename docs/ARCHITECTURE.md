@@ -252,7 +252,15 @@ Three explicit mounts maintain the frontend's fetch contract:
 | `/api/schedule` | GET/POST/DELETE | Manage OS-level scheduled update jobs |
 | `/api/run-update` | POST | Kick off a background update via Agents SDK |
 | `/api/run-update/{id}` | GET | Poll update job status + log tail |
-| `/api/reset` | POST | Scoped destructive reset (`stats` / `changelog` / `models` / `full`) with typed `confirm_token`; never touches Voidware credentials, keyring secrets, or broker grants |
+| `/api/reset` | POST | Scoped destructive reset (`stats` / `changelog` / `models` / `full`) with typed `confirm_token`; returns `409` while an in-app update job is running. Full reset also revokes LLM-Dash broker grants and clears the in-process approved-secret cache; partial scopes leave grants alone. Voidware credentials and keyring secrets are never deleted |
+| `/api/credentials/discovery` | GET | Safe credential candidates for the `provider` / `exa` / `llmstats` slots: exact-source Voidware refs when available, name-only fallback otherwise, env overrides as read-only rows. Never contains secret values, grant tokens, or encrypted blobs |
+| `/api/credentials/slots` | GET | Current slot selections + per-slot auth/grant-renewal status |
+| `/api/credentials/slots/{slot}/select` | POST | Select an existing Voidware credential for a slot; requests a durable 120d read grant and persists non-secret selection/grant metadata |
+| `/api/credentials/slots/{slot}/save` | POST | Create an LLM-Dash-managed secret at the default `llmdash.*` name and select it |
+| `/api/credentials/slots/{slot}/update` | POST | Update the selected key. External (non-LLM-Dash) credentials return `403` unless the request sends `external_mutation=true` **and** `require_fresh_grant=true`, which forces a fresh encryption-password approval |
+| `/api/credentials/slots/{slot}/selection` | DELETE | Clear the slot selection in app config only (the Voidware credential is untouched) |
+| `/api/credentials/slots/{slot}/credential` | DELETE | Delete the selected Voidware credential and clear the selection; same external-mutation dual-flag rule as update |
+| `/api/voidware/broker/approval/deny` | POST | Deny the pending broker approval (used by modal close/deny) |
 
 ### 3. First-Run Bootstrap
 
@@ -314,6 +322,7 @@ Re-running an update for the same date upserts rather than duplicates:
 |---|---|---|
 | Provider, Exa, and LLM Stats API keys | Environment, selected Voidware provider credential, or Voidware broker; legacy keyring reads remain migration fallbacks and new writes require Voidware approval | Secrets never in repo or API responses |
 | Provider credential name, base URL, models, headers, grant renewal metadata | `shxdow.llmdash.json` | Non-secret config and renewal prompts |
+| Selected credential identity per slot (`provider` / `exa` / `llmstats`): serialized Voidware ref or name fallback, safe metadata, grant renewal metadata | `shxdow.llmdash.json` (config `version: 2`; v1 files migrate in place) | One selected secret per feature without persisting secret material |
 | Selected provider grant token | Voidware OS keyring service `voidware-client-grants` | Opaque broker grant reuse without writing tokens to config |
 | Exa API key | Same as provider API key | Same credential pipeline |
 | LLM Stats API key | Same as provider API key | Optional enrichment credential |
@@ -323,8 +332,9 @@ on-disk trace outside the credential store. Provider discovery returns redacted
 Voidware metadata only. Selected credentials are read through the app-owned
 Node bridge in `scripts/voidware_app_broker.mjs`, which hosts Voidware 1.0.4's
 approval surface for the FastAPI/browser app. Grants request the longest
-supported lifetime (`120d`), and the returned renewal window metadata drives
-the 90-day renewal prompt. Opaque grant tokens are cached by Voidware's
+supported lifetime (`120d`), and the returned renewal window metadata
+(`renewAfter` / `renewalWindowStartsAt`) drives the in-app renewal prompt.
+Opaque grant tokens are cached by Voidware's
 `voidware-client-grants` keyring helper and are cleared/re-requested on
 renewal, expiration, invalidation, denial, or durable-secret-unavailable
 responses. The old `llm-dash-voidware-grants` namespace is retained only as a

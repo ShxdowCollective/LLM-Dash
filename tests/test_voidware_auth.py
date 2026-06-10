@@ -191,8 +191,191 @@ console.log(JSON.stringify({ auth, raw }))
         self.assertNotIn("sk-fallback", persisted)
 
     def test_bridge_grant_uses_official_voidware_cache_namespace(self) -> None:
+        self.assertEqual(voidware_auth.CLIENT_GRANT_SERVICE_NAME, voidware_auth.OFFICIAL_CLIENT_GRANT_SERVICE_NAME)
         self.assertEqual(voidware_auth.OFFICIAL_CLIENT_GRANT_SERVICE_NAME, "voidware-client-grants")
         self.assertEqual(voidware_auth.LEGACY_CLIENT_GRANT_SERVICE_NAME, "llm-dash-voidware-grants")
+        stored: dict[tuple[str, str]] = {}
+
+        def fake_keyring_set(service: str, account: str, value: str) -> None:
+            stored[(service, account)] = value
+
+        grant_data = {
+            "grantToken": "vwgr_test_token_value",
+            "expiresAt": "2099-01-01T00:00:00Z",
+            "grant": {"expiresAt": "2099-01-01T00:00:00Z"},
+        }
+        with patch.object(voidware_auth, "_keyring_set", side_effect=fake_keyring_set):
+            voidware_auth._store_cached_grant(
+                "client-grant:deadbeef",
+                grant_data,
+                operation="auth:secret:read",
+                target="alpha",
+                scope="auth:secret:read:alpha",
+            )
+        self.assertIn((voidware_auth.OFFICIAL_CLIENT_GRANT_SERVICE_NAME, "client-grant:deadbeef"), stored)
+        self.assertNotIn((voidware_auth.LEGACY_CLIENT_GRANT_SERVICE_NAME, "client-grant:deadbeef"), stored)
+
+        with patch.object(
+            voidware_auth,
+            "_keyring_get",
+            side_effect=lambda service, account: stored.get((service, account), ""),
+        ):
+            loaded = voidware_auth._load_cached_grant("client-grant:deadbeef")
+        self.assertEqual(loaded.get("grantToken"), "vwgr_test_token_value")
+
+    def test_legacy_grant_cache_is_read_only_fallback(self) -> None:
+        legacy_payload = json.dumps({
+            "grantToken": "vwgr_legacy_token",
+            "expiresAt": "2099-01-01T00:00:00Z",
+        })
+
+        def fake_keyring_get(service: str, account: str) -> str:
+            if service == voidware_auth.LEGACY_CLIENT_GRANT_SERVICE_NAME and account == "client-grant:legacy":
+                return legacy_payload
+            return ""
+
+        with patch.object(voidware_auth, "_keyring_get", side_effect=fake_keyring_get):
+            loaded = voidware_auth._load_cached_grant("client-grant:legacy")
+        self.assertEqual(loaded.get("grantToken"), "vwgr_legacy_token")
+
+    def test_config_migration_v2_selects_default_exa_and_llmstats_names(self) -> None:
+        config.config_path().parent.mkdir(parents=True, exist_ok=True)
+        config.config_path().write_text(
+            json.dumps({"version": 1, "provider": {"base_url": "", "default_model": ""}}),
+            encoding="utf-8",
+        )
+        with patch.object(config, "_discovered_secret_names", return_value={voidware_auth.EXA_SECRET_NAME, voidware_auth.LLMSTATS_SECRET_NAME}):
+            data = config._load_config_file()
+        self.assertEqual(data["version"], 2)
+        self.assertEqual(data["exa"]["exa_credential_name"], voidware_auth.EXA_SECRET_NAME)
+        self.assertEqual(data["llmstats"]["llmstats_credential_name"], voidware_auth.LLMSTATS_SECRET_NAME)
+
+    def test_discover_auth_refs_redacts_secret_fields(self) -> None:
+        raw_ref = {
+            "refVersion": 1,
+            "name": "alpha",
+            "source": "user-file",
+            "hasSecret": True,
+            "keyringBacked": False,
+            "secret": "sk-leak",
+            "meta": {"custom": {"app": "other", "api_key": "sk-leak"}},
+        }
+        with patch.object(voidware_auth._BRIDGE, "request", return_value={"ok": True, "data": [raw_ref], "refsAvailable": True}):
+            rows, refs_available = voidware_auth.discover_auth_refs()
+        self.assertTrue(refs_available)
+        self.assertNotIn("sk-leak", json.dumps(rows))
+        self.assertEqual(rows[0]["source_label"], "auth.json")
+
+    def test_external_slot_update_requires_explicit_mutation_flags(self) -> None:
+        config.config_path().parent.mkdir(parents=True, exist_ok=True)
+        config.config_path().write_text(
+            json.dumps({
+                "version": 2,
+                "exa": {
+                    "exa_credential_name": "external-exa",
+                    "exa_credential_meta": {"name": "external-exa"},
+                },
+            }),
+            encoding="utf-8",
+        )
+        with self.assertRaises(config.ConfigError):
+            config.update_slot_api_key("exa", "sk-new")
+        with (
+            patch.object(voidware_auth, "write_secret") as write_secret,
+            patch.object(
+                voidware_auth,
+                "read_secret_with_grant",
+                return_value={"secret": "sk-new", "grant": {"expiresAt": "2099-01-01T00:00:00Z"}},
+            ),
+        ):
+            config.update_slot_api_key(
+                "exa",
+                "sk-new",
+                external_mutation=True,
+                require_fresh_grant=True,
+            )
+        write_secret.assert_called_once()
+
+    def test_external_slot_delete_requires_explicit_mutation_flags(self) -> None:
+        config.config_path().parent.mkdir(parents=True, exist_ok=True)
+        config.config_path().write_text(
+            json.dumps({
+                "version": 2,
+                "exa": {
+                    "exa_credential_name": "external-exa",
+                    "exa_credential_meta": {"name": "external-exa"},
+                },
+            }),
+            encoding="utf-8",
+        )
+        with self.assertRaises(config.ConfigError):
+            config.delete_slot_credential("exa")
+        with patch.object(voidware_auth, "delete_secret") as delete_secret:
+            config.delete_slot_credential("exa", external_mutation=True, require_fresh_grant=True)
+        delete_secret.assert_called_once()
+        self.assertTrue(delete_secret.call_args.kwargs.get("require_fresh_grant"))
+
+    def test_default_name_selection_not_trusted_without_managed_metadata(self) -> None:
+        config.config_path().parent.mkdir(parents=True, exist_ok=True)
+        config.config_path().write_text(
+            json.dumps({
+                "version": 2,
+                "exa": {
+                    "exa_credential_name": "llmdash.exa.api_key",
+                    "exa_credential_meta": {"name": "llmdash.exa.api_key"},
+                },
+            }),
+            encoding="utf-8",
+        )
+        external_row = {
+            "name": "llmdash.exa.api_key",
+            "ref": {"name": "llmdash.exa.api_key", "source": "auth-file"},
+            "managed_by_llmdash": False,
+        }
+        with patch.object(voidware_auth, "discover_auth_refs", return_value=([external_row], True)):
+            with self.assertRaises(config.ConfigError):
+                config.update_slot_api_key("exa", "sk-new")
+            with self.assertRaises(config.ConfigError):
+                config.delete_slot_credential("exa")
+
+    def test_default_name_selection_trusted_with_live_managed_metadata(self) -> None:
+        config.config_path().parent.mkdir(parents=True, exist_ok=True)
+        config.config_path().write_text(
+            json.dumps({
+                "version": 2,
+                "exa": {
+                    "exa_credential_name": "llmdash.exa.api_key",
+                    "exa_credential_meta": {"name": "llmdash.exa.api_key"},
+                },
+            }),
+            encoding="utf-8",
+        )
+        managed_row = {
+            "name": "llmdash.exa.api_key",
+            "ref": {"name": "llmdash.exa.api_key", "source": "keyring"},
+            "managed_by_llmdash": True,
+        }
+        with (
+            patch.object(voidware_auth, "discover_auth_refs", return_value=([managed_row], True)),
+            patch.object(voidware_auth, "write_secret") as write_secret,
+            patch.object(
+                voidware_auth,
+                "read_secret_with_grant",
+                return_value={"secret": "sk-new", "grant": {"expiresAt": "2099-01-01T00:00:00Z"}},
+            ),
+        ):
+            config.update_slot_api_key("exa", "sk-new")
+        write_secret.assert_called_once()
+        self.assertFalse(write_secret.call_args.kwargs.get("require_fresh_grant"))
+
+    def test_grant_renewal_status_surfaces_renewal_needed(self) -> None:
+        status = voidware_auth.grant_renewal_status({
+            "expiresAt": "2099-01-01T00:00:00Z",
+            "renewalRecommended": True,
+            "renewAfter": "2098-12-01T00:00:00Z",
+        })
+        self.assertEqual(status["status"], "renewal_needed")
+        self.assertTrue(status["renewal_recommended"])
 
     def test_broker_request_does_not_autostart_headless_broker(self) -> None:
         calls: list[tuple[list[str], list[str]]] = []
@@ -370,10 +553,12 @@ console.log(JSON.stringify({ auth, raw }))
             encoding="utf-8",
         )
 
-        with patch.object(config.voidware_auth, "read_secret", return_value="sk-from-broker") as read_secret:
+        with patch.object(config.voidware_auth, "read_secret_with_grant", return_value={"secret": "sk-from-broker", "grant": {}}) as read_secret:
             bundle = config.load_provider_bundle()
 
-        read_secret.assert_called_once_with("alpha")
+        read_secret.assert_called_once()
+        self.assertEqual(read_secret.call_args.kwargs.get("credential_ref"), None)
+        self.assertEqual(read_secret.call_args.args[0], "alpha")
         self.assertTrue(bundle.has_provider)
         self.assertEqual(bundle.secrets.api_key, "sk-from-broker")
 
@@ -556,6 +741,86 @@ console.log(JSON.stringify({ auth, raw }))
         self.assertEqual(auth["provider"]["source"], "voidware-keystore")
         self.assertFalse(auth["provider"]["legacy_migration_available"])
         self.assertTrue(auth["provider"]["configured"])
+
+    def test_clear_llmdash_grants_revokes_matching_grants_and_preserves_auth_file(self) -> None:
+        auth_file = Path(self.tmp.name) / "auth.json"
+        auth_file.write_text(
+            json.dumps({
+                "version": 3,
+                "credentials": {
+                    "alpha": {
+                        "encryptedSecret": "ciphertext-not-a-secret",
+                        "baseURL": "https://api.alpha.example",
+                    },
+                },
+            }),
+            encoding="utf-8",
+        )
+        voidware_auth._APPROVED_SECRET_CACHE["alpha"] = {"secret": "sk-cached", "grant": {}}
+        voidware_auth._LEGACY_GRANT_ACCOUNTS.add("client-grant:abc123")
+        deleted: list[tuple[str, str]] = []
+
+        def fake_run(args: list[str], **kwargs) -> dict[str, object]:
+            if args[:3] == ["auth", "grants", "list"]:
+                return {
+                    "ok": True,
+                    "data": [
+                        {"id": "grant-1", "app": "llm-dash", "repoPath": str(voidware_auth.ROOT)},
+                        {"id": "grant-2", "app": "other-app", "repoPath": str(voidware_auth.ROOT)},
+                    ],
+                }
+            if args[:3] == ["auth", "grants", "revoke"]:
+                return {"ok": True, "data": {"id": args[3]}}
+            if args[:3] == ["auth", "grants", "cleanup"]:
+                return {"ok": True, "data": []}
+            return {"ok": False, "errorCode": "unexpected"}
+
+        with (
+            patch.object(voidware_auth, "_run", side_effect=fake_run),
+            patch.object(voidware_auth, "_keyring_delete", side_effect=lambda service, account: deleted.append((service, account))),
+            patch.object(voidware_auth, "_keyring_get", return_value=""),
+            patch.object(voidware_auth._BRIDGE, "stop") as bridge_stop,
+        ):
+            summary = voidware_auth.clear_llmdash_grants()
+
+        self.assertEqual(summary["revoked"], ["grant-1"])
+        self.assertEqual(summary["removed_cache"], ["legacy-grant-cache:client-grant:abc123"])
+        self.assertEqual(deleted, [(voidware_auth.LEGACY_CLIENT_GRANT_SERVICE_NAME, "client-grant:abc123")])
+        self.assertEqual(voidware_auth._APPROVED_SECRET_CACHE, {})
+        self.assertEqual(voidware_auth._LEGACY_GRANT_ACCOUNTS, set())
+        bridge_stop.assert_called_once()
+        self.assertTrue(auth_file.exists())
+        self.assertIn("alpha", json.loads(auth_file.read_text(encoding="utf-8"))["credentials"])
+
+    def test_clear_llmdash_grants_dry_run_previews_without_revoking(self) -> None:
+        calls: list[list[str]] = []
+
+        def fake_run(args: list[str], **kwargs) -> dict[str, object]:
+            calls.append(args)
+            if args[:3] == ["auth", "grants", "list"]:
+                return {
+                    "ok": True,
+                    "data": [{"id": "grant-preview", "app": "llm-dash", "repoPath": str(voidware_auth.ROOT)}],
+                }
+            return {"ok": False, "errorCode": "unexpected"}
+
+        with patch.object(voidware_auth, "_run", side_effect=fake_run):
+            summary = voidware_auth.clear_llmdash_grants(dry_run=True)
+
+        self.assertEqual(summary["revoked"], ["grant-preview"])
+        self.assertEqual(calls, [["auth", "grants", "list", "--shxdowdir", self.tmp.name, "--json"]])
+        self.assertTrue(any("would revoke" in item for item in summary["warnings"]))
+
+    def test_clear_llmdash_grants_treats_broker_unavailable_as_warning(self) -> None:
+        with patch.object(
+            voidware_auth,
+            "_run",
+            return_value={"ok": False, "errorCode": "broker_unavailable", "error": "missing socket"},
+        ):
+            summary = voidware_auth.clear_llmdash_grants()
+
+        self.assertEqual(summary["revoked"], [])
+        self.assertTrue(any("broker unavailable" in item for item in summary["warnings"]))
 
 
 if __name__ == "__main__":

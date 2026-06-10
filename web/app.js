@@ -71,6 +71,24 @@
   const META_POLL_MS = 15000;
   const RUN_POLL_MS = 3000;
   const BOOT_POLL_MS = 900;
+  const CREDENTIAL_SLOTS = ["provider", "exa", "llmstats"];
+  const SLOT_TITLES = { provider: "Connection", exa: "Exa", llmstats: "LLM Stats" };
+  const DEFAULT_SLOT_FORM = () => ({ pickKey: "", apiKey: "", mode: "select" });
+  const EMPTY_APPROVAL = () => ({
+    open: false,
+    password: "",
+    secret: "",
+    error: "",
+    after: null,
+    stagedSecret: "",
+    slot: "",
+    operation: "",
+    target: "",
+    scopes: [],
+    ttl: "120d",
+    passwordRequired: true,
+    secretRequired: false,
+  });
 
   const DEFAULT_UI = {
     sortKey: "overall",
@@ -148,24 +166,32 @@
     metaTimer: 0,
     chartResize: 0,
     resetMode: false,
+    setupMode: false,
+    setupStep: "provider",
     focusIndex: 0,
     drawerOpen: false,
     helpOpen: false,
     manualOpen: false,
     resetTokens: {},
     resetBusy: "",
+    resetOp: { busy: "", phase: "", result: null, error: "", postAction: "" },
     prompt: "",
     provider: {},
-    credentials: [],
+    credentialDiscovery: { slots: {}, refs_available: false, same_name_warnings: [] },
+    credentialSlots: {},
+    credentialSlotForms: {
+      provider: DEFAULT_SLOT_FORM(),
+      exa: DEFAULT_SLOT_FORM(),
+      llmstats: DEFAULT_SLOT_FORM(),
+    },
     presets: [],
     schedule: {},
     run: { open: false, id: "", state: "idle", started: 0, tail: "", error: "" },
-    approval: { open: false, password: "", secret: "", error: "", after: null },
+    approval: EMPTY_APPROVAL(),
     ui: { ...DEFAULT_UI },
     forms: {
-      provider: { base_url: "", api_key: "", models_override_url: "", endpoint_mode: "append_v1" },
+      provider: { base_url: "", models_override_url: "", endpoint_mode: "append_v1" },
       models: { default_model: "", backup_model: "" },
-      research: { exa: "", llmstats: "" },
       schedule: { cadence: "off", time_local: "09:00", day_of_week: 1, day_of_month: 1 },
     },
   };
@@ -177,7 +203,8 @@
 
   function boot() {
     cacheEls();
-    if (!consumeResetFlag()) loadPrefs();
+    const enteredSetup = consumeSetupFlag();
+    if (!enteredSetup && !consumeResetFlag()) loadPrefs();
     applyRoute(parseHash(location.hash));
     bindShell();
     renderBoot("Starting local dashboard...");
@@ -207,7 +234,7 @@
   async function start() {
     try {
       await waitForBootstrap();
-      await Promise.all([loadDatabase(), loadProvider(), loadPresets(), loadCredentials(), loadSchedule()]);
+      await Promise.all([loadDatabase(), loadProvider(), loadPresets(), loadCredentialDiscovery(), loadSchedule()]);
       hydrateForms();
       state.ready = true;
       els.app.removeAttribute("data-booting");
@@ -268,9 +295,19 @@
     state.presets = data.providers || [];
   }
 
-  async function loadCredentials() {
-    const data = await api("/api/provider/credentials").catch(() => ({ credentials: [] }));
-    state.credentials = data.credentials || [];
+  async function loadCredentialDiscovery() {
+    await refreshCredentialState();
+  }
+
+  async function refreshCredentialState() {
+    const [discovery, slotsData] = await Promise.all([
+      api("/api/credentials/discovery").catch(() => ({ slots: {}, refs_available: false, same_name_warnings: [] })),
+      api("/api/credentials/slots").catch(() => ({ slots: {} })),
+    ]);
+    state.credentialDiscovery = discovery;
+    state.credentialSlots = slotsData.slots || {};
+    await loadProvider();
+    syncSlotFormPickKeys();
   }
 
   async function loadSchedule() {
@@ -280,10 +317,8 @@
   function hydrateForms() {
     state.forms.provider = {
       base_url: state.provider.base_url || "",
-      api_key: "",
       models_override_url: state.provider.models_override_url || "",
       endpoint_mode: state.provider.endpoint_mode || "append_v1",
-      provider_credential_name: state.provider.provider_credential_name || "",
     };
     state.forms.models = {
       default_model: state.provider.default_model || "",
@@ -1176,12 +1211,61 @@
   }
 
   function renderSettings() {
-    return h("section", { class: "settings-workbench" }, [
+    return h("section", { class: "settings-workbench" + (state.setupMode ? " is-setup" : "") }, [
+      state.setupMode ? renderSetupRail() : null,
       h("div", { class: "settings-detail" }, renderSettingsSubpage()),
     ]);
   }
 
+  const SETUP_STEPS = [
+    ["provider", "Connection"],
+    ["models", "Models"],
+    ["research", "Research"],
+    ["schedule", "Schedule"],
+    ["finish", "Finish"],
+  ];
+
+  function renderSetupRail() {
+    const current = state.subpage.settings;
+    return h("nav", { class: "setup-rail panel-card", "aria-label": "Setup steps" }, [
+      h("div", { class: "setup-rail-head" }, [
+        h("strong", { class: "setup-rail-title" }, "Setup"),
+        h("p", { class: "setup-rail-copy" }, "Configure connection, models, research, and schedule."),
+      ]),
+      h("ol", { class: "setup-rail-steps" }, SETUP_STEPS.map(([key, label], index) => {
+        const active = current === key;
+        const done = SETUP_STEPS.findIndex(([step]) => step === current) > index;
+        return h("li", { class: "setup-rail-step" + (active ? " is-active" : "") + (done ? " is-done" : "") }, [
+          h("button", {
+            type: "button",
+            class: "setup-rail-btn",
+            "aria-current": active ? "step" : undefined,
+            onclick: () => navigate("settings", key),
+          }, label),
+        ]);
+      })),
+    ]);
+  }
+
+  function settingsFinish() {
+    return h("section", { class: "settings-panel panel-card setup-finish-panel", "aria-label": "Finish setup" }, [
+      h("h2", { class: "settings-panel-title" }, "Finish setup"),
+      h("p", { class: "settings-summary" }, "Connection, models, research, and schedule are saved locally. Open the Models dashboard when you are ready."),
+      h("div", { class: "action-row" }, [
+        h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: finishSetup }, "Open Models dashboard"),
+        h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: () => navigate("settings", "provider") }, "Review Connection"),
+      ]),
+    ]);
+  }
+
+  function finishSetup() {
+    state.setupMode = false;
+    state.setupStep = "provider";
+    navigate("models", "table");
+  }
+
   function renderSettingsSubpage() {
+    if (state.setupMode && state.subpage.settings === "finish") return settingsFinish();
     if (state.subpage.settings === "models") return settingsModels();
     if (state.subpage.settings === "research") return settingsResearch();
     if (state.subpage.settings === "schedule") return settingsSchedule();
@@ -1193,7 +1277,7 @@
     { scope: "stats", token: "STATS", title: "Reset stats", copy: "Clear run telemetry (tokens, cost, duration, agent leaderboard) and regenerate the metrics CSV. Models, scores, and changelogs stay." },
     { scope: "changelog", token: "CHANGELOG", title: "Reset changelog", copy: "Delete every changelog entry and its run metrics. This is the only sanctioned exception to the append-only rule — update runs never delete history." },
     { scope: "models", token: "MODELS", title: "Reset models", copy: "Clear all models and scores, then re-seed the bootstrap model set so the dashboard isn't empty. Changelogs and stats stay." },
-    { scope: "full", token: "RESET", title: "Full reset", copy: "Wipe the local database, metrics CSV, run logs, app config, and schedule, then re-seed on reload." },
+    { scope: "full", token: "RESET", title: "Full reset", copy: "Wipe the local database, metrics CSV, run logs, app config, schedule, and LLM-Dash broker grants, then re-seed on reload. Voidware credentials are preserved." },
   ];
 
   function settingsReset() {
@@ -1201,16 +1285,43 @@
       h("p", { class: "settings-summary" }, "Destructive, local-only actions. Each needs its typed confirmation."),
       h("p", { class: "reset-safe-note" }, [
         h("span", { class: "reset-safe-dot", "aria-hidden": "true" }),
-        "Voidware credentials, saved provider keys, and broker grants are not affected by any reset.",
+        "Voidware credentials are preserved. Full reset clears LLM-Dash broker grants and app config; partial resets leave grants alone.",
       ]),
+      renderResetStatus(),
       h("div", { class: "reset-actions" }, RESET_SCOPES.map(resetCard)),
+    ]);
+  }
+
+  function renderResetStatus() {
+    const op = state.resetOp;
+    if (!op || (!op.phase && !op.error && !op.result)) return null;
+    const summary = op.result || {};
+    const cleared = Array.isArray(summary.cleared) ? summary.cleared : [];
+    const removed = Array.isArray(summary.removed_files) ? summary.removed_files : [];
+    const warnings = Array.isArray(summary.warnings) ? summary.warnings : [];
+    const reseeded = summary.reseeded;
+    const counts = [];
+    if (cleared.length) counts.push(`${cleared.length} cleared`);
+    if (removed.length) counts.push(`${removed.length} removed`);
+    if (typeof reseeded === "number") counts.push(`${reseeded} reseeded`);
+    if (warnings.length) counts.push(`${warnings.length} warning${warnings.length === 1 ? "" : "s"}`);
+    const tone = op.error ? "error" : op.phase === "done" ? "success" : "busy";
+    return h("div", { class: "reset-status reset-status-" + tone, role: "status", "aria-live": "polite" }, [
+      h("strong", { class: "reset-status-title" }, op.error ? "Reset failed" : op.phase === "running" ? "Reset in progress…" : "Reset complete"),
+      op.error ? h("p", { class: "reset-status-copy" }, op.error) : null,
+      op.phase === "running" ? h("p", { class: "reset-status-copy" }, "Applying local reset. Do not close this tab.") : null,
+      op.phase === "done" && counts.length ? h("p", { class: "reset-status-copy" }, counts.join(" · ")) : null,
+      op.phase === "done" && cleared.length ? h("p", { class: "reset-status-detail" }, "Cleared: " + cleared.join(", ")) : null,
+      op.phase === "done" && typeof reseeded === "number" ? h("p", { class: "reset-status-detail" }, "Reseeded " + reseeded + " bootstrap model(s).") : null,
+      op.phase === "done" && warnings.length ? h("ul", { class: "reset-status-warnings" }, warnings.map((item) => h("li", null, item))) : null,
     ]);
   }
 
   function resetCard(item) {
     const typed = (state.resetTokens && state.resetTokens[item.scope]) || "";
     const ready = typed === item.token;
-    const busy = state.resetBusy === item.scope;
+    const globalBusy = Boolean(state.resetOp && state.resetOp.busy);
+    const busy = state.resetOp && state.resetOp.busy === item.scope;
     return h("div", { class: "reset-card" + (item.scope === "full" ? " is-danger" : "") }, [
       h("div", { class: "reset-card-text" }, [
         h("strong", { class: "reset-card-title" }, item.title),
@@ -1233,9 +1344,9 @@
           class: "vw-btn " + (item.scope === "full" ? "vw-btn-danger" : "vw-btn-secondary") + " reset-run-btn",
           type: "button",
           "data-scope": item.scope,
-          disabled: !ready || busy,
+          disabled: !ready || globalBusy,
           onclick: () => performReset(item),
-        }, busy ? "Resetting…" : "Reset"),
+        }, busy ? "Resetting…" : globalBusy ? "Busy…" : "Reset"),
       ]),
     ]);
   }
@@ -1243,21 +1354,23 @@
   // Live-toggle the button without a full re-render so the input keeps focus.
   function updateResetButton(item) {
     const typed = (state.resetTokens && state.resetTokens[item.scope]) || "";
+    const globalBusy = Boolean(state.resetOp && state.resetOp.busy);
     const btn = document.querySelector(`.reset-run-btn[data-scope="${item.scope}"]`);
-    if (btn) btn.disabled = typed !== item.token || state.resetBusy === item.scope;
+    if (btn) btn.disabled = typed !== item.token || globalBusy;
   }
 
   async function performReset(item) {
-    state.resetBusy = item.scope;
+    const token = ((state.resetTokens && state.resetTokens[item.scope]) || "").trim();
+    state.resetOp = { busy: item.scope, phase: "running", result: null, error: "", postAction: "" };
     render();
     try {
-      const data = await api("/api/reset", { method: "POST", body: { scope: item.scope, confirm_token: item.token } });
-      state.resetBusy = "";
+      const data = await api("/api/reset", { method: "POST", body: { scope: item.scope, confirm_token: token } });
+      state.resetOp = { busy: "", phase: "done", result: data, error: "", postAction: item.scope === "full" ? "setup" : "refresh" };
       state.resetTokens = { ...(state.resetTokens || {}), [item.scope]: "" };
       await applyResetAftermath(item.scope, data);
       toast(item.title + " complete", "success");
     } catch (error) {
-      state.resetBusy = "";
+      state.resetOp = { busy: "", phase: "error", result: null, error: message(error), postAction: "" };
       toast(message(error), "error");
       render();
     }
@@ -1265,7 +1378,12 @@
 
   async function applyResetAftermath(scope, data) {
     if (scope === "full") {
-      location.assign(location.pathname + "?reset=1");
+      // Show the result summary (counts + grant-cleanup warnings) before
+      // leaving for setup mode; warnings get a longer read.
+      render();
+      const warnings = Array.isArray(data && data.warnings) ? data.warnings : [];
+      const delay = warnings.length ? 4000 : 1500;
+      window.setTimeout(() => { location.assign(location.pathname + "?setup=1"); }, delay);
       return;
     }
     if (scope === "changelog") { state.changelogBodies = {}; state.activeChangelogDate = ""; }
@@ -1276,25 +1394,290 @@
     render();
   }
 
+  function getSlotDiscovery(slot) {
+    const slots = state.credentialDiscovery && state.credentialDiscovery.slots;
+    return slots && slots[slot] ? slots[slot] : {};
+  }
+
+  function getSlotSelected(slot) {
+    const discovery = getSlotDiscovery(slot);
+    if (discovery.selected) return discovery.selected;
+    const saved = state.credentialSlots && state.credentialSlots[slot];
+    return saved || {};
+  }
+
+  function getSlotCandidates(slot) {
+    const discovery = getSlotDiscovery(slot);
+    return Array.isArray(discovery.candidates) ? discovery.candidates : [];
+  }
+
+  function candidateKey(candidate) {
+    if (!candidate) return "";
+    if (candidate.ref && typeof candidate.ref === "object") {
+      const ref = candidate.ref;
+      return [ref.name || candidate.name || "", ref.source || candidate.source || "", ref.path || ref.id || ""].join("\0");
+    }
+    return [candidate.name || "", candidate.source || candidate.source_label || ""].join("\0");
+  }
+
+  function findCandidate(slot, pickKey) {
+    if (!pickKey) return null;
+    return getSlotCandidates(slot).find((item) => candidateKey(item) === pickKey) || null;
+  }
+
+  function candidateMatchesSelection(candidate, selected) {
+    if (!candidate || !selected) return false;
+    if (selected.ref && candidate.ref) return candidateKey(candidate) === candidateKey({ name: selected.name, ref: selected.ref, source: selected.ref.source });
+    return String(candidate.name || "") === String(selected.name || "");
+  }
+
+  function syncSlotFormPickKeys() {
+    for (const slot of CREDENTIAL_SLOTS) {
+      const selected = getSlotSelected(slot);
+      if (!selected || !selected.name) continue;
+      const match = getSlotCandidates(slot).find((item) => candidateMatchesSelection(item, selected));
+      if (match) state.credentialSlotForms[slot].pickKey = candidateKey(match);
+    }
+  }
+
+  function clearSlotFormSecret(slot) {
+    state.credentialSlotForms[slot].apiKey = "";
+  }
+
+  function slotMetaFromCandidate(slot, candidate) {
+    if (!candidate) return {};
+    const meta = { name: candidate.name, label: candidate.label || candidate.name };
+    if (slot === "provider") {
+      if (candidate.base_url) meta.base_url = candidate.base_url;
+      if (candidate.models_url) meta.models_url = candidate.models_url;
+      if (candidate.chat_url) meta.chat_url = candidate.chat_url;
+      if (candidate.endpoint_mode) meta.endpoint_mode = candidate.endpoint_mode;
+      if (candidate.safe_custom) meta.safeCustom = candidate.safe_custom;
+    }
+    if (candidate.ref) meta.ref = candidate.ref;
+    return meta;
+  }
+
+  function hydrateProviderFromCandidate(candidate) {
+    if (!candidate || !candidate.base_url) return;
+    const f = state.forms.provider;
+    f.base_url = candidate.base_url;
+    if (candidate.models_url) f.models_override_url = candidate.models_url;
+    if (candidate.endpoint_mode) f.endpoint_mode = candidate.endpoint_mode;
+  }
+
+  function candidateOptionLabel(candidate) {
+    const name = candidate.label || candidate.name || "Unknown";
+    const source = candidate.source_label || candidate.source || "";
+    return source ? `${name} (${source})` : name;
+  }
+
+  function grantStatusCopy(selected) {
+    const status = selected && selected.grant_status;
+    if (!status || !status.status || status.status === "none") return "";
+    if (status.status === "renewal_needed") return "Grant renewal recommended";
+    if (status.status === "expired") return "Grant expired — re-select or save again";
+    if (status.expires_at) return "Access until " + fmtDate(status.expires_at, true);
+    return "Durable access active";
+  }
+
+  function selectedStatusCopy(slot, selected, envOverride) {
+    if (envOverride && envOverride.configured) {
+      const envName = envOverride.env_var || "environment variable";
+      return `Using ${envName} (read-only)`;
+    }
+    if (!selected || !selected.name) return "No credential selected for " + (SLOT_TITLES[slot] || slot);
+    const source = selected.source_label && selected.source_label !== "none" ? selected.source_label : "selected";
+    const managed = selected.managed_by_llmdash ? " · LLM-Dash managed" : " · external Voidware credential";
+    const grant = grantStatusCopy(selected);
+    return `${selected.label || selected.name} (${source})${managed}${grant ? " · " + grant : ""}`;
+  }
+
+  function renderCredentialSlot(slot, options) {
+    const form = state.credentialSlotForms[slot];
+    const discovery = getSlotDiscovery(slot);
+    const selected = getSlotSelected(slot);
+    const envOverride = discovery.env_override || {};
+    const candidates = getSlotCandidates(slot);
+    const managed = Boolean(selected.managed_by_llmdash);
+    const hasSelection = Boolean(selected.name) || Boolean(envOverride.configured);
+    const warnings = Array.isArray(state.credentialDiscovery.same_name_warnings) ? state.credentialDiscovery.same_name_warnings : [];
+    const pickKey = form.pickKey || "";
+    const picked = findCandidate(slot, pickKey);
+    const showNewKey = form.mode === "new";
+    const showUpdate = form.mode === "update" && hasSelection && !envOverride.configured;
+    const canUseSelected = Boolean(picked) && !envOverride.configured && form.mode === "select";
+    const nodes = [
+      h("div", { class: "credential-slot-head" }, [
+        h("strong", { class: "credential-slot-title" }, (options && options.title) || "Credential"),
+        h("p", { class: "credential-slot-status" }, selectedStatusCopy(slot, selected, envOverride)),
+      ]),
+    ];
+    if (warnings.length) {
+      nodes.push(h("ul", { class: "credential-slot-warnings" }, warnings.map((item) => h("li", null, item))));
+    }
+    if (!envOverride.configured) {
+      nodes.push(h("label", { class: "field" }, [
+        h("span", null, "Source"),
+        h("select", {
+          value: showNewKey ? "__new__" : (pickKey || ""),
+          onchange: (e) => {
+            const value = e.target.value;
+            if (value === "__new__") {
+              form.mode = "new";
+              form.pickKey = "";
+            } else {
+              form.mode = "select";
+              form.pickKey = value;
+            }
+            render();
+          },
+        }, [
+          h("option", { value: "" }, candidates.length ? "Choose an existing credential…" : "No saved credentials yet"),
+          ...candidates.map((item) => h("option", { value: candidateKey(item) }, candidateOptionLabel(item))),
+          h("option", { value: "__new__" }, "New key…"),
+        ]),
+      ]));
+    }
+    if (showNewKey || showUpdate) {
+      nodes.push(h("label", { class: "field" }, [
+        h("span", null, showUpdate ? "Replacement API key" : "API key"),
+        h("input", {
+          type: "password",
+          value: form.apiKey,
+          placeholder: showUpdate ? "Paste replacement key" : "Paste API key",
+          autocomplete: "off",
+          oninput: (e) => { form.apiKey = e.target.value; },
+        }),
+      ]));
+    }
+    if (!managed && hasSelection && !envOverride.configured) {
+      nodes.push(h("p", { class: "credential-slot-external-note" }, "This credential is managed outside LLM-Dash. Editing or deleting it requires a fresh Voidware encryption-password approval."));
+    }
+    nodes.push(h("div", { class: "credential-slot-actions action-row" }, [
+      canUseSelected ? h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: () => slotSelect(slot) }, "Use selected") : null,
+      showNewKey ? h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: () => slotSaveNew(slot) }, "Save new key") : null,
+      showUpdate && managed ? h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: () => slotUpdate(slot, false) }, "Update selected key") : null,
+      showUpdate && !managed ? h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: () => slotUpdate(slot, true) }, "Modify external Voidware credential") : null,
+      hasSelection && !envOverride.configured ? h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: () => slotClearSelection(slot) }, "Remove selection") : null,
+      hasSelection && managed && !envOverride.configured ? h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: () => slotDeleteCredential(slot, false) }, "Delete credential") : null,
+      hasSelection && !managed && !envOverride.configured ? h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: () => slotDeleteCredential(slot, true) }, "Delete external Voidware credential") : null,
+      hasSelection && managed && !showUpdate && !envOverride.configured ? h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: () => { form.mode = "update"; render(); } }, "Update selected key") : null,
+    ].filter(Boolean)));
+    return h("section", { class: "credential-slot", "aria-label": (SLOT_TITLES[slot] || slot) + " credential" }, nodes);
+  }
+
+  async function slotSelect(slot, isRetry) {
+    const form = state.credentialSlotForms[slot];
+    const candidate = findCandidate(slot, form.pickKey);
+    if (!candidate) return toast("Choose a credential first.", "warning");
+    try {
+      await api("/api/credentials/slots/" + encodeURIComponent(slot) + "/select", {
+        method: "POST",
+        body: {
+          credential_name: candidate.name,
+          credential_ref: candidate.ref || null,
+          credential_meta: slotMetaFromCandidate(slot, candidate),
+        },
+      });
+      await refreshCredentialState();
+      if (slot === "provider") hydrateProviderFromCandidate(candidate);
+      form.mode = "select";
+      clearSlotFormSecret(slot);
+      toast(SLOT_TITLES[slot] + " credential selected", "success");
+      render();
+    } catch (error) {
+      if (!isRetry && await openApproval(error, () => slotSelect(slot, true), { slot })) return;
+      toast(message(error), "error");
+    }
+  }
+
+  async function slotSaveNew(slot, isRetry) {
+    const form = state.credentialSlotForms[slot];
+    const apiKey = form.apiKey.trim();
+    if (!apiKey) return toast("Enter an API key first.", "warning");
+    try {
+      await api("/api/credentials/slots/" + encodeURIComponent(slot) + "/save", {
+        method: "POST",
+        body: { api_key: apiKey },
+      });
+      await refreshCredentialState();
+      form.mode = "select";
+      clearSlotFormSecret(slot);
+      toast(SLOT_TITLES[slot] + " key saved", "success");
+      render();
+    } catch (error) {
+      if (!isRetry && await openApproval(error, () => slotSaveNew(slot, true), { slot, stagedSecret: apiKey })) return;
+      toast(message(error), "error");
+    }
+  }
+
+  async function slotUpdate(slot, external, isRetry) {
+    const form = state.credentialSlotForms[slot];
+    const apiKey = form.apiKey.trim();
+    if (!apiKey) return toast("Enter a replacement API key first.", "warning");
+    try {
+      await api("/api/credentials/slots/" + encodeURIComponent(slot) + "/update", {
+        method: "POST",
+        body: {
+          api_key: apiKey,
+          external_mutation: external,
+          require_fresh_grant: external,
+        },
+      });
+      await refreshCredentialState();
+      form.mode = "select";
+      clearSlotFormSecret(slot);
+      toast(SLOT_TITLES[slot] + " key updated", "success");
+      render();
+    } catch (error) {
+      if (!isRetry && await openApproval(error, () => slotUpdate(slot, external, true), { slot, stagedSecret: apiKey })) return;
+      toast(message(error), "error");
+    }
+  }
+
+  async function slotClearSelection(slot) {
+    if (!confirm("Remove the app selection for " + (SLOT_TITLES[slot] || slot) + "? The Voidware credential itself stays on disk.")) return;
+    try {
+      await api("/api/credentials/slots/" + encodeURIComponent(slot) + "/selection", { method: "DELETE" });
+      await refreshCredentialState();
+      state.credentialSlotForms[slot].mode = "select";
+      clearSlotFormSecret(slot);
+      toast("Selection removed", "success");
+      render();
+    } catch (error) { toast(message(error), "error"); }
+  }
+
+  async function slotDeleteCredential(slot, external, isRetry) {
+    const label = external ? "Delete this external Voidware credential?" : "Delete the LLM-Dash-managed credential?";
+    if (!confirm(label)) return;
+    const query = external ? "?external_mutation=true&require_fresh_grant=true" : "";
+    try {
+      await api("/api/credentials/slots/" + encodeURIComponent(slot) + "/credential" + query, { method: "DELETE" });
+      await refreshCredentialState();
+      state.credentialSlotForms[slot].mode = "select";
+      state.credentialSlotForms[slot].pickKey = "";
+      clearSlotFormSecret(slot);
+      toast("Credential deleted", "success");
+      render();
+    } catch (error) {
+      if (!isRetry && await openApproval(error, () => slotDeleteCredential(slot, external, true), { slot })) return;
+      toast(message(error), "error");
+    }
+  }
+
   function settingsProvider() {
     const f = state.forms.provider;
     return panel("Connection", providerStatusCopy(), [
-      state.credentials.length ? h("label", { class: "field" }, [
-        h("span", null, "Saved Voidware key"),
-        h("select", { value: f.provider_credential_name || "", onchange: (e) => { f.provider_credential_name = e.target.value; } }, [
-          h("option", { value: "" }, "Use typed key or current saved key"),
-          ...state.credentials.map((c) => h("option", { value: c.name }, c.label || c.name)),
-        ]),
-      ]) : h("p", { class: "settings-note" }, "No saved API key on file yet."),
+      renderCredentialSlot("provider", { title: "API key" }),
       h("label", { class: "field" }, [h("span", null, "Base URL"), input(f, "base_url", "https://api.openai.com")]),
-      h("label", { class: "field" }, [h("span", null, "API key"), input(f, "api_key", "Only needed when saving a new key", "password")]),
       h("label", { class: "field" }, [h("span", null, "Models URL override"), input(f, "models_override_url", "Optional")]),
       h("label", { class: "field" }, [h("span", null, "Endpoint mode"), h("select", { value: f.endpoint_mode, onchange: (e) => { f.endpoint_mode = e.target.value; } }, [
         h("option", { value: "append_v1" }, "Append /v1"),
         h("option", { value: "root" }, "Use URL as root"),
       ])]),
       h("div", { class: "action-row" }, [
-        h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: testConnection }, "Test connection"),
+        h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: () => testConnection() }, "Test connection"),
         h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: saveProviderSettings }, "Save connection"),
         h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: openManualPrompt }, "Manual prompt"),
       ]),
@@ -1315,20 +1698,19 @@
   }
 
   function settingsResearch() {
-    const f = state.forms.research;
-    return panel("Research", "Add API keys here. They're stored locally, not in the repo.", [
-      h("div", { class: "status-row" }, [statusPill(state.provider.exa_configured ? "Configured" : "Not configured", state.provider.exa_configured ? "fresh" : "unknown"), h("span", null, "Exa search")]),
-      h("label", { class: "field" }, [h("span", null, "Exa API key"), input(f, "exa", "Paste to save", "password")]),
-      h("div", { class: "action-row" }, [
-        h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: saveExa }, "Save Exa"),
-        h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: removeExa }, "Remove Exa"),
+    return panel("Research", "Select or create Voidware credentials for research integrations.", [
+      h("div", { class: "status-row" }, [
+        statusPill(state.provider.exa_configured ? "Configured" : "Not configured", state.provider.exa_configured ? "fresh" : "unknown"),
+        h("span", null, "Exa search"),
       ]),
-      h("div", { class: "status-row" }, [statusPill(state.provider.llmstats_configured ? "Configured" : "Not configured", state.provider.llmstats_configured ? "fresh" : "unknown"), h("span", null, "LLM Stats")]),
-      h("label", { class: "field" }, [h("span", null, "LLM Stats API key"), input(f, "llmstats", "Optional", "password")]),
+      renderCredentialSlot("exa", { title: "Exa API key" }),
+      h("div", { class: "status-row" }, [
+        statusPill(state.provider.llmstats_configured ? "Configured" : "Not configured", state.provider.llmstats_configured ? "fresh" : "unknown"),
+        h("span", null, "LLM Stats"),
+      ]),
+      renderCredentialSlot("llmstats", { title: "LLM Stats API key" }),
       h("div", { class: "action-row" }, [
-        h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: saveLLMStats }, "Save LLM Stats"),
-        h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: testLLMStats }, "Test"),
-        h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: removeLLMStats }, "Remove"),
+        h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: () => testLLMStats() }, "Test LLM Stats"),
       ]),
     ]);
   }
@@ -1370,10 +1752,11 @@
 
   async function saveProviderSettings() {
     const payload = {
-      ...state.forms.provider,
-      ...state.forms.models,
-      api_key: state.forms.provider.api_key || null,
-      provider_credential_name: state.forms.provider.provider_credential_name || null,
+      base_url: state.forms.provider.base_url,
+      models_override_url: state.forms.provider.models_override_url,
+      endpoint_mode: state.forms.provider.endpoint_mode,
+      default_model: state.forms.models.default_model,
+      backup_model: state.forms.models.backup_model,
     };
     try {
       state.provider = await api("/api/provider", { method: "POST", body: payload });
@@ -1381,19 +1764,18 @@
       toast("Connection saved", "success");
       render();
     } catch (error) {
-      const detail = error.payload && error.payload.detail;
-      if (detail && (detail.code === "approval_pending" || detail.code === "approval_waiting")) {
-        state.approval = { open: true, password: "", secret: "", error: "", after: saveProviderSettings };
-        render();
-      } else toast(message(error), "error");
+      toast(message(error), "error");
     }
   }
 
-  async function testConnection() {
+  async function testConnection(isRetry) {
     try {
       const data = await api("/api/provider/test-connection", { method: "POST", body: { ...state.forms.provider, ...state.forms.models } });
       toast(data.ok ? `${data.models_count || 0} models visible` : `Provider returned HTTP ${data.status_code}`, data.ok ? "success" : "warning");
-    } catch (error) { toast(message(error), "error"); }
+    } catch (error) {
+      if (!isRetry && await openApproval(error, () => testConnection(true), { slot: "provider" })) return;
+      toast(message(error), "error");
+    }
   }
 
   async function testModel(target) {
@@ -1403,43 +1785,14 @@
     } catch (error) { toast(message(error), "error"); }
   }
 
-  async function saveExa() {
-    if (!state.forms.research.exa.trim()) return toast("Paste an Exa key first.", "warning");
+  async function testLLMStats(isRetry) {
     try {
-      await api("/api/exa", { method: "POST", body: { api_key: state.forms.research.exa.trim() } });
-      state.forms.research.exa = "";
-      await loadProvider();
-      toast("Exa saved", "success");
-      render();
-    } catch (error) { if (!openApproval(error, saveExa)) toast(message(error), "error"); }
-  }
-
-  async function removeExa() {
-    if (!confirm("Remove the saved Exa key?")) return;
-    try { await api("/api/exa", { method: "DELETE" }); await loadProvider(); toast("Exa removed", "success"); render(); }
-    catch (error) { toast(message(error), "error"); }
-  }
-
-  async function saveLLMStats() {
-    if (!state.forms.research.llmstats.trim()) return toast("Paste an LLM Stats key first.", "warning");
-    try {
-      await api("/api/llmstats", { method: "POST", body: { api_key: state.forms.research.llmstats.trim() } });
-      state.forms.research.llmstats = "";
-      await loadProvider();
-      toast("LLM Stats saved", "success");
-      render();
-    } catch (error) { if (!openApproval(error, saveLLMStats)) toast(message(error), "error"); }
-  }
-
-  async function testLLMStats() {
-    try { const data = await api("/api/llmstats/test-connection"); toast(data.ok ? "LLM Stats is reachable" : "LLM Stats test failed", data.ok ? "success" : "warning"); }
-    catch (error) { toast(message(error), "error"); }
-  }
-
-  async function removeLLMStats() {
-    if (!confirm("Remove the saved LLM Stats key?")) return;
-    try { await api("/api/llmstats", { method: "DELETE" }); await loadProvider(); toast("LLM Stats removed", "success"); render(); }
-    catch (error) { toast(message(error), "error"); }
+      const data = await api("/api/llmstats/test-connection");
+      toast(data.ok ? "LLM Stats is reachable" : "LLM Stats test failed", data.ok ? "success" : "warning");
+    } catch (error) {
+      if (!isRetry && await openApproval(error, () => testLLMStats(true), { slot: "llmstats" })) return;
+      toast(message(error), "error");
+    }
   }
 
   async function saveSchedule() {
@@ -1457,25 +1810,77 @@
     catch (error) { toast(message(error), "error"); }
   }
 
+  function parseApprovalMeta(meta) {
+    const operation = meta && meta.operation;
+    return {
+      operation: typeof operation === "object" && operation ? (operation.kind || "") : String(operation || ""),
+      target: String((meta && meta.target) || (typeof operation === "object" && operation && operation.target) || ""),
+      scopes: Array.isArray(meta && meta.scopes) ? meta.scopes : [],
+      ttl: String((meta && meta.ttl) || "120d"),
+      passwordRequired: meta && meta.passwordRequired !== undefined ? Boolean(meta.passwordRequired) : true,
+      secretRequired: Boolean(meta && meta.secretRequired),
+    };
+  }
+
+  function approvalOperationLabel(approval) {
+    if (approval.operation) return approval.operation.replace(/_/g, " ");
+    return "credential access";
+  }
+
+  function clearApprovalState() {
+    state.approval = EMPTY_APPROVAL();
+  }
+
+  async function closeApproval() {
+    if (state.approval.open) {
+      try { await api("/api/voidware/broker/approval/deny", { method: "POST" }); } catch (_) {}
+    }
+    clearApprovalState();
+    for (const slot of CREDENTIAL_SLOTS) clearSlotFormSecret(slot);
+    render();
+  }
+
+  async function openApproval(error, after, context) {
+    const detail = error && error.payload && error.payload.detail;
+    const code = typeof detail === "object" ? detail.code : "";
+    if (code !== "approval_pending" && code !== "approval_waiting") return false;
+    let meta = {};
+    if (detail && typeof detail.approval === "object") meta = detail.approval;
+    else {
+      try {
+        const pending = await api("/api/voidware/broker/approval");
+        if (pending.pending && typeof pending.pending === "object") meta = pending.pending;
+      } catch (_) {}
+    }
+    state.approval = {
+      open: true,
+      password: "",
+      secret: "",
+      error: "",
+      after,
+      stagedSecret: (context && context.stagedSecret) || "",
+      slot: (context && context.slot) || "",
+      ...parseApprovalMeta(meta),
+    };
+    render();
+    return true;
+  }
+
   async function approveVoidware() {
     try {
-      await api("/api/voidware/broker/approval", { method: "POST", body: { password: state.approval.password, secret: state.approval.secret } });
+      const body = { password: state.approval.password };
+      if (state.approval.secretRequired && !state.approval.stagedSecret) body.secret = state.approval.secret;
+      await api("/api/voidware/broker/approval", { method: "POST", body });
       const after = state.approval.after;
-      state.approval = { open: false, password: "", secret: "", error: "", after: null };
+      clearApprovalState();
       render();
-      if (typeof after === "function") await after();
+      if (typeof after === "function") await after(true);
+      for (const slot of CREDENTIAL_SLOTS) clearSlotFormSecret(slot);
+      render();
     } catch (error) {
       state.approval.error = message(error);
       render();
     }
-  }
-
-  function openApproval(error, after) {
-    const detail = error && error.payload && error.payload.detail;
-    if (!detail || (detail.code !== "approval_pending" && detail.code !== "approval_waiting")) return false;
-    state.approval = { open: true, password: "", secret: "", error: "", after };
-    render();
-    return true;
   }
 
   async function handleRefresh() {
@@ -1560,13 +1965,35 @@
       h("pre", { class: "run-log" }, state.run.tail || state.run.error || "Waiting for update logs..."),
       state.run.state === "succeeded" || state.run.state === "failed" ? h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: () => { state.run.open = false; render(); } }, "Close") : null,
     ], state.run.state === "running" ? null : () => { state.run.open = false; render(); }));
-    if (state.approval.open) nodes.push(modal("Voidware approval", [
-      h("p", null, "Unlock Voidware once so LLM-Dash can save the requested credential."),
-      state.approval.error ? h("p", { class: "error-copy" }, state.approval.error) : null,
-      h("label", { class: "field" }, [h("span", null, "Password"), h("input", { type: "password", value: state.approval.password, oninput: (e) => { state.approval.password = e.target.value; } })]),
-      h("label", { class: "field" }, [h("span", null, "Secret"), h("input", { type: "password", value: state.approval.secret, oninput: (e) => { state.approval.secret = e.target.value; } })]),
-      h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: approveVoidware }, "Approve"),
-    ], () => { state.approval.open = false; render(); }));
+    if (state.approval.open) {
+      const approval = state.approval;
+      const passwordOnly = approval.passwordRequired && !(approval.secretRequired && !approval.stagedSecret);
+      const modalTitle = passwordOnly ? "Enter your Voidware encryption password" : "Voidware approval";
+      const slotLabel = approval.slot ? (SLOT_TITLES[approval.slot] || approval.slot) : "this app";
+      const operationLabel = approvalOperationLabel(approval);
+      const scopeCopy = approval.scopes.length ? approval.scopes.join(", ") : "scoped secret access";
+      nodes.push(modal(modalTitle, [
+        h("p", { class: "approval-copy" }, (
+          "Approve " + operationLabel + " for " + slotLabel
+          + (approval.target ? " on " + approval.target : "")
+          + ". Durable access TTL: " + (approval.ttl || "120d") + ". Scopes: " + scopeCopy + "."
+        )),
+        approval.stagedSecret ? h("p", { class: "settings-note" }, "The API key you entered in Settings will be used after approval.") : null,
+        approval.error ? h("p", { class: "error-copy" }, approval.error) : null,
+        approval.passwordRequired ? h("label", { class: "field" }, [
+          h("span", null, "Voidware encryption password"),
+          h("input", { type: "password", value: approval.password, autocomplete: "off", oninput: (e) => { approval.password = e.target.value; } }),
+        ]) : null,
+        approval.secretRequired && !approval.stagedSecret ? h("label", { class: "field" }, [
+          h("span", null, "Secret"),
+          h("input", { type: "password", value: approval.secret, autocomplete: "off", oninput: (e) => { approval.secret = e.target.value; } }),
+        ]) : null,
+        h("div", { class: "action-row" }, [
+          h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: closeApproval }, "Deny"),
+          h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: approveVoidware }, "Approve"),
+        ]),
+      ], closeApproval));
+    }
     els.overlay.replaceChildren(...nodes);
     document.body.classList.toggle("has-overlay", nodes.length > 0 || state.drawerOpen);
   }
@@ -1633,7 +2060,8 @@
   function keydown(event) {
     if (event.key === "Escape") {
       if (state.helpOpen || state.manualOpen || state.approval.open) {
-        state.helpOpen = false; state.manualOpen = false; state.approval.open = false; render(); return;
+        if (state.approval.open) { closeApproval(); return; }
+        state.helpOpen = false; state.manualOpen = false; render(); return;
       }
       if (state.drawerOpen) { closeDrawer(); return; }
       if (state.run.open && state.run.state !== "running") { state.run.open = false; render(); return; }
@@ -1657,6 +2085,7 @@
   function navigate(area, subpage) {
     state.area = area || "models";
     if (subpage && state.subpage[state.area] !== undefined) state.subpage[state.area] = subpage;
+    if (state.setupMode && area === "settings" && subpage) state.setupStep = subpage;
     state.drawerOpen = false;
     history.pushState({}, "", hashFor(state.area, state.subpage[state.area]));
     render();
@@ -2128,10 +2557,26 @@
     if (ui.sortDir !== "asc" && ui.sortDir !== "desc") ui.sortDir = "desc";
   }
 
+  function consumeSetupFlag() {
+    const params = new URLSearchParams(location.search);
+    if (!params.has("setup")) return false;
+    state.setupMode = true;
+    state.resetMode = true;
+    state.setupStep = "provider";
+    state.ui = { ...DEFAULT_UI };
+    try { localStorage.removeItem(STORE_KEY); } catch (_) {}
+    params.delete("setup");
+    const query = params.toString();
+    history.replaceState({}, "", location.pathname + (query ? "?" + query : "") + "#settings/provider");
+    return true;
+  }
+
   function consumeResetFlag() {
     const params = new URLSearchParams(location.search);
     if (!params.has("reset")) return false;
     state.resetMode = true;
+    state.setupMode = true;
+    state.setupStep = "provider";
     state.ui = { ...DEFAULT_UI };
     try { localStorage.removeItem(STORE_KEY); } catch (_) {}
     params.delete("reset");

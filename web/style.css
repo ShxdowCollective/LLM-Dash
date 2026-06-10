@@ -1044,6 +1044,76 @@ body.is-col-resizing .model-row { pointer-events: none; }
   text-transform: uppercase;
 }
 .reset-run-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.reset-status {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: var(--vw-radius-md);
+  background: var(--vw-surface-2);
+  box-shadow: inset 0 0 0 1px var(--vw-border-mid);
+}
+.reset-status-busy { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vw-accent) 35%, transparent); }
+.reset-status-success { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vw-success, #4caf7d) 45%, transparent); }
+.reset-status-error {
+  background: color-mix(in srgb, var(--vw-error) 8%, var(--vw-surface-2));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vw-error) 35%, transparent);
+}
+.reset-status-title { color: var(--vw-text); font-size: 14px; }
+.reset-status-copy,
+.reset-status-detail {
+  margin: 0;
+  color: var(--vw-text-muted);
+  font-size: 13px;
+}
+.reset-status-warnings {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--vw-text-soft);
+  font-size: 12px;
+}
+.settings-workbench.is-setup { gap: 14px; }
+.setup-rail {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px;
+}
+.setup-rail-head { display: grid; gap: 4px; }
+.setup-rail-title { color: var(--vw-text); font-size: 15px; }
+.setup-rail-copy {
+  margin: 0;
+  color: var(--vw-text-muted);
+  font-size: 13px;
+}
+.setup-rail-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.setup-rail-step { margin: 0; }
+.setup-rail-btn {
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: var(--vw-surface-3, var(--vw-surface-2));
+  color: var(--vw-text-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.setup-rail-step.is-active .setup-rail-btn {
+  background: color-mix(in srgb, var(--vw-accent) 18%, var(--vw-surface-2));
+  color: var(--vw-text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vw-accent) 35%, transparent);
+}
+.setup-rail-step.is-done .setup-rail-btn { color: var(--vw-text); }
+.setup-finish-panel .settings-panel-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
 .vw-btn-danger {
   color: #fff;
   background: var(--vw-error);
@@ -1729,6 +1799,50 @@ body.is-col-resizing .model-row { pointer-events: none; }
 .settings-fields .field input,
 .settings-fields .field select {
   width: min(100%, 680px);
+}
+
+.credential-slot {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--vw-radius-lg);
+  background: color-mix(in srgb, var(--vw-surface-2) 88%, transparent);
+  box-shadow: inset 0 0 0 1px var(--vw-border);
+}
+
+.credential-slot-head {
+  display: grid;
+  gap: 4px;
+}
+
+.credential-slot-title {
+  color: var(--vw-text);
+  font-size: 14px;
+}
+
+.credential-slot-status,
+.credential-slot-external-note {
+  margin: 0;
+  color: var(--vw-text-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.credential-slot-warnings {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--vw-warning, #d4a017);
+  font-size: 12px;
+}
+
+.credential-slot-actions {
+  margin-top: 2px;
+}
+
+.approval-copy {
+  margin: 0;
+  color: var(--vw-text-soft);
+  line-height: 1.5;
 }
 
 .modal-backdrop {

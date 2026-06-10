@@ -357,7 +357,9 @@ async function approve(payload) {
       }
       if (result.type === 'error') throw result.err
       if (!pendingApproval) activeGrant = null
-      return responseFromBrokerGrant(result.value, grant.operationId, grantTarget)
+      const response = responseFromBrokerGrant(result.value, grant.operationId, grantTarget)
+      if (response.ok && grant.cacheKey) response.cacheKey = grant.cacheKey
+      return response
     }
     activeGrant = null
     return { ok: false, code: 'approval_pending', message: 'Voidware requested too many sequential approvals.', operationId: grant.operationId, approval: pendingApproval ? pendingApproval.approval : null }
@@ -384,6 +386,75 @@ async function status() {
   return { ok: true, status: started.status, owned: started.owned, serviceModule: service.modulePath }
 }
 
+function brokerRefPayload(ref) {
+  const name = String(ref?.name || '')
+  return {
+    app: APP_NAME,
+    repoPath: ROOT,
+    operation: 'auth:ref:read',
+    target: name,
+    scopes: [`auth:secret:read:${name}`],
+    ttl: MAX_GRANT_TTL,
+    timeoutMs: APPROVAL_TIMEOUT_MS,
+    allowSecretOutput: true,
+    params: { ref },
+  }
+}
+
+async function startRefGrant(ref, forceRefresh = false) {
+  const api = await loadService()
+  await ensureBroker()
+  const name = String(ref?.name || '')
+  if (!name) throw Object.assign(new Error('Credential ref is missing a name.'), { code: 'invalid_request' })
+  if (pendingApproval && sameApprovalRequest(pendingApproval.approval, { operation: { kind: 'auth:ref:read', target: name } })) {
+    return {
+      ok: false,
+      code: 'approval_pending',
+      operationId: activeGrant && activeGrant.operationId ? activeGrant.operationId : randomUUID(),
+      approval: pendingApproval.approval,
+    }
+  }
+  const operationId = randomUUID()
+  const promise = Promise.resolve().then(() =>
+    api.requestDurableVoidwareAuthGrant(
+      brokerRefPayload(ref),
+      context(),
+      { forceRefresh },
+    ),
+  )
+  activeGrant = { operationId, target: name, promise, cacheKey: refCacheKey(ref) }
+  const result = await raceForPending(promise)
+  if (result.type === 'pending') {
+    return {
+      ok: false,
+      code: 'approval_pending',
+      operationId,
+      approval: pendingApproval.approval,
+    }
+  }
+  if (result.type === 'error') throw result.err
+  const response = responseFromBrokerGrant(result.value, operationId, name)
+  if (response.ok) response.cacheKey = refCacheKey(ref)
+  return response
+}
+
+function refCacheKey(ref) {
+  const parts = [String(ref?.name || ''), String(ref?.source || '')]
+  if (ref?.authFilePath) parts.push(String(ref.authFilePath))
+  if (ref?.envVar) parts.push(String(ref.envVar))
+  return parts.join('|')
+}
+
+async function discoverAuthRefs() {
+  await loadService()
+  const auth = new service.AuthService(context())
+  if (typeof auth.discoverRefs !== 'function') {
+    return { ok: true, data: [], refsAvailable: false }
+  }
+  const data = await auth.discoverRefs()
+  return { ok: true, data, refsAvailable: true }
+}
+
 async function discoverProviders(payload = {}) {
   await loadService()
   const auth = new service.AuthService(context())
@@ -402,11 +473,12 @@ async function writeSecret(payload = {}) {
     template: 'custom-http',
     metadata: payload.metadata || {},
     custom: payload.custom || {},
+    ...(payload.forceRefresh ? { forceRefresh: true } : {}),
   })
 }
 
 async function deleteSecret(payload = {}) {
-  return await startBrokerRequest('auth:secret:delete', payload.name)
+  return await startBrokerRequest('auth:secret:delete', payload.name, payload.forceRefresh ? { forceRefresh: true } : {})
 }
 
 async function stop() {
@@ -431,8 +503,12 @@ async function handle(message) {
       return deny()
     case 'discoverProviders':
       return await discoverProviders(message.payload || {})
+    case 'discoverAuthRefs':
+      return await discoverAuthRefs(message.payload || {})
     case 'readSecretGrant':
       return await startGrant(String(message.payload?.name || ''), Boolean(message.payload?.forceRefresh))
+    case 'readRefGrant':
+      return await startRefGrant(message.payload?.ref || {}, Boolean(message.payload?.forceRefresh))
     case 'writeSecret':
       return await writeSecret(message.payload || {})
     case 'deleteSecret':

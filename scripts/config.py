@@ -42,6 +42,28 @@ ENDPOINT_MODE_APPEND_V1 = "append_v1"
 ENDPOINT_MODE_ROOT = "root"
 ENDPOINT_MODES = {ENDPOINT_MODE_APPEND_V1, ENDPOINT_MODE_ROOT}
 SECRET_REMOVE_FALLBACK_CODES = {"broker_unavailable", "broker_timeout", "cli_unavailable"}
+CONFIG_VERSION = 2
+CREDENTIAL_SLOTS = ("provider", "exa", "llmstats")
+SLOT_ENV_KEYS = {
+    "provider": PROVIDER_API_KEY_ENVS,
+    "exa": EXA_API_KEY_ENVS,
+    "llmstats": LLMSTATS_API_KEY_ENVS,
+}
+SLOT_KEY_NAMES = {
+    "provider": PROVIDER_KEY_NAMES,
+    "exa": (EXA_KEY_NAME,),
+    "llmstats": (LLMSTATS_KEY_NAME,),
+}
+SLOT_DEFAULT_SECRET_NAMES = {
+    "provider": voidware_auth.PROVIDER_SECRET_NAME,
+    "exa": voidware_auth.EXA_SECRET_NAME,
+    "llmstats": voidware_auth.LLMSTATS_SECRET_NAME,
+}
+SLOT_MANAGED_KINDS = {
+    "provider": "agent-provider",
+    "exa": "exa",
+    "llmstats": "llmstats",
+}
 
 
 class ConfigError(ValueError):
@@ -57,8 +79,17 @@ class ProviderConfig:
     endpoint_mode: str = ENDPOINT_MODE_APPEND_V1
     request_headers: dict[str, str] | None = None
     provider_credential_name: str = ""
+    provider_credential_ref: str = ""
     provider_credential_meta: dict[str, Any] | None = None
     provider_credential_grant: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class CredentialSlotConfig:
+    credential_name: str = ""
+    credential_ref: str = ""
+    credential_meta: dict[str, Any] | None = None
+    credential_grant: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -158,10 +189,86 @@ def _env_first(names: tuple[str, ...]) -> str:
 def _load_config_file() -> dict[str, Any]:
     data = _read_json(config_path())
     if "provider" in data:
-        return data
+        migrated = _migrate_config_v2(data)
+        if migrated is not data:
+            _atomic_write_json(config_path(), migrated)
+        return migrated
     if APP_NAME in data and isinstance(data[APP_NAME], dict):
-        return data[APP_NAME]
-    return data
+        return _migrate_config_v2(data[APP_NAME])
+    return _migrate_config_v2(data)
+
+
+def _slot_section_key(slot: str) -> str:
+    if slot == "provider":
+        return "provider"
+    return slot
+
+
+def _slot_field_prefix(slot: str) -> str:
+    if slot == "provider":
+        return "provider_credential"
+    return f"{slot}_credential"
+
+
+def _load_slot_section(data: dict[str, Any], slot: str) -> dict[str, Any]:
+    section = data.get(_slot_section_key(slot), {})
+    return section if isinstance(section, dict) else {}
+
+
+def _slot_selection_from_section(slot: str, section: dict[str, Any]) -> CredentialSlotConfig:
+    prefix = _slot_field_prefix(slot)
+    grant = section.get(f"{prefix}_grant")
+    return CredentialSlotConfig(
+        credential_name=str(section.get(f"{prefix}_name") or "").strip(),
+        credential_ref=str(section.get(f"{prefix}_ref") or "").strip(),
+        credential_meta=_safe_provider_credential_meta(section.get(f"{prefix}_meta")),
+        credential_grant=grant if isinstance(grant, dict) else {},
+    )
+
+
+def load_credential_slot(slot: str) -> CredentialSlotConfig:
+    if slot not in CREDENTIAL_SLOTS:
+        raise ConfigError(f"Unknown credential slot: {slot}")
+    data = _load_config_file()
+    return _slot_selection_from_section(slot, _load_slot_section(data, slot))
+
+
+def _discovered_secret_names() -> set[str]:
+    names: set[str] = set()
+    try:
+        for item in voidware_auth.discover_auth_refs()[0]:
+            if item.get("has_secret") and item.get("name"):
+                names.add(str(item["name"]))
+    except Exception:
+        pass
+    try:
+        for item in voidware_auth.discover_provider_credentials(reusable_only=False):
+            if item.get("hasSecret", item.get("has_secret")) and item.get("name"):
+                names.add(str(item["name"]))
+    except Exception:
+        pass
+    return names
+
+
+def _migrate_config_v2(data: dict[str, Any]) -> dict[str, Any]:
+    if int(data.get("version") or 1) >= CONFIG_VERSION:
+        return data
+    migrated = dict(data)
+    migrated["version"] = CONFIG_VERSION
+    migrated.setdefault("app", APP_NAME)
+    discovered = _discovered_secret_names()
+    for slot in ("exa", "llmstats"):
+        section = dict(_load_slot_section(migrated, slot))
+        prefix = _slot_field_prefix(slot)
+        if not section.get(f"{prefix}_name"):
+            default_name = SLOT_DEFAULT_SECRET_NAMES[slot]
+            if default_name in discovered:
+                section[f"{prefix}_name"] = default_name
+                section.setdefault(f"{prefix}_meta", {"name": default_name, "label": default_name})
+        migrated[slot] = section
+    provider = dict(_load_slot_section(migrated, "provider"))
+    migrated["provider"] = provider
+    return migrated
 
 
 def _keyring_get(name: str) -> str:
@@ -203,10 +310,15 @@ def _legacy_secret(name: str) -> str:
     return _keyring_get(name)
 
 
-def _read_broker_secret(name: str) -> str:
+def _read_broker_secret(name: str, *, credential_ref: str = "") -> str:
     try:
-        return voidware_auth.read_secret(name)
-    except voidware_auth.VoidwareAuthError:
+        return str(voidware_auth.read_secret_with_grant(
+            name,
+            credential_ref=credential_ref or None,
+        ).get("secret") or "")
+    except voidware_auth.VoidwareAuthError as exc:
+        if exc.code in voidware_auth.FRESH_GRANT_CODES:
+            return ""
         return ""
 
 
@@ -215,13 +327,14 @@ def _read_secret(
     key_name: str | tuple[str, ...],
     broker_name: str | None = None,
     selected_name: str | None = None,
+    selected_ref: str | None = None,
 ) -> str:
     key_names = (key_name,) if isinstance(key_name, str) else key_name
     env_secret = _env_first(envs)
     if env_secret:
         return env_secret
-    if selected_name:
-        selected_secret = _read_broker_secret(selected_name)
+    if selected_ref or selected_name:
+        selected_secret = _read_broker_secret(selected_name or "", credential_ref=selected_ref or "")
         if selected_secret:
             return selected_secret
     if broker_name:
@@ -244,11 +357,22 @@ def _credential_source(
     key_name: str | tuple[str, ...],
     broker_name: str | None = None,
     selected_name: str | None = None,
+    selected_ref: str | None = None,
     selected_grant: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     key_names = (key_name,) if isinstance(key_name, str) else key_name
-    if _env_first(envs):
-        return {"configured": True, "source": "env", "legacy_migration_available": False}
+    env_value = _env_first(envs)
+    if env_value:
+        env_var = next((name for name in envs if os.environ.get(name)), envs[0] if envs else "")
+        return {
+            "configured": True,
+            "source": "env",
+            "source_label": "env",
+            "read_only": True,
+            "env_var": env_var,
+            "legacy_migration_available": False,
+            "grant_status": {"status": "none", "renewal_recommended": False, "expires_at": ""},
+        }
     discovered_names = set()
     try:
         discovered_names = {
@@ -258,20 +382,31 @@ def _credential_source(
         }
     except Exception:
         discovered_names = set()
-    if selected_name:
+    parsed_ref = voidware_auth.safe_credential_ref(selected_ref)
+    if selected_name or parsed_ref:
+        name = str(parsed_ref.get("name") if parsed_ref else selected_name or "")
         return {
-            "configured": selected_name in discovered_names or bool(selected_grant),
-            "source": "voidware-provider",
-            "name": selected_name,
+            "configured": name in discovered_names or bool(selected_grant) or bool(parsed_ref),
+            "source": "voidware-provider" if parsed_ref else "voidware-provider",
+            "source_label": voidware_auth.source_label(str(parsed_ref.get("source") or "")) if parsed_ref else "selected",
+            "name": name,
+            "ref": parsed_ref,
             "grant": selected_grant or {},
-            "legacy_migration_available": any(_legacy_secret(name) for name in key_names),
+            "grant_status": voidware_auth.grant_renewal_status(selected_grant),
+            "managed_by_llmdash": voidware_auth.credential_managed_by_llmdash(
+                ref=parsed_ref or None,
+                name=name,
+            ),
+            "legacy_migration_available": any(_legacy_secret(item) for item in key_names),
         }
     for name in [*( [broker_name] if broker_name else [] ), *key_names]:
         if name and name in discovered_names:
             return {
                 "configured": True,
                 "source": "voidware-broker",
+                "source_label": "keyring",
                 "name": name,
+                "grant_status": {"status": "none", "renewal_recommended": False, "expires_at": ""},
                 "legacy_migration_available": any(_legacy_secret(item) for item in key_names),
             }
     fallback_source = ""
@@ -282,6 +417,8 @@ def _credential_source(
     return {
         "configured": bool(fallback_source),
         "source": fallback_source or "missing",
+        "source_label": "none" if not fallback_source else "keyring",
+        "grant_status": {"status": "none", "renewal_recommended": False, "expires_at": ""},
         "legacy_migration_available": False,
     }
 
@@ -493,6 +630,274 @@ def discover_provider_credentials() -> dict[str, Any]:
     return {"credentials": candidates}
 
 
+def discover_all_credential_slots() -> dict[str, Any]:
+    discovery = voidware_auth.discover_credential_candidates()
+    data = _load_config_file()
+    slots: dict[str, Any] = {}
+    for slot in CREDENTIAL_SLOTS:
+        selection = _slot_selection_from_section(slot, _load_slot_section(data, slot))
+        auth = _credential_source(
+            SLOT_ENV_KEYS[slot],
+            SLOT_KEY_NAMES[slot],
+            SLOT_DEFAULT_SECRET_NAMES[slot],
+            selection.credential_name,
+            selection.credential_ref,
+            selection.credential_grant,
+        )
+        if slot == "provider":
+            candidates = [
+                _provider_candidate(item)
+                for item in discovery.get("provider_candidates", [])
+            ]
+            candidates = [item for item in candidates if item]
+        else:
+            candidates = list(discovery.get("generic_candidates", []))
+        slots[slot] = {
+            "selected": {
+                "name": selection.credential_name,
+                "ref": voidware_auth.safe_credential_ref(selection.credential_ref),
+                "meta": selection.credential_meta or {},
+                "grant": selection.credential_grant or {},
+                "grant_status": auth.get("grant_status") or voidware_auth.grant_renewal_status(selection.credential_grant),
+                "managed_by_llmdash": _slot_managed(slot, selection, live_rows=discovery.get("auth_refs") or []),
+                "source_label": auth.get("source_label") or ("none" if not auth.get("configured") else "selected"),
+                "read_only": bool(auth.get("read_only")),
+            },
+            "candidates": candidates,
+            "env_override": {
+                "configured": bool(_env_first(SLOT_ENV_KEYS[slot])),
+                "read_only": True,
+                "source_label": "env",
+                "env_var": next((name for name in SLOT_ENV_KEYS[slot] if os.environ.get(name)), ""),
+            },
+        }
+    return {
+        "refs_available": discovery.get("refs_available", False),
+        "same_name_warnings": discovery.get("same_name_warnings", []),
+        "slots": slots,
+    }
+
+
+def _persist_config(data: dict[str, Any]) -> None:
+    data["version"] = CONFIG_VERSION
+    data["app"] = APP_NAME
+    _atomic_write_json(config_path(), data)
+
+
+def _ref_identity(ref: dict[str, Any]) -> tuple[str, str, str, str]:
+    return (
+        str(ref.get("name") or ""),
+        str(ref.get("source") or ""),
+        str(ref.get("authFilePath") or ""),
+        str(ref.get("envVar") or ""),
+    )
+
+
+def _selection_managed_live(
+    selection: CredentialSlotConfig,
+    *,
+    live_rows: list[dict[str, Any]] | None = None,
+) -> bool | None:
+    """Ownership from live Voidware metadata; None when discovery is unavailable.
+
+    Name-only selections are managed only when every same-name source row is
+    LLM-Dash-managed, so ambiguous same-name externals fail closed.
+    """
+    ref = voidware_auth.safe_credential_ref(selection.credential_ref)
+    name = str((ref.get("name") if ref else "") or selection.credential_name or "")
+    if not name:
+        return None
+    rows = live_rows
+    if rows is None:
+        try:
+            rows, refs_available = voidware_auth.discover_auth_refs()
+        except voidware_auth.VoidwareAuthError:
+            return None
+        if not refs_available and not rows:
+            return None
+    matches = [row for row in rows if isinstance(row, dict) and str(row.get("name") or "") == name]
+    if ref:
+        ident = _ref_identity(ref)
+        refined = [
+            row for row in matches
+            if isinstance(row.get("ref"), dict) and _ref_identity(row["ref"]) == ident
+        ]
+        if refined:
+            matches = refined
+    if not matches:
+        return None
+    return all(bool(row.get("managed_by_llmdash")) for row in matches)
+
+
+def _slot_managed(
+    slot: str,
+    selection: CredentialSlotConfig,
+    *,
+    live_rows: list[dict[str, Any]] | None = None,
+) -> bool:
+    _ = slot
+    live = _selection_managed_live(selection, live_rows=live_rows)
+    if live is not None:
+        return live
+    ref = voidware_auth.safe_credential_ref(selection.credential_ref)
+    meta = selection.credential_meta or {}
+    custom = meta.get("custom") if isinstance(meta.get("custom"), dict) else None
+    return voidware_auth.credential_managed_by_llmdash(ref=ref or None, custom=custom, name=selection.credential_name)
+
+
+def _require_external_mutation_allowed(
+    slot: str,
+    *,
+    external_mutation: bool,
+    require_fresh_grant: bool,
+) -> tuple[CredentialSlotConfig, bool]:
+    selection = load_credential_slot(slot)
+    if not selection.credential_name and not selection.credential_ref:
+        raise ConfigError(f"No credential is selected for slot '{slot}'.")
+    managed = _slot_managed(slot, selection)
+    if managed:
+        return selection, True
+    if not external_mutation or not require_fresh_grant:
+        raise ConfigError(
+            "This credential is not managed by LLM-Dash. External mutation requires "
+            "external_mutation=true and require_fresh_grant=true."
+        )
+    return selection, False
+
+
+def select_credential_slot(
+    slot: str,
+    *,
+    credential_name: str = "",
+    credential_ref: str | dict[str, Any] | None = None,
+    credential_meta: dict[str, Any] | None = None,
+) -> CredentialSlotConfig:
+    if slot not in CREDENTIAL_SLOTS:
+        raise ConfigError(f"Unknown credential slot: {slot}")
+    ref = voidware_auth.safe_credential_ref(credential_ref)
+    name = str(ref.get("name") if ref else credential_name or "").strip()
+    if not name:
+        raise ConfigError("credential_name or credential_ref is required")
+    try:
+        secret_info = voidware_auth.read_secret_with_grant(name, credential_ref=ref or credential_ref)
+    except voidware_auth.VoidwareAuthError as exc:
+        if exc.code in voidware_auth.FRESH_GRANT_CODES:
+            _clear_slot_grant(slot)
+        raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
+    if not secret_info.get("secret") and not _env_first(SLOT_ENV_KEYS[slot]):
+        raise ConfigError("Selected Voidware credential did not return a secret.")
+    meta = _safe_provider_credential_meta(credential_meta or {"name": name, **(ref or {})})
+    grant = secret_info.get("grant") if isinstance(secret_info.get("grant"), dict) else {}
+    data = _load_config_file()
+    section = dict(_load_slot_section(data, slot))
+    prefix = _slot_field_prefix(slot)
+    section[f"{prefix}_name"] = name
+    section[f"{prefix}_ref"] = voidware_auth.serialize_credential_ref(ref) if ref else ""
+    section[f"{prefix}_meta"] = meta
+    section[f"{prefix}_grant"] = grant
+    data[_slot_section_key(slot)] = section
+    _persist_config(data)
+    return _slot_selection_from_section(slot, section)
+
+
+def _clear_slot_grant(slot: str) -> None:
+    data = _load_config_file()
+    section = dict(_load_slot_section(data, slot))
+    prefix = _slot_field_prefix(slot)
+    section[f"{prefix}_grant"] = {}
+    data[_slot_section_key(slot)] = section
+    _persist_config(data)
+
+
+def clear_credential_slot_selection(slot: str) -> None:
+    if slot not in CREDENTIAL_SLOTS:
+        raise ConfigError(f"Unknown credential slot: {slot}")
+    data = _load_config_file()
+    section = dict(_load_slot_section(data, slot))
+    prefix = _slot_field_prefix(slot)
+    section[f"{prefix}_name"] = ""
+    section[f"{prefix}_ref"] = ""
+    section[f"{prefix}_meta"] = {}
+    section[f"{prefix}_grant"] = {}
+    data[_slot_section_key(slot)] = section
+    _persist_config(data)
+
+
+def save_slot_api_key(slot: str, api_key: str) -> CredentialSlotConfig:
+    secret = str(api_key or "").strip()
+    if not secret:
+        raise ConfigError("api_key is required")
+    default_name = SLOT_DEFAULT_SECRET_NAMES[slot]
+    labels = {
+        "provider": "LLM-Dash Agent Provider",
+        "exa": "LLM-Dash Exa",
+        "llmstats": "LLM-Dash LLM Stats",
+    }
+    env_names = {
+        "provider": PROVIDER_KEY_NAME,
+        "exa": EXA_KEY_NAME,
+        "llmstats": LLMSTATS_KEY_NAME,
+    }
+    _save_secret(
+        default_name,
+        env_names[slot],
+        secret,
+        metadata={"label": labels[slot], "envVar": env_names[slot]},
+        custom={"app": APP_NAME, "kind": SLOT_MANAGED_KINDS[slot]},
+    )
+    return select_credential_slot(
+        slot,
+        credential_name=default_name,
+        credential_meta={"name": default_name, "label": labels[slot]},
+    )
+
+
+def update_slot_api_key(
+    slot: str,
+    api_key: str,
+    *,
+    external_mutation: bool = False,
+    require_fresh_grant: bool = False,
+) -> CredentialSlotConfig:
+    selection, managed = _require_external_mutation_allowed(
+        slot,
+        external_mutation=external_mutation,
+        require_fresh_grant=require_fresh_grant,
+    )
+    secret = str(api_key or "").strip()
+    if not secret:
+        raise ConfigError("api_key is required")
+    name = selection.credential_name or SLOT_DEFAULT_SECRET_NAMES[slot]
+    ref = voidware_auth.safe_credential_ref(selection.credential_ref)
+    voidware_auth.write_secret(
+        name,
+        secret,
+        require_fresh_grant=require_fresh_grant or not managed,
+    )
+    return select_credential_slot(slot, credential_name=name, credential_ref=ref or None, credential_meta=selection.credential_meta)
+
+
+def delete_slot_credential(
+    slot: str,
+    *,
+    external_mutation: bool = False,
+    require_fresh_grant: bool = False,
+) -> None:
+    selection, managed = _require_external_mutation_allowed(
+        slot,
+        external_mutation=external_mutation,
+        require_fresh_grant=require_fresh_grant,
+    )
+    name = selection.credential_name or SLOT_DEFAULT_SECRET_NAMES[slot]
+    voidware_auth.delete_secret(
+        name,
+        require_fresh_grant=require_fresh_grant or not managed,
+    )
+    for key_name in SLOT_KEY_NAMES[slot]:
+        _keyring_delete(key_name)
+    clear_credential_slot_selection(slot)
+
+
 def build_auth_headers(bundle: ProviderBundle) -> dict[str, str]:
     headers = dict(bundle.config.request_headers or {})
     if not any(is_sensitive_header(name) for name in headers):
@@ -502,15 +907,32 @@ def build_auth_headers(bundle: ProviderBundle) -> dict[str, str]:
 
 def public_provider_state() -> dict[str, Any]:
     config = load_provider_config()
+    exa_slot = load_credential_slot("exa")
+    llmstats_slot = load_credential_slot("llmstats")
     provider_auth = _credential_source(
         PROVIDER_API_KEY_ENVS,
         PROVIDER_KEY_NAMES,
         voidware_auth.PROVIDER_SECRET_NAME,
         config.provider_credential_name,
+        config.provider_credential_ref,
         config.provider_credential_grant,
     )
-    exa_auth = _credential_source(EXA_API_KEY_ENVS, EXA_KEY_NAME, voidware_auth.EXA_SECRET_NAME)
-    llmstats_auth = _credential_source(LLMSTATS_API_KEY_ENVS, LLMSTATS_KEY_NAME, voidware_auth.LLMSTATS_SECRET_NAME)
+    exa_auth = _credential_source(
+        EXA_API_KEY_ENVS,
+        EXA_KEY_NAME,
+        voidware_auth.EXA_SECRET_NAME,
+        exa_slot.credential_name,
+        exa_slot.credential_ref,
+        exa_slot.credential_grant,
+    )
+    llmstats_auth = _credential_source(
+        LLMSTATS_API_KEY_ENVS,
+        LLMSTATS_KEY_NAME,
+        voidware_auth.LLMSTATS_SECRET_NAME,
+        llmstats_slot.credential_name,
+        llmstats_slot.credential_ref,
+        llmstats_slot.credential_grant,
+    )
     has_provider = bool(config.base_url and config.default_model and provider_auth.get("configured"))
     bundle = ProviderBundle(config=config, secrets=ProviderSecrets(api_key=""))
     return {
@@ -523,10 +945,37 @@ def public_provider_state() -> dict[str, Any]:
         "backup_model": config.backup_model,
         "endpoint_mode": config.endpoint_mode,
         "provider_credential_name": config.provider_credential_name,
+        "provider_credential_ref": voidware_auth.safe_credential_ref(config.provider_credential_ref),
         "provider_credential_meta": config.provider_credential_meta or {},
         "provider_credential_grant": config.provider_credential_grant or {},
         "exa_configured": bool(exa_auth.get("configured")),
         "llmstats_configured": bool(llmstats_auth.get("configured")),
+        "credential_slots": {
+            "provider": {
+                "name": config.provider_credential_name,
+                "ref": voidware_auth.safe_credential_ref(config.provider_credential_ref),
+                "meta": config.provider_credential_meta or {},
+                "grant": config.provider_credential_grant or {},
+                "grant_status": provider_auth.get("grant_status") or voidware_auth.grant_renewal_status(config.provider_credential_grant),
+                "managed_by_llmdash": provider_auth.get("managed_by_llmdash", False),
+            },
+            "exa": {
+                "name": exa_slot.credential_name,
+                "ref": voidware_auth.safe_credential_ref(exa_slot.credential_ref),
+                "meta": exa_slot.credential_meta or {},
+                "grant": exa_slot.credential_grant or {},
+                "grant_status": exa_auth.get("grant_status") or voidware_auth.grant_renewal_status(exa_slot.credential_grant),
+                "managed_by_llmdash": exa_auth.get("managed_by_llmdash", False),
+            },
+            "llmstats": {
+                "name": llmstats_slot.credential_name,
+                "ref": voidware_auth.safe_credential_ref(llmstats_slot.credential_ref),
+                "meta": llmstats_slot.credential_meta or {},
+                "grant": llmstats_slot.credential_grant or {},
+                "grant_status": llmstats_auth.get("grant_status") or voidware_auth.grant_renewal_status(llmstats_slot.credential_grant),
+                "managed_by_llmdash": llmstats_auth.get("managed_by_llmdash", False),
+            },
+        },
         "auth": {
             "precedence": ["env", "voidware-provider", "voidware-broker", "voidware-keystore", "keyring-legacy"],
             "broker": voidware_auth.broker_status(),
@@ -550,6 +999,7 @@ def load_provider_config() -> ProviderConfig:
     endpoint_mode = normalize_endpoint_mode(os.environ.get(ENDPOINT_MODE_ENV) or provider.get("endpoint_mode"))
     request_headers = provider.get("request_headers") or {}
     provider_credential_name = str(provider.get("provider_credential_name") or "").strip()
+    provider_credential_ref = str(provider.get("provider_credential_ref") or "").strip()
     provider_credential_meta = _safe_provider_credential_meta(provider.get("provider_credential_meta"))
     provider_credential_grant = provider.get("provider_credential_grant")
     if os.environ.get(REQUEST_HEADERS_ENV):
@@ -569,6 +1019,7 @@ def load_provider_config() -> ProviderConfig:
         endpoint_mode=endpoint_mode,
         request_headers=_normalize_header_map(request_headers),
         provider_credential_name=provider_credential_name,
+        provider_credential_ref=provider_credential_ref,
         provider_credential_meta=provider_credential_meta,
         provider_credential_grant=provider_credential_grant if isinstance(provider_credential_grant, dict) else {},
     )
@@ -614,6 +1065,7 @@ def load_provider_bundle() -> ProviderBundle:
             PROVIDER_KEY_NAMES,
             voidware_auth.PROVIDER_SECRET_NAME,
             config.provider_credential_name,
+            config.provider_credential_ref,
         )),
     )
 
@@ -628,22 +1080,30 @@ def save_provider(
     endpoint_mode: str = ENDPOINT_MODE_APPEND_V1,
     request_headers: dict[str, str] | None = None,
     provider_credential_name: str | None = None,
+    provider_credential_ref: str | dict[str, Any] | None = None,
     provider_credential_meta: dict[str, Any] | None = None,
 ) -> ProviderBundle:
     current = load_provider_config()
     mode = normalize_endpoint_mode(endpoint_mode)
     selected_name = current.provider_credential_name if provider_credential_name is None else str(provider_credential_name or "").strip()
+    selected_ref = current.provider_credential_ref if provider_credential_ref is None else voidware_auth.serialize_credential_ref(provider_credential_ref)
     selected_meta = current.provider_credential_meta or {}
     selected_grant = current.provider_credential_grant or {}
     resolved_secret = str(api_key or "").strip()
     if api_key:
         selected_name = ""
+        selected_ref = ""
         selected_meta = {}
         selected_grant = {}
-    elif selected_name:
+    elif selected_name or selected_ref:
         try:
-            secret_info = voidware_auth.read_secret_with_grant(selected_name)
+            secret_info = voidware_auth.read_secret_with_grant(
+                selected_name,
+                credential_ref=selected_ref or None,
+            )
         except voidware_auth.VoidwareAuthError as exc:
+            if exc.code in voidware_auth.FRESH_GRANT_CODES:
+                selected_grant = {}
             raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
         if not secret_info.get("secret"):
             raise ConfigError("Selected Voidware credential did not return a secret.")
@@ -664,6 +1124,7 @@ def save_provider(
         endpoint_mode=mode,
         request_headers=_normalize_header_map(request_headers or {}),
         provider_credential_name=selected_name,
+        provider_credential_ref=selected_ref,
         provider_credential_meta=selected_meta,
         provider_credential_grant=selected_grant,
     )
@@ -671,7 +1132,7 @@ def save_provider(
         save_provider_api_key(api_key)
 
     data = _load_config_file()
-    data["version"] = 1
+    data["version"] = CONFIG_VERSION
     data["app"] = APP_NAME
     data["provider"] = {
         "base_url": normalized.base_url,
@@ -681,6 +1142,7 @@ def save_provider(
         "endpoint_mode": normalized.endpoint_mode,
         "request_headers": normalized.request_headers or {},
         "provider_credential_name": normalized.provider_credential_name,
+        "provider_credential_ref": normalized.provider_credential_ref,
         "provider_credential_meta": normalized.provider_credential_meta or {},
         "provider_credential_grant": normalized.provider_credential_grant or {},
     }
@@ -702,44 +1164,42 @@ def save_provider_api_key(api_key: str) -> None:
 
 
 def load_exa_api_key() -> str:
-    return _read_secret(EXA_API_KEY_ENVS, EXA_KEY_NAME, voidware_auth.EXA_SECRET_NAME)
-
-
-def save_exa_api_key(api_key: str) -> None:
-    secret = str(api_key or "").strip()
-    if not secret:
-        raise ConfigError("api_key is required")
-    _save_secret(
-        voidware_auth.EXA_SECRET_NAME,
+    slot = load_credential_slot("exa")
+    return _read_secret(
+        EXA_API_KEY_ENVS,
         EXA_KEY_NAME,
-        secret,
-        metadata={"label": "LLM-Dash Exa", "envVar": EXA_KEY_NAME},
-        custom={"app": APP_NAME, "kind": "exa"},
+        voidware_auth.EXA_SECRET_NAME,
+        slot.credential_name,
+        slot.credential_ref,
     )
 
 
+def save_exa_api_key(api_key: str) -> None:
+    save_slot_api_key("exa", api_key)
+
+
 def remove_exa_api_key() -> None:
+    clear_credential_slot_selection("exa")
     _remove_secret(voidware_auth.EXA_SECRET_NAME, (EXA_KEY_NAME,))
 
 
 def load_llmstats_api_key() -> str:
-    return _read_secret(LLMSTATS_API_KEY_ENVS, LLMSTATS_KEY_NAME, voidware_auth.LLMSTATS_SECRET_NAME)
-
-
-def save_llmstats_api_key(api_key: str) -> None:
-    secret = str(api_key or "").strip()
-    if not secret:
-        raise ConfigError("api_key is required")
-    _save_secret(
-        voidware_auth.LLMSTATS_SECRET_NAME,
+    slot = load_credential_slot("llmstats")
+    return _read_secret(
+        LLMSTATS_API_KEY_ENVS,
         LLMSTATS_KEY_NAME,
-        secret,
-        metadata={"label": "LLM-Dash LLM Stats", "envVar": LLMSTATS_KEY_NAME},
-        custom={"app": APP_NAME, "kind": "llmstats"},
+        voidware_auth.LLMSTATS_SECRET_NAME,
+        slot.credential_name,
+        slot.credential_ref,
     )
 
 
+def save_llmstats_api_key(api_key: str) -> None:
+    save_slot_api_key("llmstats", api_key)
+
+
 def remove_llmstats_api_key() -> None:
+    clear_credential_slot_selection("llmstats")
     _remove_secret(voidware_auth.LLMSTATS_SECRET_NAME, (LLMSTATS_KEY_NAME,))
 
 

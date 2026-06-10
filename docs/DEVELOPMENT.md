@@ -50,11 +50,16 @@ To return a local install to first-run state, use `./run.sh --reset` or
 | Database | `data/dash.sqlite` + WAL/SHM/journal sidecars |
 | Metrics CSV | `data/run_metrics.csv` |
 | Run logs | `logs/run-update-*.log`, `logs/server.log`, `logs/scheduled-run.log` |
-| UI state | `localStorage` (cleared via `?reset=1` on next load) |
+| Broker grants | LLM-Dash's own Voidware broker grants/access tokens (revoked via the local CLI when the broker is reachable; skipped with a warning otherwise) and the legacy `llm-dash-voidware-grants` keyring cache |
+| UI state | `localStorage` (cleared via `?setup=1` / `?reset=1` on next load) |
+
+After a launcher reset the app opens guided setup mode (`?setup=1`): a step
+rail over the Settings pages (Connection, Models, Research, Schedule, Finish).
+In-app full reset (Settings → Reset) lands in the same mode.
 
 **Not removed:** `changelogs/*.md` (append-only audit history; Settings → Reset
 with typed confirmation is the deliberate operator exception),
-Voidware broker grants/secrets, reusable provider credentials,
+Voidware credentials and auth files, reusable provider credentials,
 keyring/keystore secrets, `web/` static assets, Python virtual environment.
 
 ### Environment Variables

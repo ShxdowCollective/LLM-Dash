@@ -7,18 +7,21 @@ Use `[ ]` only for still-open work.
 
 ## Now
 
-**Reset + Voidware credential remediation — PLANNED (2026-06-10).**
-Implementation plan:
-[`docs/plans/2026-06-10-reset-voidware-credentials-nanoagent-plan.md`](docs/plans/2026-06-10-reset-voidware-credentials-nanoagent-plan.md).
-Scope: fix janky Settings reset feedback, send typed reset confirmations, add
-post-full-reset setup mode, clear LLM-Dash broker grants/tokens without deleting
-Voidware credentials, and replace the Connection/Exa/LLM Stats raw-key flows
-with selectable/editable Voidware credential slots. No implementation has been
-done yet; plan was scoped with two flash nano-agent explorers and reviewed by a
-pro nano-agent.
-
 All M12/M13 follow-ups are closed. Next data refresh runs via
 [`skill/SKILL.md`](skill/SKILL.md) unless development work is active.
+
+Deferred follow-ups from the 2026-06-10 reset/credential work (see plan Status
+section for context; pick up when credential UX gets another pass):
+
+- [ ] Provider slot exact-source ref candidates — Connection candidates are
+  still name-collapsed provider-discovery rows; Exa/LLM Stats already use
+  `discoverAuthRefs` rows.
+- [ ] Ref-bound write/delete broker operations (`auth:ref:write|delete`) so
+  same-name multi-source credentials cannot be mutated on the wrong source;
+  mutations are currently name-bound with ref identity used for reads only.
+- [ ] Keyring-wide purge of legacy `llm-dash-voidware-grants` cache entries
+  written under older auth fingerprints (currently derived-account best effort;
+  stale entries expire on their own TTL).
 
 Standing maintenance notes (not tasks — handled as they come up during update
 runs):
@@ -30,6 +33,20 @@ runs):
 - Prefer exact per-model `card_url`s as update runs read new model cards.
 
 ## Recent Completed
+
+**Reset + Voidware credential remediation — DONE (2026-06-10).** Implemented
+[`docs/plans/2026-06-10-reset-voidware-credentials-nanoagent-plan.md`](docs/plans/2026-06-10-reset-voidware-credentials-nanoagent-plan.md):
+typed reset confirmations actually sent, global reset busy guard + in-tab
+progress/result surface, `409` reset guard during active update jobs, full
+reset now revokes LLM-Dash broker grants (credentials preserved) and lands in
+a guided setup mode (`?setup=1` step rail: Connection → Models → Research →
+Schedule → Finish), config v2 credential slots for Connection/Exa/LLM Stats
+with ref-aware discovery/selection, add/edit secret UX with server-side
+external-mutation enforcement (live-metadata ownership, fail-closed), an
+operation-aware approval modal (password-only for common flows, deny endpoint,
+state scrubbing), and 120d grants in the official `voidware-client-grants`
+namespace. 53 tests, live endpoint smoke, and headed screenshots
+(`e2e/screenshots/m14-reset-credentials/`). Three follow-ups deferred (see Now).
 
 **Desktop scale and color polish — DONE (2026-06-09).** Enlarged the desktop
 Models workbench for 1440p displays without changing the vanilla app structure:

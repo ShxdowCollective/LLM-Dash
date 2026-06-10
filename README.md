@@ -109,10 +109,11 @@ run.bat --reset               # Windows
 ```
 
 Clears local provider/schedule settings, deletes generated dashboard data and
-run logs, restarts from the bootstrap seed, clears saved UI preferences, and
-opens Settings.
-Historical `changelogs/*.md`, Voidware broker grants/secrets, legacy
-`~/.shxdow/auth.json`, and keyring/keystore secrets are left alone.
+run logs, revokes LLM-Dash's own Voidware broker grants/access tokens, restarts
+from the bootstrap seed, clears saved UI preferences, and opens guided setup
+mode (`?setup=1`).
+Historical `changelogs/*.md`, Voidware credentials, legacy
+`~/.shxdow/auth.json`, and keyring/keystore secrets are never deleted.
 
 Saved Voidware credentials use the local Voidware 1.0.4 package and CLI service bridge.
 For source-tree testing, set `VOIDWARE_CLI_SERVICE_MODULE` to the built

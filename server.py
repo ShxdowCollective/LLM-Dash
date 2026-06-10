@@ -21,11 +21,15 @@ from pydantic import BaseModel
 from scripts import voidware_auth
 from scripts.config import (
     LLMSTATS_BASE_URL,
+    CREDENTIAL_SLOTS,
     ConfigError,
     ProviderBundle,
     ProviderConfig,
     ProviderSecrets,
     build_auth_headers,
+    clear_credential_slot_selection,
+    delete_slot_credential,
+    discover_all_credential_slots,
     load_llmstats_api_key,
     load_provider_config,
     load_provider_bundle,
@@ -37,8 +41,12 @@ from scripts.config import (
     remove_llmstats_api_key,
     remove_provider_api_key,
     save_exa_api_key,
-    save_llmstats_api_key,
     save_provider,
+    save_slot_api_key,
+    save_exa_api_key,
+    save_llmstats_api_key,
+    select_credential_slot,
+    update_slot_api_key,
 )
 from scripts.migrate_score_checks import migrate as migrate_score_checks
 from scripts.migrate_model_metadata_v4 import migrate as migrate_metadata_v4
@@ -100,7 +108,20 @@ class LLMStatsPayload(BaseModel):
 
 
 class VoidwareGrantPayload(BaseModel):
-    credential_name: str
+    credential_name: str = ""
+    credential_ref: dict[str, Any] | None = None
+
+
+class CredentialSlotSelectPayload(BaseModel):
+    credential_name: str = ""
+    credential_ref: dict[str, Any] | None = None
+    credential_meta: dict[str, Any] | None = None
+
+
+class CredentialSlotSecretPayload(BaseModel):
+    api_key: str
+    external_mutation: bool = False
+    require_fresh_grant: bool = False
 
 
 class VoidwareApprovalPayload(BaseModel):
@@ -266,6 +287,11 @@ def _watch_job(job_id: str, process: subprocess.Popen[str], log_path: Path) -> N
         job["exit_code"] = exit_code
         job["state"] = "succeeded" if exit_code == 0 else "failed"
         job["tail"] = _safe_tail(log_path)
+
+
+def _any_update_job_running() -> bool:
+    with _jobs_lock:
+        return any(job.get("state") == "running" for job in _jobs.values())
 
 
 def _last_updated() -> str | None:
@@ -510,13 +536,147 @@ def post_voidware_broker_stop() -> dict[str, Any]:
         raise _voidware_auth_http_error(exc) from exc
 
 
+def _validate_slot(slot: str) -> str:
+    normalized = slot.strip().lower()
+    if normalized not in CREDENTIAL_SLOTS:
+        raise HTTPException(status_code=404, detail=f"Unknown credential slot: {slot}")
+    return normalized
+
+
+@app.get("/api/credentials/discovery")
+def get_credentials_discovery() -> dict[str, Any]:
+    try:
+        return discover_all_credential_slots()
+    except voidware_auth.VoidwareAuthError as exc:
+        raise _voidware_auth_http_error(exc) from exc
+    except ConfigError as exc:
+        raise _http_error(exc)
+
+
+@app.get("/api/credentials/slots")
+def get_credentials_slots() -> dict[str, Any]:
+    try:
+        state = public_provider_state()
+        return {
+            "slots": state.get("credential_slots") or {},
+            "auth": state.get("auth") or {},
+        }
+    except voidware_auth.VoidwareAuthError as exc:
+        raise _voidware_auth_http_error(exc) from exc
+    except ConfigError as exc:
+        raise _http_error(exc)
+
+
+@app.post("/api/credentials/slots/{slot}/select")
+def post_credentials_slot_select(slot: str, payload: CredentialSlotSelectPayload) -> dict[str, Any]:
+    slot = _validate_slot(slot)
+    try:
+        selection = select_credential_slot(
+            slot,
+            credential_name=payload.credential_name,
+            credential_ref=payload.credential_ref,
+            credential_meta=payload.credential_meta,
+        )
+        return {
+            "slot": slot,
+            "selection": {
+                "name": selection.credential_name,
+                "ref": voidware_auth.safe_credential_ref(selection.credential_ref),
+                "meta": selection.credential_meta or {},
+                "grant": selection.credential_grant or {},
+                "grant_status": voidware_auth.grant_renewal_status(selection.credential_grant),
+            },
+        }
+    except voidware_auth.VoidwareAuthError as exc:
+        raise _voidware_auth_http_error(exc) from exc
+    except ConfigError as exc:
+        raise _http_error(exc)
+
+
+@app.post("/api/credentials/slots/{slot}/save")
+def post_credentials_slot_save(slot: str, payload: CredentialSlotSecretPayload) -> dict[str, Any]:
+    slot = _validate_slot(slot)
+    try:
+        selection = save_slot_api_key(slot, payload.api_key)
+        return {
+            "slot": slot,
+            "configured": True,
+            "selection": {
+                "name": selection.credential_name,
+                "ref": voidware_auth.safe_credential_ref(selection.credential_ref),
+                "meta": selection.credential_meta or {},
+                "grant": selection.credential_grant or {},
+            },
+        }
+    except voidware_auth.VoidwareAuthError as exc:
+        raise _voidware_auth_http_error(exc) from exc
+    except ConfigError as exc:
+        raise _http_error(exc)
+
+
+@app.post("/api/credentials/slots/{slot}/update")
+def post_credentials_slot_update(slot: str, payload: CredentialSlotSecretPayload) -> dict[str, Any]:
+    slot = _validate_slot(slot)
+    try:
+        selection = update_slot_api_key(
+            slot,
+            payload.api_key,
+            external_mutation=payload.external_mutation,
+            require_fresh_grant=payload.require_fresh_grant,
+        )
+        return {
+            "slot": slot,
+            "selection": {
+                "name": selection.credential_name,
+                "ref": voidware_auth.safe_credential_ref(selection.credential_ref),
+                "meta": selection.credential_meta or {},
+                "grant": selection.credential_grant or {},
+            },
+        }
+    except voidware_auth.VoidwareAuthError as exc:
+        raise _voidware_auth_http_error(exc) from exc
+    except ConfigError as exc:
+        raise _http_error(exc, status_code=403 if "not managed by LLM-Dash" in str(exc) else 400)
+
+
+@app.delete("/api/credentials/slots/{slot}/selection")
+def delete_credentials_slot_selection(slot: str) -> dict[str, Any]:
+    slot = _validate_slot(slot)
+    try:
+        clear_credential_slot_selection(slot)
+        return {"slot": slot, "selection_cleared": True}
+    except ConfigError as exc:
+        raise _http_error(exc)
+
+
+@app.delete("/api/credentials/slots/{slot}/credential")
+def delete_credentials_slot_credential(
+    slot: str,
+    external_mutation: bool = False,
+    require_fresh_grant: bool = False,
+) -> dict[str, Any]:
+    slot = _validate_slot(slot)
+    try:
+        delete_slot_credential(
+            slot,
+            external_mutation=external_mutation,
+            require_fresh_grant=require_fresh_grant,
+        )
+        return {"slot": slot, "credential_deleted": True}
+    except voidware_auth.VoidwareAuthError as exc:
+        raise _voidware_auth_http_error(exc) from exc
+    except ConfigError as exc:
+        raise _http_error(exc, status_code=403 if "not managed by LLM-Dash" in str(exc) else 400)
+
+
 @app.post("/api/voidware/broker/grant")
 def post_voidware_broker_grant(payload: VoidwareGrantPayload) -> dict[str, Any]:
     name = payload.credential_name.strip()
-    if not name:
-        raise _http_error(ValueError("credential_name is required."))
+    ref = voidware_auth.safe_credential_ref(payload.credential_ref)
+    if not name and not ref:
+        raise _http_error(ValueError("credential_name or credential_ref is required."))
     try:
-        result = voidware_auth.request_credential_access_grant(name)
+        result = voidware_auth.request_credential_access_grant(name or str(ref.get("name") or ""), credential_ref=ref or None)
     except voidware_auth.VoidwareAuthError as exc:
         raise _voidware_auth_http_error(exc) from exc
     if result.get("pending"):
@@ -814,9 +974,16 @@ def run_update_status(job_id: str) -> dict[str, Any]:
 @app.post("/api/reset")
 def post_reset(payload: ResetPayload) -> dict[str, Any]:
     """Scoped destructive reset for the same local operator who can run
-    ./run.sh --reset. Requires a scope-specific typed confirm_token. Never
-    touches Voidware credentials, keyring secrets, or broker grants."""
+    ./run.sh --reset. Requires a scope-specific typed confirm_token. Clears
+    LLM-Dash broker grants on full reset only. Never deletes Voidware
+    credentials or keyring secrets."""
     from scripts.reset_local_state import RESET_TOKENS, run_scope
+
+    if _any_update_job_running():
+        raise HTTPException(
+            status_code=409,
+            detail="An update job is running. Wait for it to finish before resetting.",
+        )
 
     scope = (payload.scope or "").strip().lower()
     if scope not in RESET_TOKENS:

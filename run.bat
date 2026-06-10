@@ -2,7 +2,7 @@
 rem LLM-Dash - Windows launcher.
 rem Creates/uses a repo-local .venv, installs deps, starts uvicorn, opens the browser.
 rem Use --silent to detach the server and print the URL for startup tasks.
-rem Use --reset to clear local settings/data and open Settings.
+rem Use --reset to clear local settings/data and open setup mode.
 
 setlocal enableextensions
 
@@ -57,7 +57,7 @@ exit /b 2
 :args_done
 
 if "%SILENT%"=="1" if "%RESET%"=="1" (
-  echo LLM-Dash: --reset opens Settings and cannot be combined with --silent. 1>&2
+  echo LLM-Dash: --reset opens setup mode and cannot be combined with --silent. 1>&2
   exit /b 2
 )
 
@@ -115,7 +115,7 @@ if "%RESET%"=="1" (
     if "%SILENT%"=="0" pause
     exit /b 1
   )
-  set "OPEN_URL=%URL%/?reset=1"
+  set "OPEN_URL=%URL%/?setup=1"
 )
 
 if "%SILENT%"=="1" (

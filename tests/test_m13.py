@@ -5,11 +5,14 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
+from fastapi.testclient import TestClient
 
 import scripts.init_db as init_db
 import scripts.reset_local_state as rls
+import server
 from scripts.migrate_model_metadata_v4 import migrate as migrate_v4
 from scripts.run_update import canonical_capabilities as ru_caps, RunUpdateError
 
@@ -145,3 +148,102 @@ def test_reset_models_reseeds(tmp_path):
 
 def test_reset_tokens_table_matches_scopes():
     assert rls.RESET_TOKENS == {"stats": "STATS", "changelog": "CHANGELOG", "models": "MODELS", "full": "RESET"}
+
+
+def test_reset_full_invokes_grant_cleanup(tmp_path):
+    db = _seed(tmp_path)
+    _point_rls(tmp_path, db)
+    grant_summary = {"revoked": ["grant-1"], "removed_cache": ["legacy-grant-cache:abc"], "warnings": []}
+    with patch("scripts.reset_local_state.clear_llmdash_grants", return_value=grant_summary) as clear:
+        out = rls.reset_full()
+    clear.assert_called_once_with(dry_run=False, secret_names=[])
+    assert "grants: revoked 1 LLM-Dash grant(s)" in out["removed_files"]
+    assert "legacy-grant-cache:abc" in out["removed_files"]
+
+
+def test_partial_reset_does_not_clear_grants(tmp_path):
+    db = _seed(tmp_path)
+    _point_rls(tmp_path, db)
+    with patch("scripts.reset_local_state.clear_llmdash_grants") as clear:
+        rls.reset_stats()
+    clear.assert_not_called()
+
+
+def test_reset_local_state_dry_run_previews_grant_cleanup(tmp_path, monkeypatch):
+    monkeypatch.setattr(rls, "SCHEDULE_PATH", tmp_path / "schedule.json")
+    monkeypatch.setattr(rls, "config_path", lambda: tmp_path / "config.json")
+    monkeypatch.setattr(rls, "DB_PATH", tmp_path / "dash.sqlite")
+    monkeypatch.setattr(rls, "CSV_PATH", tmp_path / "run_metrics.csv")
+    monkeypatch.setattr(rls, "LOGS_DIR", tmp_path / "logs")
+    grant_summary = {"revoked": ["grant-preview"], "removed_cache": [], "warnings": ["grant cleanup preview: would revoke 1 LLM-Dash grant(s)"]}
+    with patch("scripts.reset_local_state.clear_llmdash_grants", return_value=grant_summary) as clear:
+        removed, warnings = rls.reset_local_state(dry_run=True)
+    clear.assert_called_once_with(dry_run=True, secret_names=[])
+    assert any("grants: would revoke" in item for item in removed)
+    assert any("grant cleanup preview" in item for item in warnings)
+
+
+def test_api_reset_rejects_wrong_token(tmp_path):
+    db = _seed(tmp_path)
+    server.DB_PATH = db
+    client = TestClient(server.app)
+    resp = client.post("/api/reset", json={"scope": "stats", "confirm_token": "NOPE"})
+    assert resp.status_code == 400
+
+
+def test_api_reset_accepts_correct_token(tmp_path):
+    db = _seed(tmp_path)
+    _point_rls(tmp_path, db)
+    server.DB_PATH = db
+    client = TestClient(server.app)
+    with patch("scripts.reset_local_state.clear_llmdash_grants", return_value={"revoked": [], "removed_cache": [], "warnings": []}):
+        resp = client.post("/api/reset", json={"scope": "stats", "confirm_token": "STATS"})
+    assert resp.status_code == 200
+    assert resp.json()["scope"] == "stats"
+
+
+def test_api_reset_blocks_active_update_job(tmp_path):
+    db = _seed(tmp_path)
+    server.DB_PATH = db
+    client = TestClient(server.app)
+    with server._jobs_lock:
+        server._jobs.clear()
+        server._jobs["job-1"] = {"id": "job-1", "state": "running"}
+    try:
+        resp = client.post("/api/reset", json={"scope": "stats", "confirm_token": "STATS"})
+        assert resp.status_code == 409
+    finally:
+        with server._jobs_lock:
+            server._jobs.clear()
+
+
+def test_api_full_reset_includes_grant_cleanup_warnings(tmp_path):
+    db = _seed(tmp_path)
+    _point_rls(tmp_path, db)
+    server.DB_PATH = db
+    client = TestClient(server.app)
+    grant_summary = {"revoked": [], "removed_cache": [], "warnings": ["grant cleanup skipped: broker unavailable"]}
+    with patch("scripts.reset_local_state.clear_llmdash_grants", return_value=grant_summary):
+        resp = client.post("/api/reset", json={"scope": "full", "confirm_token": "RESET"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["scope"] == "full"
+    assert any("broker unavailable" in item for item in body.get("warnings", []))
+
+
+def test_api_external_credential_mutation_returns_403(tmp_path):
+    from scripts.config import ConfigError
+
+    db = _seed(tmp_path)
+    server.DB_PATH = db
+    client = TestClient(server.app)
+    rejection = ConfigError(
+        "This credential is not managed by LLM-Dash. External mutation requires "
+        "external_mutation=true and require_fresh_grant=true."
+    )
+    with patch("server.update_slot_api_key", side_effect=rejection):
+        resp = client.post("/api/credentials/slots/exa/update", json={"api_key": "sk-x"})
+    assert resp.status_code == 403
+    with patch("server.delete_slot_credential", side_effect=rejection):
+        resp = client.delete("/api/credentials/slots/exa/credential")
+    assert resp.status_code == 403

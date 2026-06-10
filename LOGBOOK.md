@@ -3,6 +3,61 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 114 — 2026-06-10
+
+**Agent:** Claude Fable 5 (Vex, orchestrating)
+**Cycle:** Reset + Voidware credential remediation implementation
+**Task:** Implement the full Entry-113 plan via shxdowflow nano-agent dispatch
+
+---
+
+Implemented `docs/plans/2026-06-10-reset-voidware-credentials-nanoagent-plan.md`
+end to end. Three write-enabled pro nano-agents did the heavy lifting
+(NA-impl-1: reset reliability + setup mode + grant cleanup; NA-impl-2:
+discovery/config v2/grant scoping backend; NA-impl-3: slot UX + approval
+modal), a pro nano reviewed the final tree, and the main agent reviewed every
+diff, fixed review findings, and ran all verification.
+
+What shipped:
+
+- Reset: typed token actually sent, global busy guard, in-tab progress/result
+  surface with cleared/removed/reseeded/warning counts, `409` when an in-app
+  update job is running, full reset revokes LLM-Dash broker grants via the
+  local CLI (`grants list/revoke/cleanup`, warning-only when the broker is
+  down) and clears the in-process approved-secret cache. Voidware credentials
+  are never deleted. `--dry-run` previews grant cleanup.
+- Setup mode: `?setup=1` (launchers + in-app full reset) opens a Settings-backed
+  step rail (Connection, Models, Research, Schedule, Finish); finish lands on
+  Models. Separate `state.setupMode` from the legacy `resetMode` prefs wipe.
+- Credential slots: config v2 (in-place migration, no rewrite churn) persists
+  selected ref/name + safe metadata + grant metadata for provider/exa/llmstats.
+  `/api/credentials/*` routes for discovery/select/save/update/delete with
+  server-side external-mutation enforcement — ownership verified against live
+  Voidware ref metadata (`custom.app`/`kind`), fail-closed, dual-flag + fresh
+  password approval required for external edit/delete (`forceRefresh` plumbed
+  through the bridge).
+- Approval modal: renders from broker metadata (operation, target, scopes,
+  TTL, passwordRequired/secretRequired); common flows are password-only; staged
+  app secrets never render a Secret box; deny/close hits the broker deny
+  endpoint and scrubs all secret state.
+- Grants: 120d durable grants in the official `voidware-client-grants`
+  namespace; legacy `llm-dash-voidware-grants` is read-fallback + cleanup-only
+  (derived-account deletion for known secret names in both namespaces).
+
+Review findings fixed before ship: default-name ownership bypass in
+`_slot_managed`, config v2 rewrite-on-every-load, no-op legacy cache cleanup,
+full-reset summary skipped before redirect, 90-day doc drift, dead duplicated
+block in `delete_slot_credential`. Deferred follow-ups live in TODO.md
+(provider ref candidates, ref-bound mutations, fingerprint-stale cache purge).
+
+Verification: 53/53 pytest, py_compile, `node --check` on both JS entry
+points, `git diff --check`, `npm run smoke:voidware`, live endpoint smoke with
+isolated `LLM_DASH_SHXDOW_ROOT`, and headed screenshots
+(`e2e/screenshots/m14-reset-credentials/`) confirming setup mode, research
+slots, and the reset tab render clean. No real Voidware auth stores touched.
+
+---
+
 ## Entry 113 — 2026-06-10
 
 **Agent:** Codex GPT-5 (Sable, planning)
