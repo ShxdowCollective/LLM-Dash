@@ -31,6 +31,7 @@ LEGACY_CLIENT_GRANT_SERVICE_NAME = "llm-dash-voidware-grants"
 OFFICIAL_CLIENT_GRANT_SERVICE_NAME = "voidware-client-grants"
 CLIENT_GRANT_SERVICE_NAME = LEGACY_CLIENT_GRANT_SERVICE_NAME
 BRIDGE_PATH = ROOT / "scripts" / "voidware_app_broker.mjs"
+INSTALL_OVER_MARKER_FILE = ".shxdowgen-install-over-marker"
 
 GRANT_RE = re.compile(r"vwgr_[A-Za-z0-9._-]+")
 FRESH_GRANT_CODES = {
@@ -165,6 +166,62 @@ def _context_flags() -> list[str]:
     return ["--shxdowdir", str(Path(root).expanduser())] if root else []
 
 
+def _shxdow_dir() -> Path:
+    return Path(os.environ.get("LLM_DASH_SHXDOW_ROOT") or (Path.home() / ".shxdow")).expanduser()
+
+
+def _auth_file_path() -> Path:
+    return _shxdow_dir() / "auth.json"
+
+
+def _read_json_file(path: Path) -> dict[str, Any] | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _is_legacy_install_over_auth_marker(path: Path | None = None) -> bool:
+    data = _read_json_file(path or _auth_file_path())
+    if not data:
+        return False
+    return (
+        set(data) == {"marker", "version", "credentials"}
+        and data.get("version") == 3
+        and isinstance(data.get("marker"), str)
+        and bool(str(data.get("marker")).strip())
+        and data.get("credentials") == {}
+    )
+
+
+def _legacy_marker_empty_result() -> dict[str, Any]:
+    return {
+        "secret": "",
+        "grant": {},
+        "recovered": "legacy-install-over-marker",
+        "markerFile": str(_shxdow_dir() / INSTALL_OVER_MARKER_FILE),
+    }
+
+
+def _move_legacy_install_over_auth_marker() -> bool:
+    auth_file = _auth_file_path()
+    if not _is_legacy_install_over_auth_marker(auth_file):
+        return False
+    marker_file = auth_file.with_name(INSTALL_OVER_MARKER_FILE)
+    try:
+        marker_file.write_text(auth_file.read_text(encoding="utf-8"), encoding="utf-8")
+        auth_file.unlink()
+        return True
+    except OSError as exc:
+        raise VoidwareAuthError(
+            "Could not move old install-over verification marker out of auth.json.",
+            code="legacy_marker_move_failed",
+        ) from exc
+
+
 def resolve_cli() -> list[str] | None:
     override = os.environ.get("VOIDWARE_CLI")
     if override:
@@ -271,6 +328,22 @@ def _run(args: list[str], *, secret: str | None = None, timeout: int = DEFAULT_B
 
 
 def broker_status() -> dict[str, Any]:
+    if _is_legacy_install_over_auth_marker():
+        return {
+            "available": False,
+            "cli_available": False,
+            "bridge_available": False,
+            "bridge_error_code": "legacy_install_over_marker",
+            "bridge_error": "Old install-over verification marker detected in auth.json; treating it as empty credentials.",
+            "persistence": "",
+            "approval_surface": "",
+            "can_approve": False,
+            "durable_grants": False,
+            "durable_secrets": False,
+            "error_code": "legacy_install_over_marker",
+            "grant_ttl": MAX_GRANT_TTL,
+            "bootstrap_actions": [],
+        }
     try:
         response = _BRIDGE.request("status", timeout=8)
         status = response.get("status") if isinstance(response.get("status"), dict) else {}
@@ -483,7 +556,7 @@ def _fingerprint_file(path: Path) -> str:
 
 
 def _auth_fingerprint() -> str:
-    shxdow_dir = Path(os.environ.get("LLM_DASH_SHXDOW_ROOT") or (Path.home() / ".shxdow")).expanduser()
+    shxdow_dir = _shxdow_dir()
     payload = {
         "authFile": str(shxdow_dir / "auth.json"),
         "fileState": _fingerprint_file(shxdow_dir / "auth.json"),
@@ -635,6 +708,8 @@ def request_credential_access_grant(name: str) -> dict[str, Any]:
 
 
 def read_secret_with_grant(name: str, *, require_fresh_grant: bool = False) -> dict[str, Any]:
+    if _is_legacy_install_over_auth_marker():
+        return _legacy_marker_empty_result()
     cached_approval = _APPROVED_SECRET_CACHE.get(name)
     if cached_approval and not require_fresh_grant:
         return {
@@ -676,6 +751,8 @@ def read_secret(name: str) -> str:
 
 
 def discover_provider_credentials(*, reusable_only: bool = True) -> list[dict[str, Any]]:
+    if _is_legacy_install_over_auth_marker():
+        return []
     try:
         response = _BRIDGE.request("discoverProviders", {"reusableOnly": reusable_only}, timeout=12)
         data = response.get("data")
@@ -703,6 +780,7 @@ def discover_provider_credentials(*, reusable_only: bool = True) -> list[dict[st
 
 
 def write_secret(name: str, secret: str, *, metadata: dict[str, Any] | None = None, custom: dict[str, Any] | None = None) -> None:
+    _move_legacy_install_over_auth_marker()
     try:
         response = _BRIDGE.request(
             "writeSecret",

@@ -21,6 +21,19 @@ runs):
 
 ## Recent Completed
 
+**Install-over Voidware auth retention hardening — DONE (2026-06-09).**
+Hardened LLM-Dash against old install-over verification marker artifacts:
+marker-only `auth.json` files are treated as empty only for the exact old-tool
+shape (`marker` + `version: 3` + empty `credentials`, no other keys), and new
+secret writes move that marker aside to `.shxdowgen-install-over-marker` before
+Voidware creates a real encrypted auth file. Settings shows targeted recovery
+copy only when that old marker is detected; a marker-less invalid v3 file still
+fails closed. Added regression coverage that generates a valid encrypted v3 file
+through `@shxdowcollective/voidware/auth` and proves marker seeding does not
+overwrite it. The reported install-over scripts are not present in this checkout
+or tracked history, so this repo fixes the LLM-Dash auth/recovery side and
+documents the missing writer scope.
+
 **Metadata backfill follow-ups — DONE (2026-06-09).** Closed the three open
 M13 follow-ups: verified logo coverage for all 10 vendors; researched
 `input_capabilities` for all 34 models from cited primary sources (21 rows

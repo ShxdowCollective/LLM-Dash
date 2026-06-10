@@ -2091,6 +2091,10 @@
   }
 
   function providerStatusCopy() {
+    const broker = state.provider.auth && state.provider.auth.broker ? state.provider.auth.broker : {};
+    if (broker.error_code === "legacy_install_over_marker") {
+      return "Old install marker found. No saved credentials were loaded; saving a new key will move the marker aside.";
+    }
     return state.provider.has_provider ? "Connected. Your key is stored securely on this machine." : "Add a provider to let Refresh run from the dashboard.";
   }
 

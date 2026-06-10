@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -37,6 +39,41 @@ class VoidwareAuthTests(unittest.TestCase):
         patcher = patch.dict(os.environ, env, clear=False)
         patcher.start()
         self.addCleanup(patcher.stop)
+
+    def _write_encrypted_voidware_auth(self, auth_file: Path) -> dict:
+        if not shutil.which("node"):
+            self.skipTest("node is required for Voidware encrypted auth regression")
+        if not (ROOT / "node_modules" / "@shxdowcollective" / "voidware").exists():
+            self.skipTest("@shxdowcollective/voidware is not installed")
+        script = """
+import { setPasswordProvider, saveStoredAuth, getStoredAuth } from '@shxdowcollective/voidware/auth'
+import { readFile } from 'node:fs/promises'
+
+const authPath = process.argv[2]
+setPasswordProvider(async () => 'llm-dash-install-over-regression')
+await saveStoredAuth(
+  'alpha',
+  {
+    name: 'alpha',
+    secret: 'sk-real-retained',
+    baseURL: 'https://api.alpha.example',
+    providerFamily: 'openai',
+  },
+  { authOverridePath: authPath, skipKeyring: true },
+)
+const auth = await getStoredAuth({ name: 'alpha', authOverridePath: authPath, skipKeyring: true })
+const raw = JSON.parse(await readFile(authPath, 'utf8'))
+console.log(JSON.stringify({ auth, raw }))
+"""
+        result = subprocess.run(
+            ["node", "--input-type=module", "-", str(auth_file)],
+            cwd=ROOT,
+            input=script,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        return json.loads(result.stdout)
 
     def test_provider_discovery_filters_and_redacts_reusable_http_credentials(self) -> None:
         raw_candidates = [
@@ -339,6 +376,157 @@ class VoidwareAuthTests(unittest.TestCase):
         read_secret.assert_called_once_with("alpha")
         self.assertTrue(bundle.has_provider)
         self.assertEqual(bundle.secrets.api_key, "sk-from-broker")
+
+    def test_legacy_install_over_marker_auth_file_is_treated_as_empty(self) -> None:
+        auth_file = Path(self.tmp.name) / "auth.json"
+        auth_file.write_text(
+            json.dumps({
+                "marker": "install-over-retention",
+                "version": 3,
+                "credentials": {},
+            }),
+            encoding="utf-8",
+        )
+
+        with patch.object(voidware_auth._BRIDGE, "request") as bridge_request:
+            secret = voidware_auth.read_secret("alpha")
+            discovered = voidware_auth.discover_provider_credentials()
+
+        bridge_request.assert_not_called()
+        self.assertEqual(secret, "")
+        self.assertEqual(discovered, [])
+
+    def test_legacy_install_over_marker_auth_file_overrides_approved_cache(self) -> None:
+        auth_file = Path(self.tmp.name) / "auth.json"
+        auth_file.write_text(
+            json.dumps({
+                "marker": "install-over-retention",
+                "version": 3,
+                "credentials": {},
+            }),
+            encoding="utf-8",
+        )
+        voidware_auth._APPROVED_SECRET_CACHE["alpha"] = {"secret": "sk-cached", "grant": {}}
+
+        self.assertEqual(voidware_auth.read_secret("alpha"), "")
+
+    def test_broker_status_short_circuits_legacy_install_over_marker(self) -> None:
+        auth_file = Path(self.tmp.name) / "auth.json"
+        auth_file.write_text(
+            json.dumps({
+                "marker": "install-over-retention",
+                "version": 3,
+                "credentials": {},
+            }),
+            encoding="utf-8",
+        )
+
+        with patch.object(voidware_auth._BRIDGE, "request") as bridge_request:
+            status = voidware_auth.broker_status()
+
+        bridge_request.assert_not_called()
+        self.assertEqual(status["error_code"], "legacy_install_over_marker")
+
+    def test_public_provider_state_exposes_legacy_marker_for_recovery_copy(self) -> None:
+        auth_file = Path(self.tmp.name) / "auth.json"
+        auth_file.write_text(
+            json.dumps({
+                "marker": "install-over-retention",
+                "version": 3,
+                "credentials": {},
+            }),
+            encoding="utf-8",
+        )
+
+        with patch.object(config.voidware_auth, "discover_provider_credentials", return_value=[]):
+            state = config.public_provider_state()
+
+        self.assertFalse(state["has_provider"])
+        self.assertEqual(state["auth"]["broker"]["error_code"], "legacy_install_over_marker")
+
+    def test_marker_only_without_old_tool_marker_is_not_recovered(self) -> None:
+        auth_file = Path(self.tmp.name) / "auth.json"
+        auth_file.write_text(json.dumps({"version": 3, "credentials": {}}), encoding="utf-8")
+
+        self.assertFalse(voidware_auth._is_legacy_install_over_auth_marker(auth_file))
+
+    def test_valid_empty_encrypted_v3_shape_is_not_marker_recovered(self) -> None:
+        auth_file = Path(self.tmp.name) / "auth.json"
+        auth_file.write_text(
+            json.dumps({
+                "version": 3,
+                "encryption": {
+                    "kdf": "scrypt",
+                    "kdfParams": {"N": 16384, "r": 8, "p": 1, "keyLen": 32},
+                    "cipher": "aes-256-gcm",
+                    "salt": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+                },
+                "credentials": {},
+            }),
+            encoding="utf-8",
+        )
+
+        self.assertFalse(voidware_auth._is_legacy_install_over_auth_marker(auth_file))
+
+    def test_plaintext_v2_and_corrupt_json_are_not_marker_recovered(self) -> None:
+        auth_file = Path(self.tmp.name) / "auth.json"
+        auth_file.write_text(json.dumps({"version": 2, "credentials": {}}), encoding="utf-8")
+        self.assertFalse(voidware_auth._is_legacy_install_over_auth_marker(auth_file))
+
+        auth_file.write_text("{", encoding="utf-8")
+        self.assertFalse(voidware_auth._is_legacy_install_over_auth_marker(auth_file))
+
+    def test_install_over_marker_sidecar_does_not_overwrite_encrypted_auth(self) -> None:
+        auth_file = Path(self.tmp.name) / "auth.json"
+        written = self._write_encrypted_voidware_auth(auth_file)
+        before = auth_file.read_text(encoding="utf-8")
+        marker_file = Path(self.tmp.name) / voidware_auth.INSTALL_OVER_MARKER_FILE
+
+        marker_file.write_text(
+            json.dumps({
+                "marker": "install-over-retention",
+                "version": 3,
+                "credentials": {},
+            }),
+            encoding="utf-8",
+        )
+
+        self.assertEqual(auth_file.read_text(encoding="utf-8"), before)
+        self.assertIn("encryption", json.loads(before))
+        self.assertEqual(written["auth"]["secret"], "sk-real-retained")
+
+    def test_marker_auth_file_is_moved_before_secret_write(self) -> None:
+        auth_file = Path(self.tmp.name) / "auth.json"
+        auth_file.write_text(
+            json.dumps({
+                "marker": "install-over-retention",
+                "version": 3,
+                "credentials": {},
+            }),
+            encoding="utf-8",
+        )
+
+        self.assertTrue(voidware_auth._move_legacy_install_over_auth_marker())
+        self.assertFalse(auth_file.exists())
+        self.assertTrue((Path(self.tmp.name) / voidware_auth.INSTALL_OVER_MARKER_FILE).exists())
+
+    def test_write_secret_moves_marker_auth_file_before_bridge_write(self) -> None:
+        auth_file = Path(self.tmp.name) / "auth.json"
+        auth_file.write_text(
+            json.dumps({
+                "marker": "install-over-retention",
+                "version": 3,
+                "credentials": {},
+            }),
+            encoding="utf-8",
+        )
+
+        with patch.object(voidware_auth._BRIDGE, "request", return_value={"ok": True}) as bridge_request:
+            voidware_auth.write_secret("alpha", "sk-new")
+
+        bridge_request.assert_called_once()
+        self.assertFalse(auth_file.exists())
+        self.assertTrue((Path(self.tmp.name) / voidware_auth.INSTALL_OVER_MARKER_FILE).exists())
 
     def test_public_provider_state_shows_voidware_keystore_source(self) -> None:
         config.config_path().parent.mkdir(parents=True, exist_ok=True)
