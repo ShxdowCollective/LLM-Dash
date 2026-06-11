@@ -7,18 +7,40 @@ Use `[ ]` only for still-open work.
 
 ## Now
 
-All M12/M13 follow-ups are closed. Next data refresh runs via
-[`skill/SKILL.md`](skill/SKILL.md) unless development work is active.
+**Active dev track — Voidware 1.0.5 package-native upgrade + the two credential
+follow-ups. PLANNED, not yet implemented.** Full plan (reviewed):
+[`docs/plans/2026-06-10-voidware-1-0-5-package-native-upgrade.md`](docs/plans/2026-06-10-voidware-1-0-5-package-native-upgrade.md).
 
-Deferred follow-ups from the 2026-06-10 reset/credential work (see plan Status
-section for context; pick up when credential UX gets another pass):
+Key finding from scoping: `@shxdowcollective/voidware-cli@1.0.5` **is** published
+to GitHub Packages (installable with `GH_PACKAGES_KEY` from `.env`), so we drop
+the `~/Repos/voidware` checkout dependency by adding `voidware-cli` as a proper
+npm dep and pointing the bridge + Python CLI resolver at `node_modules` — no
+broker subsystem rewrite. 1.0.5 ships `auth:ref:write|delete|rotate` ops and the
+`clientGrantIndex` / `userClientGrantIndexPath()` purge primitives, which unblock
+both tasks below.
 
-- [ ] Ref-bound write/delete broker operations (`auth:ref:write|delete`) so
-  same-name multi-source credentials cannot be mutated on the wrong source;
-  mutations are currently name-bound with ref identity used for reads only.
-- [ ] Keyring-wide purge of legacy `llm-dash-voidware-grants` cache entries
-  written under older auth fingerprints (currently derived-account best effort;
-  stale entries expire on their own TTL).
+- [ ] **P0 (gate):** bump `voidware` 1.0.4→1.0.5, add `voidware-cli@1.0.5`, add
+  env-var `.npmrc`, resolve cli from `node_modules` (bridge + `resolve_cli`,
+  reorder ahead of `which voidware`), re-vendor CSS, bump version stamps, smoke.
+- [ ] **T1:** ref-bound write/delete broker operations (`auth:ref:write|delete`)
+  so same-name multi-source credentials can't be mutated on the wrong source
+  (mutations are currently name-bound; ref identity used for reads only). Also
+  invalidate the ref-scoped cached grant on mutation.
+- [ ] **T2:** keyring-wide purge of legacy `llm-dash-voidware-grants` entries
+  written under older auth fingerprints, via the client-grant index (currently
+  derived-account best effort; stale entries expire on TTL only).
+- [ ] **T3:** adopt `discoverProviderCredentialsByRef` for the provider-slot
+  exact-source discovery (refactor of the Entry 115 hand-rolled join; keep the
+  emitted candidate shape + name-only fallback).
+
+Decisions resolved 2026-06-10 (see plan): node_modules cli resolves before
+global `which voidware`; token-gated `npm ci` added to launchers; keep
+`~/Repos/voidware` as last-resort fallback; `_remove_secret` becomes ref-aware
+for provider removals; commit `.env.example`; adopt `discoverProviderCredentialsByRef`
+(T3). Execution order P0 → T1 → T2 → T3 (shared files, run sequentially).
+
+Next data refresh runs via [`skill/SKILL.md`](skill/SKILL.md) unless this dev
+track is active.
 
 Standing maintenance notes (not tasks — handled as they come up during update
 runs):
@@ -41,7 +63,7 @@ refs are unavailable. Frontend candidate keys use ref identity
 duplicates by basename. Plan:
 [`docs/plans/2026-06-10-provider-slot-ref-candidates.md`](docs/plans/2026-06-10-provider-slot-ref-candidates.md).
 57 tests. Remaining credential follow-ups (ref-bound mutations, stale cache
-purge) stay in Now — both partly blocked on Voidware 1.0.5.
+purge) are now scoped under the Voidware 1.0.5 upgrade track in Now.
 
 **Reset + Voidware credential remediation — DONE (2026-06-10).** Implemented
 [`docs/plans/2026-06-10-reset-voidware-credentials-nanoagent-plan.md`](docs/plans/2026-06-10-reset-voidware-credentials-nanoagent-plan.md):

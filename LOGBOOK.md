@@ -3,6 +3,59 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 116 — 2026-06-10
+
+**Agent:** Claude Opus 4.8 (Wren, orchestrating)
+**Cycle:** Voidware 1.0.5 upgrade scoping + planning
+**Task:** Scope voidware 1.0.5, decide the upgrade architecture, plan TASK 1+2
+
+---
+
+Planning-only pass (no code changed). Scoped voidware 1.0.5 from primary source
+by diffing freshly fetched 1.0.4 vs 1.0.5 tarballs of both `@shxdowcollective/voidware`
+and `@shxdowcollective/voidware-cli`.
+
+What 1.0.5 actually adds (verified, not from notes): main pkg gains
+`discoverProviderCredentialsByRef` + `userClientGrantIndexPath()`; CSS is
+byte-identical to 1.0.4 (re-vendor is a no-op + VERSION bump). The cli pkg gains
+broker ops `auth:ref:write|delete|rotate` and `clientGrantIndex` /
+grant-cache purge plumbing. README calls it an "integration-hardening release
+[adding] ref-bound broker mutations, purgeable durable client-grant cache
+metadata, and ref-qualified provider discovery" — which maps 1:1 onto the two
+deferred Now tasks.
+
+Architecture decision (user-driven): no dependency on the local `~/Repos/voidware`
+checkout. I first wrongly concluded `voidware-cli` was unpublished after a 401
+then a 404 — but the 404 was my own botched `npm pack` (ran without the scoped
+`.npmrc`), and the 401 was just the home `~/.npmrc` token lacking scope. Phxntom
+pointed at `GH_PACKAGES_KEY` in `.env`; with that token `voidware-cli@1.0.5`
+installs fine and ships `dist/service/index.js` (all 6 broker exports) + `dist/bin.js`.
+So the plan adds `voidware-cli` as a proper npm dep and points the bridge
+(`resolveServiceModule`) + Python `resolve_cli` at `node_modules` instead of the
+checkout — no broker/grant subsystem rewrite, which is what an earlier reading of
+the constraint had threatened.
+
+Flow: I did the primary-source scoping myself (version/API claims gate real code,
+so I verified them directly), ran one pro nano-agent to map the LLM-Dash auth
+integration and one to review the plan. The plan review caught real gaps now
+folded in: ESM `createRequire` for resolution, `which voidware` shadowing the
+pinned dep, launchers never run `npm ci`, `_request_args` has no ref param,
+write/delete don't invalidate the ref-scoped cached grant, ref-scoped accounts
+under stale fingerprints in the T2 purge, and T1/T2 sharing `voidware_auth.py`
+(run sequentially). Plan:
+[`docs/plans/2026-06-10-voidware-1-0-5-package-native-upgrade.md`](docs/plans/2026-06-10-voidware-1-0-5-package-native-upgrade.md)
+— P0 (dep + node_modules wiring, the gate) → T1 (ref write/delete) → T2 (grant
+purge) → T3 (ref-qualified provider discovery). Six decision flags were put to
+Phxntom and all resolved this pass: node_modules cli before global `which
+voidware`; token-gated `npm ci` in the launchers; keep `~/Repos/voidware` as
+last-resort fallback; `_remove_secret` becomes ref-aware for provider removals;
+commit `.env.example`; and **adopt `discoverProviderCredentialsByRef` now** (the
+one non-default pick → new Track T3). Plan + TODO updated with every decision;
+tracks run sequentially since they share `voidware_auth.py`/`config.py`. No
+docs/code touched beyond TODO + this entry + the plan.
+
+---
+
 ## Entry 115 — 2026-06-10
 
 **Agent:** Claude Fable 5 (Vex, orchestrating)
