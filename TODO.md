@@ -7,19 +7,20 @@ Use `[ ]` only for still-open work.
 
 ## Now
 
-**Active dev track — Voidware 1.0.5 package-native upgrade + the two credential
+**Active dev track — Voidware 1.1.0 package-native upgrade + the two credential
 follow-ups. PLANNED, not yet implemented.** Full plan (reviewed):
-[`docs/plans/2026-06-10-voidware-1-0-5-package-native-upgrade.md`](docs/plans/2026-06-10-voidware-1-0-5-package-native-upgrade.md).
+[`docs/plans/2026-06-12-voidware-1-1-0-package-native-upgrade.md`](docs/plans/2026-06-12-voidware-1-1-0-package-native-upgrade.md).
 
-Key finding from scoping: `@shxdowcollective/voidware-cli@1.0.5` **is** published
+Key finding from scoping: `@shxdowcollective/voidware-cli@1.1.0` **is** published
 to GitHub Packages (installable with `GH_PACKAGES_KEY` from `.env`), so we drop
 the `~/Repos/voidware` checkout dependency by adding `voidware-cli` as a proper
 npm dep and pointing the bridge + Python CLI resolver at `node_modules` — no
-broker subsystem rewrite. 1.0.5 ships `auth:ref:write|delete|rotate` ops and the
-`clientGrantIndex` / `userClientGrantIndexPath()` purge primitives, which unblock
-both tasks below.
+broker subsystem rewrite. 1.1.0 ships `auth:ref:write|delete|rotate` ops, the
+`clientGrantIndex` / `userClientGrantIndexPath()` purge primitives, and
+`discoverProviderCredentialsByRef`. 1.1.0 also changes vendor CSS versus the
+current 1.0.4 copy, so P0 needs a real CSS refresh, not a provenance-only bump.
 
-- [ ] **P0 (gate):** bump `voidware` 1.0.4→1.0.5, add `voidware-cli@1.0.5`, add
+- [ ] **P0 (gate):** bump `voidware` 1.0.4→1.1.0, add `voidware-cli@1.1.0`, add
   env-var `.npmrc`, resolve cli from `node_modules` (bridge + `resolve_cli`,
   reorder ahead of `which voidware`), re-vendor CSS, bump version stamps, smoke.
 - [ ] **T1:** ref-bound write/delete broker operations (`auth:ref:write|delete`)
@@ -63,7 +64,7 @@ refs are unavailable. Frontend candidate keys use ref identity
 duplicates by basename. Plan:
 [`docs/plans/2026-06-10-provider-slot-ref-candidates.md`](docs/plans/2026-06-10-provider-slot-ref-candidates.md).
 57 tests. Remaining credential follow-ups (ref-bound mutations, stale cache
-purge) are now scoped under the Voidware 1.0.5 upgrade track in Now.
+purge) are now scoped under the Voidware 1.1.0 upgrade track in Now.
 
 **Reset + Voidware credential remediation — DONE (2026-06-10).** Implemented
 [`docs/plans/2026-06-10-reset-voidware-credentials-nanoagent-plan.md`](docs/plans/2026-06-10-reset-voidware-credentials-nanoagent-plan.md):

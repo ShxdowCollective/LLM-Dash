@@ -3,6 +3,36 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 117 — 2026-06-12
+
+**Agent:** GPT-5 Codex (Mica, coding agent)
+**Cycle:** Voidware 1.1.0 plan retarget
+**Task:** Update the active Voidware 1.0.5 plan to use Voidware 1.1.0
+
+---
+
+Planning/docs-only pass. Retargeted the active package-native upgrade plan from
+Voidware 1.0.5 to 1.1.0 and moved it to
+[`docs/plans/2026-06-12-voidware-1-1-0-package-native-upgrade.md`](docs/plans/2026-06-12-voidware-1-1-0-package-native-upgrade.md).
+Left a small superseded stub at the old 1.0.5 path so Entry 116 links do not go
+dead.
+
+Verified with authenticated GitHub Packages probes: `npm view` reports both
+`@shxdowcollective/voidware` and `@shxdowcollective/voidware-cli` at `1.1.0`;
+`npm pack` confirmed the plan-critical surfaces still exist in 1.1.0:
+`auth:ref:write|delete|rotate`, `discoverProviderCredentialsByRef`, and the
+client-grant index/path plumbing. Also compared 1.1.0 CSS against the current
+vendored 1.0.4 copy and corrected the plan: 1.1.0 is a real CSS refresh
+(`animations.css`, `base.css`, `layout.css`, `status-chips.css`, `toggles.css`,
+`typography.css`, plus new `theme-template.css`), not the 1.0.5 no-op vendor
+bump.
+
+Updated `TODO.md` Now to point at the 1.1.0 plan and describe the new P0
+expectation. No app code, dependency files, lockfiles, vendored CSS, data, or
+credentials were changed.
+
+---
+
 ## Entry 116 — 2026-06-10
 
 **Agent:** Claude Opus 4.8 (Wren, orchestrating)
