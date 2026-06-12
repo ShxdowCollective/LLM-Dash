@@ -55,4 +55,31 @@ release prep, use the development instructions below.
 - Update `TODO.md`, `LOGBOOK.md`, and relevant docs when development work
   changes behavior, workflow, architecture, or user-facing expectations.
 - Run the smallest meaningful verification for the change. If verification
-  cannot run, record the exact blocker and the command that should be run.
+ cannot run, record the exact blocker and the command that should be run.
+
+## Cursor Cloud specific instructions
+
+Environment-specific notes for agents running in the Cursor Cloud VM. The
+startup update script already refreshes Python deps into `.venv`; you do not
+need to reinstall them.
+
+- **Run the server (dev):** `.venv/bin/python -m uvicorn server:app --host 127.0.0.1 --port 8787`.
+ It is the only long-running service. Start it in a background/tmux session — it
+ stays in the foreground. There is no separate frontend or database process:
+ the frontend is zero-build static files and the SQLite DB runs in-browser via
+ sql.js. `data/dash.sqlite` is gitignored and auto-seeds (34 models) on first
+ launch, so the dashboard is fully usable offline with no API keys.
+- **Tests:** `.venv/bin/python -m pytest tests/` runs the full suite (57 tests).
+ `tests/test_m13.py` requires `pytest` (installed by the update script, not in
+ `requirements.txt`); plain `python -m unittest discover` skips/errors on it.
+- **Lint/syntax (no linter configured):** `.venv/bin/python -m py_compile server.py scripts/*.py tests/*.py`
+ and `node --check web/app.js`. There is no build step.
+- **Voidware npm tooling is optional.** The runtime CSS is committed under
+ `web/vendor/voidware/`, so the dashboard works without `npm`. The
+ `@shxdowcollective/voidware` package lives on GitHub Packages and needs auth:
+ a gitignored `.npmrc` pointing the `@shxdowcollective` scope at
+ `npm.pkg.github.com` with `_authToken=${GH_PACKAGES_KEY}` is already present so
+ `npm ci`, `npm run smoke:voidware`, and `npm run vendor:voidware` work. Never
+ commit `.npmrc` (it holds a token).
+- Update/agent runs (`scripts/run_update.py`, Refresh button) need external
+ provider/Exa credentials and are not required to develop or view the dashboard.

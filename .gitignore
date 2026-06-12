@@ -5,6 +5,7 @@ node_modules/
 logs/
 .shxdow/
 .env
+.npmrc
 
 # Local-only docs (kept on disk, not in repo)
 LOGBOOK.md
