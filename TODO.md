@@ -7,8 +7,38 @@ Use `[ ]` only for still-open work.
 
 ## Now
 
-No active dev track. Next data refresh runs via
-[`skill/SKILL.md`](skill/SKILL.md).
+**Setup wizard seeding + reset overhaul + table redesign — PLANNED
+(2026-06-13).** Plan:
+[`docs/plans/2026-06-13-setup-wizard-seeding-table-redesign.md`](docs/plans/2026-06-13-setup-wizard-seeding-table-redesign.md)
+(pro-reviewed). No implementation yet. Six parallel tracks:
+
+- [ ] **A — Reset semantics + warning UX.** Silence the phantom "broker
+  unavailable" grant warning (live + dry-run); `reset_models` clears the catalog
+  + drops `last_updated` (no bootstrap re-seed); full reset stops auto-reseeding.
+  Honest reset copy + models→wizard redirect. Update `tests/test_m13.py`.
+- [ ] **B — No default DB.** New `needs_setup` bootstrap state; stop auto-running
+  `init_db.py` on first launch (keep it as the CLI/skill preseed escape hatch);
+  frontend boots into the wizard when the catalog is empty; null-DB guards so the
+  app never fetches a missing `dash.sqlite`.
+- [ ] **C — Wizard single-nav chrome.** Kill the two-menu confusion (shell tabs
+  *and* the setup rail render together today). One linear stepper; rename "Models"
+  step → "Agent model" to free up "Catalog".
+- [ ] **D — Catalog presets + seed backend.** New `seed_catalog()` prompt builder
+  + `/api/seed` endpoint reusing the agent harness; presets gated by configured
+  keys (AA / LLM Stats top N, Exa top N, OpenRouter top X, custom prompt, custom
+  OpenAI-compatible endpoint via Voidware creds). Schema bootstrap before first
+  apply; batch 50–100 models; extend the job lock to seed + run-update.
+- [ ] **E — Seed progress + completion.** Live progress in the wizard, snazzy
+  completion animation (reduced-motion safe), "Let's start!" → Dashboard, plus a
+  CLI/skill seed escape hatch on failure.
+- [ ] **F — Table repolish / List view (independent).** Compact List view +
+  tighter table defaults to fit more models without hurting readability; bump the
+  UI prefs key. Visual nano-agent review.
+
+Suggested PR split: **F + A** early (low-risk), then **A→B→C→D→E** as the wizard
+PR (C/D/E sequential on `web/app.js`).
+
+Next data refresh still runs via [`skill/SKILL.md`](skill/SKILL.md).
 
 Standing maintenance notes (not tasks — handled as they come up during update
 runs):

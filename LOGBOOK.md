@@ -3,6 +3,74 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 119 — 2026-06-13
+
+**Agent:** Claude Opus 4.8 (handle: Vesper, via shxdowflow + nano-agents)
+**Cycle:** Planning only — setup wizard seeding, reset overhaul, table redesign
+**Task:** Scope the work, write a reviewed implementation plan. No code changes.
+
+---
+
+Scoping run, no implementation. The user flagged the Settings setup flow as
+janky: two parallel menus during setup (the shell subpage tabs *and* a floating
+"Setup" rail card both render — `renderSettings()` mounts `renderSetupRail()`
+next to the shell subnav), and a full reset reports a phantom "1 warning →
+grant cleanup skipped: broker unavailable" for cleanup of something that doesn't
+exist on a fresh machine. Plus three feature asks: reset should clear the model
+DB and set "last update" to never; we should stop shipping/auto-seeding a default
+DB and instead seed the catalog from the wizard via the research agent (preset
+seed strategies gated by configured keys — AA / LLM Stats top N, Exa top N,
+OpenRouter top X, custom prompt, or a custom OpenAI-compatible endpoint+bearer
+via Voidware saved creds) with live progress + a completion animation + a
+"Let's start!" button; and a table repolish to fit more models (maybe a List
+view).
+
+Traced the relevant code myself and via nano-agents (Cursor flash explorer +
+pro plan reviewer). Key findings that shaped the plan:
+
+- The research harness (`run_update.py generate_diff → run_agent_once →
+  apply_update`) already populates an empty DB via `INSERT ... ON CONFLICT(name)`
+  and `validate_update` accepts an all-new-models payload — so seeding can reuse
+  it, **but** `apply_update`/`run_update.py` assume the schema tables + DB file
+  already exist (only `init_db.py` runs `schema.sql`). Seed mode must
+  `executescript(schema.sql)` first. This was the reviewer's top catch.
+- First launch auto-seeds the 34-model bootstrap (`_startup →
+  ensure_bootstrap_started → init_db.py`); full reset deletes the DB then
+  *re-seeds* it via `ensure_bootstrap_started()` in `post_reset`. Both must stop
+  for the "no default DB" goal; introduce a `needs_setup` bootstrap state and
+  route the frontend into the wizard. Keep `init_db.py` as the documented CLI/
+  skill preseed escape hatch.
+- The DB is already gitignored (only `data/.gitkeep` tracked), so "no default
+  DB" is about killing the auto-bootstrap, not a gitignore change.
+- The "broker unavailable" warning is benign — the durable grant purge is
+  index-driven and doesn't need the broker — so it can be demoted to a debug log
+  (live + dry-run paths) while keeping real failures surfaced.
+- Reused job machinery (`/api/run-update` + `_watch_job` + tail polling) is the
+  natural backbone for `/api/seed` progress; the job lock needs to cover both
+  endpoints to avoid a scheduler-vs-seed race.
+
+Wrote
+[`docs/plans/2026-06-13-setup-wizard-seeding-table-redesign.md`](docs/plans/2026-06-13-setup-wizard-seeding-table-redesign.md):
+six parallel tracks (A reset semantics + warning, B no-default-DB bootstrap
+gating, C single-nav wizard chrome, D catalog presets + seed backend, E seed
+progress + completion animation, F table/list repolish), with file scopes,
+dependencies, verification matrix, and a §8b addendum folding in 13 pro-review
+findings (schema bootstrap, catalog-readiness gating vs file existence, separate
+seed prompt builder, batching for 50–100 models, expanded null-DB guard list,
+job-lock concurrency, models-reset redirect, dry-run warning parity, the
+"Models" vs "Catalog" step naming collision, wizard hardening, tests +
+`AGENTS.md`/`ARCHITECTURE.md` doc updates, OpenRouter auth check, sequential
+C→D→E on `app.js`). TODO "Now" updated with the six tracks and a suggested PR
+split (F + A early, then A→B→C→D→E). The plan is gitignored under `docs/plans/*`
+so it lives on disk only; this entry + TODO carry the durable summary.
+
+**Next:** implement Track F + A as the low-risk early PR, then the wizard PR.
+Two open decisions for the user/impl: AA/LLM Stats "top N" ranking is
+research-driven (no public AA API) — confirm acceptable; and List view vs just a
+tightened table (decision lever in Track F).
+
+---
+
 ## Entry 118 — 2026-06-12
 
 **Agent:** Claude Opus 4.8 (orchestrating, via shxdowflow + nano-agents)
