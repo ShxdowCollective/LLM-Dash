@@ -258,7 +258,7 @@ button.vw-status-chip > span {
   pointer-events: none;
 }
 .vw-status-emphasis > .vw-emphasis-label {
-  color: #ffffff;
+  color: var(--vw-text);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -89,6 +89,24 @@ PIP="${VENV}/bin/pip"
 "${PY}" -m pip install --quiet --upgrade pip >/dev/null
 "${PIP}" install --quiet -r requirements.txt
 
+if [ -f "${HERE}/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . "${HERE}/.env"
+  set +a
+fi
+if [ -n "${GH_PACKAGES_KEY:-}" ] && command -v npm >/dev/null 2>&1; then
+  if [ -f "${HERE}/package-lock.json" ]; then
+    npm ci --prefix "${HERE}" --quiet
+  else
+    npm install --prefix "${HERE}" --quiet
+  fi
+elif [ -z "${GH_PACKAGES_KEY:-}" ]; then
+  echo "LLM-Dash: GH_PACKAGES_KEY not set; skipping npm install. Voidware broker/credential features may be degraded." >&2
+elif ! command -v npm >/dev/null 2>&1; then
+  echo "LLM-Dash: npm not found on PATH; skipping npm install. Voidware broker/credential features may be degraded." >&2
+fi
+
 if [ "${RESET}" -eq 1 ]; then
   if [ "${DRY_RUN}" -eq 1 ]; then
     "${PY}" scripts/reset_local_state.py --dry-run

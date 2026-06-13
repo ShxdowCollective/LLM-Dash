@@ -15,7 +15,10 @@ body {
   font-weight: var(--vw-weight-regular);
   line-height: 1.55;
   letter-spacing: -0.012em;
-  font-feature-settings: "liga" 1, "calt" 1;
+  /* cv01 (single-story a) + ss03 (geometric alternates) are the Voidware
+     typographic signature on Inter; they must stay paired with the thin
+     display weights and negative tracking. */
+  font-feature-settings: "liga" 1, "calt" 1, "cv01" 1, "ss03" 1;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

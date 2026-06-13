@@ -8,6 +8,7 @@
     "verify:voidware": "npm run vendor:voidware && npm run smoke:voidware"
   },
   "dependencies": {
-    "@shxdowcollective/voidware": "1.0.4"
+    "@shxdowcollective/voidware": "1.1.0",
+    "@shxdowcollective/voidware-cli": "1.1.0"
   }
 }

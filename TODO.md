@@ -7,41 +7,8 @@ Use `[ ]` only for still-open work.
 
 ## Now
 
-**Active dev track — Voidware 1.1.0 package-native upgrade + the two credential
-follow-ups. PLANNED, not yet implemented.** Full plan (reviewed):
-[`docs/plans/2026-06-12-voidware-1-1-0-package-native-upgrade.md`](docs/plans/2026-06-12-voidware-1-1-0-package-native-upgrade.md).
-
-Key finding from scoping: `@shxdowcollective/voidware-cli@1.1.0` **is** published
-to GitHub Packages (installable with `GH_PACKAGES_KEY` from `.env`), so we drop
-the `~/Repos/voidware` checkout dependency by adding `voidware-cli` as a proper
-npm dep and pointing the bridge + Python CLI resolver at `node_modules` — no
-broker subsystem rewrite. 1.1.0 ships `auth:ref:write|delete|rotate` ops, the
-`clientGrantIndex` / `userClientGrantIndexPath()` purge primitives, and
-`discoverProviderCredentialsByRef`. 1.1.0 also changes vendor CSS versus the
-current 1.0.4 copy, so P0 needs a real CSS refresh, not a provenance-only bump.
-
-- [ ] **P0 (gate):** bump `voidware` 1.0.4→1.1.0, add `voidware-cli@1.1.0`, add
-  env-var `.npmrc`, resolve cli from `node_modules` (bridge + `resolve_cli`,
-  reorder ahead of `which voidware`), re-vendor CSS, bump version stamps, smoke.
-- [ ] **T1:** ref-bound write/delete broker operations (`auth:ref:write|delete`)
-  so same-name multi-source credentials can't be mutated on the wrong source
-  (mutations are currently name-bound; ref identity used for reads only). Also
-  invalidate the ref-scoped cached grant on mutation.
-- [ ] **T2:** keyring-wide purge of legacy `llm-dash-voidware-grants` entries
-  written under older auth fingerprints, via the client-grant index (currently
-  derived-account best effort; stale entries expire on TTL only).
-- [ ] **T3:** adopt `discoverProviderCredentialsByRef` for the provider-slot
-  exact-source discovery (refactor of the Entry 115 hand-rolled join; keep the
-  emitted candidate shape + name-only fallback).
-
-Decisions resolved 2026-06-10 (see plan): node_modules cli resolves before
-global `which voidware`; token-gated `npm ci` added to launchers; keep
-`~/Repos/voidware` as last-resort fallback; `_remove_secret` becomes ref-aware
-for provider removals; commit `.env.example`; adopt `discoverProviderCredentialsByRef`
-(T3). Execution order P0 → T1 → T2 → T3 (shared files, run sequentially).
-
-Next data refresh runs via [`skill/SKILL.md`](skill/SKILL.md) unless this dev
-track is active.
+No active dev track. Next data refresh runs via
+[`skill/SKILL.md`](skill/SKILL.md).
 
 Standing maintenance notes (not tasks — handled as they come up during update
 runs):
@@ -53,6 +20,25 @@ runs):
 - Prefer exact per-model `card_url`s as update runs read new model cards.
 
 ## Recent Completed
+
+**Voidware 1.1.0 package-native upgrade + credential follow-ups — DONE
+(2026-06-12).** Implemented
+[`docs/plans/2026-06-12-voidware-1-1-0-package-native-upgrade.md`](docs/plans/2026-06-12-voidware-1-1-0-package-native-upgrade.md)
+end to end. P0: bumped `@shxdowcollective/voidware` 1.0.4→1.1.0, added
+`@shxdowcollective/voidware-cli@1.1.0`, env-var `.npmrc` + committed
+`.env.example`, resolve the cli from `node_modules` ahead of global `which
+voidware` (bridge `createRequire` + Python `resolve_cli`), token-gated `npm ci`
+in `run.sh`/`run.bat`, re-vendored 1.1.0 CSS (now includes `theme-template.css`),
+version stamps + smoke that asserts the cli service resolves. T1: ref-bound
+`auth:ref:write`/`auth:ref:delete` broker ops so same-name multi-source
+credentials can't be mutated on the wrong source, ref-scoped grant-cache
+invalidation on mutation, ref-aware `_remove_secret` for provider removals.
+T2: index-driven keyring-wide purge of legacy grant-cache entries via Voidware's
+`userClientGrantIndexPath()` client-grant index, reaching entries written under
+stale auth fingerprints. T3: provider-slot exact-source discovery now sources
+from `discoverProviderCredentialsByRef` (ref-qualified, one row per source) with
+the Entry 115 name-join kept as fallback. 70 tests green; `verify:voidware`
+passes against 1.1.0; service resolves from `node_modules`.
 
 **Provider slot exact-source ref candidates — DONE (2026-06-10).** Connection
 candidates now join provider-discovery metadata (base URL, models URL,

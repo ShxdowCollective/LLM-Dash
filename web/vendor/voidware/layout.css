@@ -131,6 +131,31 @@
   gap: 12px;
 }
 
+/* Narrow-width disclosure toggle. Hidden on desktop; consumers render it as
+   a real <button> with an inline hamburger SVG, aria-label, and
+   aria-expanded, then mirror open state via data-vw-open on .vw-project-nav.
+   The links must never silently disappear without this fallback. */
+.vw-project-nav-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  min-height: 38px;
+  padding: 0;
+  border: none;
+  border-radius: var(--vw-radius-sm);
+  color: var(--vw-text);
+  background: color-mix(in srgb, var(--vw-surface-2) 76%, transparent);
+  box-shadow: inset 0 0 0 1px var(--vw-border-mid);
+  cursor: pointer;
+  transition: background var(--vw-transition-fast), box-shadow var(--vw-transition-fast);
+}
+
+.vw-project-nav-toggle:hover,
+.vw-project-nav-toggle:focus-visible {
+  background: color-mix(in srgb, var(--vw-accent) 10%, var(--vw-surface-2));
+}
+
 .vw-project-nav-action {
   display: inline-flex;
   align-items: center;
@@ -149,12 +174,43 @@
 
 @media (max-width: 860px) {
   .vw-project-nav {
+    position: relative;
     width: min(100%, calc(100% - 32px));
-    grid-template-columns: auto auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
+  .vw-project-nav-toggle {
+    display: inline-flex;
+  }
+
+  /* Collapsed by default; opens as a dropdown panel under the header when the
+     consumer sets data-vw-open="true" on .vw-project-nav (or .open on the
+     links). Links stack full-width with touch-sized targets. */
   .vw-project-nav-links {
     display: none;
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 0;
+    right: 0;
+    z-index: 30;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    padding: 10px;
+    border-radius: var(--vw-radius-md);
+    background: var(--vw-surface-1);
+    box-shadow: 0 0 0 1px var(--vw-border-mid), var(--vw-shadow-lg);
+  }
+
+  .vw-project-nav[data-vw-open="true"] .vw-project-nav-links,
+  .vw-project-nav-links.open {
+    display: flex;
+  }
+
+  .vw-project-nav-link {
+    justify-content: flex-start;
+    min-height: 44px;
+    padding-inline: 14px;
   }
 }
 

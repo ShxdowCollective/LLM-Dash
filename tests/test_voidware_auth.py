@@ -822,6 +822,248 @@ console.log(JSON.stringify({ auth, raw }))
         self.assertEqual(summary["revoked"], [])
         self.assertTrue(any("broker unavailable" in item for item in summary["warnings"]))
 
+    def test_legacy_grant_purge_covers_index_accounts_across_fingerprints(self) -> None:
+        voidware_auth._LEGACY_GRANT_ACCOUNTS.clear()
+        index_path = Path(self.tmp.name) / "data" / "client-grant-index.json"
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        index_path.write_text(
+            json.dumps({
+                "v": 1,
+                "entries": [
+                    {
+                        "v": 1,
+                        "account": "client-grant:fp-old-1",
+                        "app": "llm-dash",
+                        "repoPath": str(voidware_auth.ROOT),
+                        "operation": "auth:secret:read",
+                        "target": "alpha",
+                        "scopes": ["auth:secret:read:alpha"],
+                    },
+                    {
+                        "v": 1,
+                        "account": "client-grant:fp-old-2",
+                        "app": "llm-dash",
+                        "repoPath": str(voidware_auth.ROOT),
+                        "operation": "auth:ref:read",
+                        "target": "alpha",
+                        "scopes": ["auth:secret:read:alpha"],
+                    },
+                    {
+                        "v": 1,
+                        "account": "client-grant:other-app",
+                        "app": "some-other-app",
+                        "repoPath": "/elsewhere",
+                        "operation": "auth:secret:read",
+                        "target": "x",
+                        "scopes": [],
+                    },
+                ],
+            }),
+            encoding="utf-8",
+        )
+        deleted: list[tuple[str, str]] = []
+
+        def fake_run(args: list[str], **kwargs) -> dict[str, object]:
+            return {"ok": True, "data": []}
+
+        with (
+            patch.object(voidware_auth, "_run", side_effect=fake_run),
+            patch.object(voidware_auth, "_keyring_get", return_value=""),
+            patch.object(voidware_auth, "_keyring_delete", side_effect=lambda service, account: deleted.append((service, account))),
+            patch.object(voidware_auth._BRIDGE, "stop"),
+        ):
+            summary = voidware_auth.clear_llmdash_grants()
+
+        deleted_accounts = {account for _, account in deleted}
+        self.assertIn("client-grant:fp-old-1", deleted_accounts)
+        self.assertIn("client-grant:fp-old-2", deleted_accounts)
+        self.assertNotIn("client-grant:other-app", deleted_accounts)
+        self.assertTrue(any("grant-cache-index:client-grant:fp-old-1" in item for item in summary["removed_cache"]))
+
+        remaining = json.loads(index_path.read_text(encoding="utf-8"))
+        accounts_left = {entry["account"] for entry in remaining["entries"]}
+        self.assertEqual(accounts_left, {"client-grant:other-app"})
+
+    def test_write_secret_with_ref_routes_ref_write_command(self) -> None:
+        ref = {"refVersion": 1, "name": "alpha", "source": "auth.json", "authFilePath": "/store-a/auth.json"}
+        with patch.object(voidware_auth._BRIDGE, "request", return_value={"ok": True}) as bridge_request:
+            voidware_auth.write_secret("alpha", "sk-new", credential_ref=ref)
+
+        bridge_request.assert_called_once()
+        command, payload = bridge_request.call_args.args[0], bridge_request.call_args.args[1]
+        self.assertEqual(command, "writeRefSecret")
+        self.assertEqual(payload["ref"]["authFilePath"], "/store-a/auth.json")
+        self.assertEqual(payload["secret"], "sk-new")
+
+    def test_delete_secret_with_ref_routes_ref_delete_command(self) -> None:
+        ref = {"refVersion": 1, "name": "alpha", "source": "auth.json", "authFilePath": "/store-a/auth.json"}
+        with patch.object(voidware_auth._BRIDGE, "request", return_value={"ok": True}) as bridge_request:
+            voidware_auth.delete_secret("alpha", credential_ref=ref)
+
+        bridge_request.assert_called_once()
+        command, payload = bridge_request.call_args.args[0], bridge_request.call_args.args[1]
+        self.assertEqual(command, "deleteRefSecret")
+        self.assertEqual(payload["ref"]["name"], "alpha")
+
+    def test_delete_secret_without_ref_uses_name_bound_command(self) -> None:
+        with patch.object(voidware_auth._BRIDGE, "request", return_value={"ok": True}) as bridge_request:
+            voidware_auth.delete_secret("alpha")
+
+        self.assertEqual(bridge_request.call_args.args[0], "deleteSecret")
+
+    def test_ref_mutation_invalidates_ref_scoped_cached_grant(self) -> None:
+        ref = {"refVersion": 1, "name": "alpha", "source": "auth.json", "authFilePath": "/store-a/auth.json"}
+        parsed = voidware_auth._parse_credential_ref(ref)
+        ref_key = voidware_auth._ref_identity_key(parsed)
+        voidware_auth._APPROVED_SECRET_CACHE[ref_key] = {"secret": "sk-old", "grant": {}}
+        voidware_auth._APPROVED_SECRET_CACHE["alpha"] = {"secret": "sk-old", "grant": {}}
+        deleted_accounts: list[str] = []
+
+        with (
+            patch.object(voidware_auth._BRIDGE, "request", return_value={"ok": True}),
+            patch.object(voidware_auth, "_delete_cached_grant", side_effect=lambda acct: deleted_accounts.append(acct)),
+        ):
+            voidware_auth.delete_secret("alpha", credential_ref=ref)
+
+        self.assertNotIn(ref_key, voidware_auth._APPROVED_SECRET_CACHE)
+        self.assertNotIn("alpha", voidware_auth._APPROVED_SECRET_CACHE)
+        # Both the ref-op and secret-op read accounts must be purged.
+        expected_ref_read = voidware_auth._grant_cache_account(
+            "auth:ref:read", "alpha", "auth:secret:read:alpha", ref=parsed
+        )
+        expected_secret_read = voidware_auth._grant_cache_account(
+            "auth:secret:read", "alpha", "auth:secret:read:alpha", ref=parsed
+        )
+        self.assertIn(expected_ref_read, deleted_accounts)
+        self.assertIn(expected_secret_read, deleted_accounts)
+
+    def test_write_secret_ref_cli_fallback_emits_ref_operation(self) -> None:
+        ref = {"refVersion": 1, "name": "alpha", "source": "auth.json"}
+        captured: dict[str, list[str]] = {}
+
+        def fake_run(args: list[str], **kwargs) -> dict[str, object]:
+            captured["args"] = args
+            return {"ok": True, "data": {}}
+
+        with (
+            patch.object(
+                voidware_auth._BRIDGE,
+                "request",
+                side_effect=voidware_auth.VoidwareAuthError("no bridge", code="bridge_unavailable"),
+            ),
+            patch.object(voidware_auth, "_run", side_effect=fake_run),
+        ):
+            voidware_auth.write_secret("alpha", "sk-new", credential_ref=ref)
+
+        self.assertIn("auth:ref:write", captured["args"])
+        self.assertIn("--ref", captured["args"])
+
+    def test_delete_secret_ref_cli_fallback_emits_ref_operation(self) -> None:
+        ref = {"refVersion": 1, "name": "alpha", "source": "auth.json"}
+        captured: dict[str, list[str]] = {}
+
+        def fake_run(args: list[str], **kwargs) -> dict[str, object]:
+            captured["args"] = args
+            return {"ok": True, "data": {}}
+
+        with (
+            patch.object(
+                voidware_auth._BRIDGE,
+                "request",
+                side_effect=voidware_auth.VoidwareAuthError("no bridge", code="bridge_unavailable"),
+            ),
+            patch.object(voidware_auth, "_run", side_effect=fake_run),
+        ):
+            voidware_auth.delete_secret("alpha", credential_ref=ref)
+
+        self.assertIn("auth:ref:delete", captured["args"])
+        self.assertIn("--ref", captured["args"])
+
+    def test_slot_update_and_delete_pass_credential_ref(self) -> None:
+        ref_str = json.dumps({
+            "refVersion": 1,
+            "name": "external-exa",
+            "source": "user-file",
+            "authFilePath": "/store-a/auth.json",
+        })
+        section = {
+            "version": 2,
+            "exa": {
+                "exa_credential_name": "external-exa",
+                "exa_credential_ref": ref_str,
+                "exa_credential_meta": {"name": "external-exa"},
+            },
+        }
+        config.config_path().parent.mkdir(parents=True, exist_ok=True)
+        config.config_path().write_text(json.dumps(section), encoding="utf-8")
+
+        with (
+            patch.object(voidware_auth, "write_secret") as write_secret,
+            patch.object(
+                voidware_auth,
+                "read_secret_with_grant",
+                return_value={"secret": "sk-new", "grant": {"expiresAt": "2099-01-01T00:00:00Z"}},
+            ),
+        ):
+            config.update_slot_api_key("exa", "sk-new", external_mutation=True, require_fresh_grant=True)
+        self.assertEqual(write_secret.call_args.kwargs.get("credential_ref", {}).get("authFilePath"), "/store-a/auth.json")
+
+        config.config_path().write_text(json.dumps(section), encoding="utf-8")
+        with patch.object(voidware_auth, "delete_secret") as delete_secret:
+            config.delete_slot_credential("exa", external_mutation=True, require_fresh_grant=True)
+        self.assertEqual(delete_secret.call_args.kwargs.get("credential_ref", {}).get("authFilePath"), "/store-a/auth.json")
+
+    def test_invalid_persisted_ref_fails_closed_on_removal(self) -> None:
+        config.config_path().parent.mkdir(parents=True, exist_ok=True)
+        config.config_path().write_text(
+            json.dumps({
+                "version": config.CONFIG_VERSION,
+                "provider": {
+                    "base_url": "https://api.example.com",
+                    "provider_credential_name": "alpha",
+                    "provider_credential_ref": "{not-valid-json",
+                },
+            }),
+            encoding="utf-8",
+        )
+        with (
+            patch.object(config.voidware_auth, "delete_secret") as delete_secret,
+            patch.object(config, "_keyring_delete"),
+        ):
+            with self.assertRaises(config.ConfigError):
+                config.remove_provider_api_key()
+        delete_secret.assert_not_called()
+
+    def test_remove_provider_routes_external_ref_to_delete(self) -> None:
+        config.config_path().parent.mkdir(parents=True, exist_ok=True)
+        config.config_path().write_text(
+            json.dumps({
+                "version": config.CONFIG_VERSION,
+                "provider": {
+                    "base_url": "https://api.example.com",
+                    "provider_credential_name": "alpha",
+                    "provider_credential_ref": json.dumps({
+                        "refVersion": 1,
+                        "name": "alpha",
+                        "source": "auth.json",
+                        "authFilePath": "/store-a/auth.json",
+                    }),
+                },
+            }),
+            encoding="utf-8",
+        )
+
+        with (
+            patch.object(config.voidware_auth, "delete_secret") as delete_secret,
+            patch.object(config, "_keyring_delete"),
+        ):
+            config.remove_provider_api_key()
+
+        delete_secret.assert_called_once()
+        kwargs = delete_secret.call_args.kwargs
+        self.assertEqual(kwargs.get("credential_ref", {}).get("name"), "alpha")
+        self.assertEqual(kwargs["credential_ref"].get("authFilePath"), "/store-a/auth.json")
+
     def test_discover_credential_candidates_joins_provider_rows_with_ref_sources(self) -> None:
         provider_row = {
             "name": "my-key",
@@ -873,6 +1115,7 @@ console.log(JSON.stringify({ auth, raw }))
         ]
 
         with (
+            patch.object(voidware_auth, "discover_provider_credentials_by_ref", return_value=([], False)),
             patch.object(voidware_auth, "discover_provider_credentials", return_value=[provider_row]),
             patch.object(voidware_auth, "discover_auth_refs", return_value=(ref_rows, True)),
         ):
@@ -890,6 +1133,92 @@ console.log(JSON.stringify({ auth, raw }))
         self.assertTrue(provider_candidates[1]["managed_by_llmdash"])
         self.assertEqual([item["name"] for item in result["generic_candidates"]], ["exa-key"])
 
+    def test_discover_credential_candidates_uses_ref_qualified_discovery(self) -> None:
+        by_ref_rows = [
+            voidware_auth._safe_provider_by_ref_row({
+                "name": "my-key",
+                "source": "keyring",
+                "hasSecret": True,
+                "keyringBacked": True,
+                "reusability": "reusable",
+                "baseURL": "https://api.example.com/v1",
+                "modelsURL": "https://api.example.com/v1/models",
+                "ref": {"refVersion": 1, "name": "my-key", "source": "keyring", "hasSecret": True},
+            }),
+            voidware_auth._safe_provider_by_ref_row({
+                "name": "my-key",
+                "source": "user-file",
+                "hasSecret": True,
+                "reusability": "reusable",
+                "baseURL": "https://api.example.com/v1",
+                "ref": {
+                    "refVersion": 1,
+                    "name": "my-key",
+                    "source": "user-file",
+                    "authFilePath": "/home/user/.shxdow/auth.json",
+                    "hasSecret": True,
+                },
+            }),
+        ]
+        ref_rows = [
+            {
+                "name": "exa-key",
+                "label": "Exa",
+                "source": "keyring",
+                "source_label": "keyring",
+                "ref": {"name": "exa-key", "source": "keyring", "hasSecret": True},
+                "has_secret": True,
+                "managed_by_llmdash": False,
+                "locked": False,
+                "unreadable": False,
+            },
+        ]
+
+        with (
+            patch.object(voidware_auth, "discover_provider_credentials_by_ref", return_value=(by_ref_rows, True)),
+            patch.object(voidware_auth, "discover_auth_refs", return_value=(ref_rows, True)),
+            patch.object(voidware_auth, "_join_provider_rows_with_refs") as join,
+        ):
+            result = voidware_auth.discover_credential_candidates()
+
+        join.assert_not_called()
+        provider_candidates = result["provider_candidates"]
+        self.assertEqual(len(provider_candidates), 2)
+        self.assertEqual(provider_candidates[0]["ref"]["source"], "keyring")
+        self.assertEqual(provider_candidates[0]["source_label"], "keyring")
+        self.assertEqual(provider_candidates[1]["ref"]["authFilePath"], "/home/user/.shxdow/auth.json")
+        self.assertEqual(provider_candidates[1]["source_label"], "auth.json")
+        # provider name excluded from generic candidates; exa survives
+        self.assertEqual([item["name"] for item in result["generic_candidates"]], ["exa-key"])
+
+    def test_provider_by_ref_row_derives_llmdash_fields_from_ref(self) -> None:
+        shaped = voidware_auth._safe_provider_by_ref_row({
+            "name": "my-key",
+            "source": "user-file",
+            "hasSecret": True,
+            "baseURL": "https://api.example.com/v1",
+            "ref": {
+                "refVersion": 1,
+                "name": "my-key",
+                "source": "user-file",
+                "authFilePath": "/home/user/.shxdow/auth.json",
+                "hasSecret": True,
+                "meta": {"custom": {"app": "llmdash", "kind": "agent-provider"}},
+            },
+        })
+        self.assertEqual(shaped["source_label"], "auth.json")
+        self.assertTrue(shaped["managed_by_llmdash"])
+        self.assertEqual(shaped["ref"]["authFilePath"], "/home/user/.shxdow/auth.json")
+        self.assertEqual(shaped["baseURL"], "https://api.example.com/v1")
+        # secret-shaped fields never survive shaping
+        self.assertNotIn("secret", json.dumps(shaped))
+
+    def test_discover_provider_credentials_by_ref_respects_unavailable_runtime(self) -> None:
+        with patch.object(voidware_auth._BRIDGE, "request", return_value={"ok": True, "data": [], "refsAvailable": False}):
+            rows, available = voidware_auth.discover_provider_credentials_by_ref()
+        self.assertEqual(rows, [])
+        self.assertFalse(available)
+
     def test_discover_credential_candidates_falls_back_when_refs_unavailable(self) -> None:
         provider_row = {
             "name": "my-key",
@@ -899,6 +1228,7 @@ console.log(JSON.stringify({ auth, raw }))
         }
 
         with (
+            patch.object(voidware_auth, "discover_provider_credentials_by_ref", return_value=([], False)),
             patch.object(voidware_auth, "discover_provider_credentials", return_value=[provider_row]),
             patch.object(voidware_auth, "discover_auth_refs", return_value=([], False)),
         ):

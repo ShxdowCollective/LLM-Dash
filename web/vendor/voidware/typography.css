@@ -1,6 +1,10 @@
-/* ── Google Fonts ─────────────────────────────────────────── */
+/* ── Web Fonts ────────────────────────────────────────────── */
 
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@100;300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=SUSE:wght@400;500;600;700&display=swap");
+/* Inter ships from its official CDN: the variable font there carries the
+   cv01/ss03 alternates that the Voidware type signature depends on (Google
+   Fonts' static Inter subsets strip those lookups). */
+@import url("https://rsms.me/inter/inter.css");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=SUSE:wght@400;500;600;700&display=swap");
 
 /* ── Type Scale ──────────────────────────────────────────── */
 

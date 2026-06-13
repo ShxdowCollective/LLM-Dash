@@ -33,7 +33,7 @@
 
     &::after {
       transform: translateX(16px);
-      background: #fff;
+      background: var(--vw-surface-inverse);
     }
   }
 

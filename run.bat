@@ -104,6 +104,31 @@ if errorlevel 1 (
   exit /b 1
 )
 
+if exist "%SCRIPT_DIR%.env" (
+  for /f "usebackq tokens=1,* delims==" %%A in ("%SCRIPT_DIR%.env") do (
+    if /I "%%A"=="GH_PACKAGES_KEY" set "GH_PACKAGES_KEY=%%B"
+  )
+)
+where npm >nul 2>&1
+if %ERRORLEVEL%==0 (
+  if defined GH_PACKAGES_KEY (
+    if exist "%SCRIPT_DIR%package-lock.json" (
+      call npm ci --prefix "%SCRIPT_DIR%" --quiet
+    ) else (
+      call npm install --prefix "%SCRIPT_DIR%" --quiet
+    )
+    if errorlevel 1 (
+      echo LLM-Dash: npm dependency install failed. Voidware broker/credential features may be unavailable. 1>&2
+      if "%SILENT%"=="0" pause
+      exit /b 1
+    )
+  ) else (
+    echo LLM-Dash: GH_PACKAGES_KEY not set; skipping npm install. Voidware broker/credential features may be degraded. 1>&2
+  )
+) else (
+  echo LLM-Dash: npm not found on PATH; skipping npm install. Voidware broker/credential features may be degraded. 1>&2
+)
+
 if "%RESET%"=="1" (
   if "%DRY_RUN%"=="1" (
     "%PY%" scripts\reset_local_state.py --dry-run

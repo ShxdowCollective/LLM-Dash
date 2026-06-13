@@ -706,6 +706,22 @@ def _ref_identity(ref: dict[str, Any]) -> tuple[str, str, str, str]:
     )
 
 
+def _resolved_mutation_ref(raw: str | dict[str, Any] | None) -> dict[str, Any]:
+    """Parse a persisted slot ref, failing closed when it is set but invalid.
+
+    A slot that records an external `credential_ref` must mutate that exact
+    source. If the stored ref is present but unparseable we refuse rather than
+    silently fall back to a name-bound write/delete that could hit a same-name
+    credential on a different source.
+    """
+    ref = voidware_auth.safe_credential_ref(raw)
+    if raw and not ref:
+        raise ConfigError(
+            "Stored credential ref is invalid; re-select the credential source before changing it."
+        )
+    return ref
+
+
 def _selection_managed_live(
     selection: CredentialSlotConfig,
     *,
@@ -881,11 +897,12 @@ def update_slot_api_key(
     if not secret:
         raise ConfigError("api_key is required")
     name = selection.credential_name or SLOT_DEFAULT_SECRET_NAMES[slot]
-    ref = voidware_auth.safe_credential_ref(selection.credential_ref)
+    ref = _resolved_mutation_ref(selection.credential_ref)
     voidware_auth.write_secret(
         name,
         secret,
         require_fresh_grant=require_fresh_grant or not managed,
+        credential_ref=ref or None,
     )
     return select_credential_slot(slot, credential_name=name, credential_ref=ref or None, credential_meta=selection.credential_meta)
 
@@ -902,9 +919,11 @@ def delete_slot_credential(
         require_fresh_grant=require_fresh_grant,
     )
     name = selection.credential_name or SLOT_DEFAULT_SECRET_NAMES[slot]
+    ref = _resolved_mutation_ref(selection.credential_ref)
     voidware_auth.delete_secret(
         name,
         require_fresh_grant=require_fresh_grant or not managed,
+        credential_ref=ref or None,
     )
     for key_name in SLOT_KEY_NAMES[slot]:
         _keyring_delete(key_name)
@@ -1058,9 +1077,15 @@ def _save_secret(
         raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
 
 
-def _remove_secret(broker_name: str, keyring_names: tuple[str, ...]) -> None:
+def _remove_secret(
+    broker_name: str,
+    keyring_names: tuple[str, ...],
+    *,
+    credential_ref: str | dict[str, Any] | None = None,
+) -> None:
+    ref = _resolved_mutation_ref(credential_ref)
     try:
-        voidware_auth.delete_secret(broker_name)
+        voidware_auth.delete_secret(broker_name, credential_ref=ref or None)
     except voidware_auth.VoidwareAuthError as exc:
         if exc.code not in SECRET_REMOVE_FALLBACK_CODES:
             raise ConfigError(f"Voidware auth {exc.code}: {exc}") from exc
@@ -1217,4 +1242,9 @@ def remove_llmstats_api_key() -> None:
 
 
 def remove_provider_api_key() -> None:
-    _remove_secret(voidware_auth.PROVIDER_SECRET_NAME, PROVIDER_KEY_NAMES)
+    config = load_provider_config()
+    _remove_secret(
+        config.provider_credential_name or voidware_auth.PROVIDER_SECRET_NAME,
+        PROVIDER_KEY_NAMES,
+        credential_ref=config.provider_credential_ref or None,
+    )

@@ -3,6 +3,80 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 118 — 2026-06-12
+
+**Agent:** Claude Opus 4.8 (orchestrating, via shxdowflow + nano-agents)
+**Cycle:** Voidware 1.1.0 package-native upgrade — implementation
+**Task:** Finish the planned 1.1.0 upgrade end to end (P0 + T1 + T2 + T3)
+
+---
+
+Picked up a working tree where a prior agent had landed P0 (dep bump,
+node_modules cli wiring, 1.1.0 CSS re-vendor, `.npmrc`/`.env.example`, launcher
+`npm ci`) and ~40% of T1 (broker `writeRefSecret`/`deleteRefSecret` ref payload
+builders + `_request_args` ref param + a `_invalidate_secret_mutation_caches`
+helper). Verified the P0 gate first: `verify:voidware` clean against 1.1.0, cli
+service resolves from `node_modules`, `discoverProviderCredentialsByRef`
+exported, existing suite 57 green.
+
+**T1 finished.** Wired `write_secret`/`delete_secret` to route the new
+`writeRefSecret`/`deleteRefSecret` bridge commands (and `auth:ref:write` /
+`auth:ref:delete` CLI fallback with `--ref`) whenever a `credential_ref` is
+present, name-bound path unchanged otherwise. Both now call
+`_invalidate_secret_mutation_caches` on success, which clears the approved-secret
+cache under both the name key and the ref-identity key and deletes the
+ref-scoped + name-only read grant accounts — closing the gap where a same-name
+wrong-source mutation could leave a stale ref-scoped read grant. config.py:
+`update_slot_api_key`/`delete_slot_credential` pass the slot ref through;
+`_remove_secret` is ref-aware and `remove_provider_api_key` routes the persisted
+provider ref so a removal deletes the exact source (managed/no-ref providers
+still hit the name-bound path).
+
+**T2 finished.** The legacy grant-cache purge in `_delete_legacy_grant_cache_entries`
+now also reads Voidware's durable client-grant index
+(`<shxdow_dir>/data/client-grant-index.json`, the `userClientGrantIndexPath()`
+location), enumerates every llm-dash account regardless of the auth fingerprint
+it was written under, `_keyring_delete`s each across both grant services, and
+rewrites the index without the purged entries. This reaches ref-scoped and
+stale-fingerprint accounts the derived path can't reconstruct. Gate check first:
+confirmed there is **no** broker-free CLI purge subcommand (the index
+reader/writer live in the broker service), so the plan's documented index-file
+fallback is the right surface — not a guessed command.
+
+**T3 finished.** Provider-slot exact-source discovery now sources from
+`discoverProviderCredentialsByRef` via a new broker `discoverProvidersByRef`
+command (→ `AuthService.discoverProvidersBySource`) and
+`voidware_auth.discover_provider_credentials_by_ref()`. Each ref-qualified row is
+shaped by `_safe_provider_by_ref_row`, deriving `source_label` /
+`managed_by_llmdash` / `locked` / `unreadable` from the embedded ref — no
+hand-rolled name join. The Entry 115 join is retained as
+`_join_provider_rows_with_refs`, used only when the ref-qualified path is
+unavailable (bridge down or older runtime).
+
+A pro nano-agent final review caught two real correctness gaps, both fixed:
+(1) the mutation cache invalidation only purged `auth:secret:read` grant-cache
+accounts, leaving the `auth:ref:read` durable grant for a ref read alive after a
+mutation — now both op kinds are purged; (2) a corrupt persisted ref string
+silently fell back to a name-bound write/delete that could hit a same-name
+wrong source — config mutations now fail closed via `_resolved_mutation_ref`
+when a stored ref is present but unparseable.
+
+Tests: +13 cases (T1 ref routing/cache-invalidation across both op kinds/
+write+delete CLI fallback + slot ref pass-through + provider-ref removal +
+fail-closed invalid ref, T2 cross-fingerprint index purge, T3 ref-qualified
+discovery/shaping/unavailable-runtime). Updated the two Entry 115 join tests to
+pin the fallback explicitly. **70 passed.** `node --check` +
+`npm run smoke:voidware` green.
+
+Heads-up: while probing the cli I learned `voidware auth --help` is **not** a
+help flag — the bin treats unknown args as a command and ran `auth list` against
+the real keystore (metadata only, no secret leaked). Inspect `dist/` source or
+use an isolated `--shxdowdir` instead of live `--help`. Docs synced
+(ARCHITECTURE, DEVELOPMENT, TODO, plan status); README/style stamps were already
+1.1.0 from P0. Nothing committed — working tree left for review.
+
+---
+
 ## Entry 117 — 2026-06-12
 
 **Agent:** GPT-5 Codex (Mica, coding agent)

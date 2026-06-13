@@ -73,7 +73,7 @@ in-progress update. Killing the agent doesn't affect the dashboard.
 | Research | Exa (preferred) | Structured search + content fetch with citation control |
 | Credential storage | Env → Voidware provider credential → Voidware app broker → legacy keyring | Secrets stay outside repo/API responses; selected provider credentials use broker grants with renewal metadata |
 | Scheduling | OS-native jobs | systemd timer (Linux/WSL), launchd (macOS), Task Scheduler (Windows) |
-| Design system | Voidware v1.0.4 | Package-pinned dark-native surfaces, sidebar app shell, and iridescent accent system |
+| Design system | Voidware v1.1.0 | Package-pinned dark-native surfaces, sidebar app shell, and iridescent accent system |
 
 ---
 
@@ -329,23 +329,35 @@ Re-running an update for the same date upserts rather than duplicates:
 
 API keys are **never** returned in API responses, logged, or written to any
 on-disk trace outside the credential store. Provider discovery returns redacted
-Voidware metadata only. Selected credentials are read through the app-owned
-Node bridge in `scripts/voidware_app_broker.mjs`, which hosts Voidware 1.0.4's
-approval surface for the FastAPI/browser app. Grants request the longest
-supported lifetime (`120d`), and the returned renewal window metadata
-(`renewAfter` / `renewalWindowStartsAt`) drives the in-app renewal prompt.
-Opaque grant tokens are cached by Voidware's
-`voidware-client-grants` keyring helper and are cleared/re-requested on
-renewal, expiration, invalidation, denial, or durable-secret-unavailable
-responses. The old `llm-dash-voidware-grants` namespace is retained only as a
-cleanup-era compatibility detail.
+Voidware metadata only; the provider slot's exact-source candidates come from
+Voidware 1.1.0's `discoverProviderCredentialsByRef` (one ref-qualified row per
+source), with a name-join fallback for older runtimes. Selected credentials are
+read through the app-owned Node bridge in `scripts/voidware_app_broker.mjs`,
+which hosts Voidware 1.1.0's approval surface for the FastAPI/browser app. The
+bridge resolves the cli service from the `@shxdowcollective/voidware-cli`
+package in `node_modules` (escape hatch `VOIDWARE_CLI_SERVICE_MODULE`, with a
+`~/Repos/voidware` checkout as a last-resort dev fallback), so there is no
+runtime dependency on an external Voidware checkout. Mutations on a selected
+external credential route ref-bound broker operations (`auth:ref:write` /
+`auth:ref:delete`) so a same-name credential on a different source is never
+written or deleted by mistake. Grants request the longest supported lifetime
+(`120d`), and the returned renewal window metadata (`renewAfter` /
+`renewalWindowStartsAt`) drives the in-app renewal prompt. Opaque grant tokens
+are cached by Voidware's `voidware-client-grants` keyring helper and are
+cleared/re-requested on renewal, expiration, invalidation, denial, or
+durable-secret-unavailable responses. A full reset purges LLM-Dash grant-cache
+entries keyring-wide via Voidware's durable client-grant index
+(`userClientGrantIndexPath()`), reaching entries written under stale auth
+fingerprints that the fingerprint-derived path cannot reconstruct. The old
+`llm-dash-voidware-grants` namespace is retained only as a cleanup-era
+compatibility detail.
 When a background Voidware access service blocks in-app approval, Settings can
 call `POST /api/voidware/broker/stop` after user confirmation to stop that
 external service and retry with the app-owned approval surface.
 
 ---
 
-## Design System — Voidware v1.0.4
+## Design System — Voidware v1.1.0
 
 The UI follows the Voidware design specification:
 
@@ -359,14 +371,16 @@ The UI follows the Voidware design specification:
 
 CSS custom properties on `:root` make the entire theme overridable.
 
-Milestone 11 updates Voidware to the explicit
-`@shxdowcollective/voidware@1.0.4` dependency. LLM-Dash still serves committed
-static CSS at runtime; the package is the source for vendoring, runtime API
-audits, and the ground-up app CSS rebuild. Refresh vendored CSS with
-`npm run vendor:voidware` after `npm ci`. The app-owned approval bridge still
-depends on a Voidware CLI service build exposed through
-`VOIDWARE_CLI_SERVICE_MODULE`; the root package exports auth/config/logging
-helpers but not the CLI broker host.
+Voidware is pinned at `@shxdowcollective/voidware@1.1.0` (auth/CSS) plus
+`@shxdowcollective/voidware-cli@1.1.0` (broker service + bin), both installed
+from GitHub Packages. LLM-Dash still serves committed static CSS at runtime; the
+package is the source for vendoring, runtime API audits, and the ground-up app
+CSS rebuild. Refresh vendored CSS with `npm run vendor:voidware` after
+`npm ci`. The app-owned approval bridge resolves the cli broker host from
+`@shxdowcollective/voidware-cli` in `node_modules` by default;
+`VOIDWARE_CLI_SERVICE_MODULE` overrides it and a `~/Repos/voidware` checkout is
+the last-resort fallback. The root `voidware` package exports
+auth/config/logging helpers but not the CLI broker host.
 
 ---
 

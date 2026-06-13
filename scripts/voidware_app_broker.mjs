@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { createInterface } from 'node:readline'
+import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -64,16 +65,23 @@ function context() {
 }
 
 function resolveServiceModule() {
-  const candidates = [
-    process.env.VOIDWARE_CLI_SERVICE_MODULE,
-    join(homedir(), 'Repos', 'voidware', 'packages', 'cli', 'dist', 'service', 'index.js'),
-  ].filter(Boolean)
+  const candidates = []
+  if (process.env.VOIDWARE_CLI_SERVICE_MODULE) {
+    candidates.push(process.env.VOIDWARE_CLI_SERVICE_MODULE)
+  }
+  try {
+    const require = createRequire(import.meta.url)
+    candidates.push(require.resolve('@shxdowcollective/voidware-cli/dist/service/index.js'))
+  } catch {
+    // fall through when the cli package is not installed
+  }
+  candidates.push(join(homedir(), 'Repos', 'voidware', 'packages', 'cli', 'dist', 'service', 'index.js'))
   for (const candidate of candidates) {
     const absolute = resolve(String(candidate))
     if (existsSync(absolute)) return absolute
   }
   throw Object.assign(
-    new Error('Voidware 1.0.4 CLI bridge unavailable. Run npm ci, build packages/cli from a local voidware checkout, or set VOIDWARE_CLI_SERVICE_MODULE to the CLI service entrypoint.'),
+    new Error('Voidware 1.1.0 CLI bridge unavailable. Run npm ci, build packages/cli from a local voidware checkout, or set VOIDWARE_CLI_SERVICE_MODULE to the CLI service entrypoint.'),
     { code: 'bridge_unavailable' },
   )
 }
@@ -95,7 +103,7 @@ async function loadService() {
     'AuthService',
   ]
   for (const key of required) {
-    if (!(key in loaded)) throw Object.assign(new Error(`Voidware service module is missing ${key}. Install @shxdowcollective/voidware@1.0.4 and point VOIDWARE_CLI_SERVICE_MODULE at a Voidware CLI service build.`), { code: 'bridge_unavailable' })
+    if (!(key in loaded)) throw Object.assign(new Error(`Voidware service module is missing ${key}. Install @shxdowcollective/voidware-cli@1.1.0 and point VOIDWARE_CLI_SERVICE_MODULE at a Voidware CLI service build.`), { code: 'bridge_unavailable' })
   }
   service = { ...loaded, modulePath }
   return service
@@ -401,6 +409,69 @@ function brokerRefPayload(ref) {
   }
 }
 
+function brokerRefWritePayload(ref, params = {}) {
+  const name = String(ref?.name || '')
+  return {
+    app: APP_NAME,
+    repoPath: ROOT,
+    operation: 'auth:ref:write',
+    target: name,
+    scopes: [`auth:secret:write:${name}`],
+    ttl: MAX_GRANT_TTL,
+    timeoutMs: APPROVAL_TIMEOUT_MS,
+    allowSecretOutput: false,
+    params: { ref, ...params },
+  }
+}
+
+function brokerRefDeletePayload(ref, params = {}) {
+  const name = String(ref?.name || '')
+  return {
+    app: APP_NAME,
+    repoPath: ROOT,
+    operation: 'auth:ref:delete',
+    target: name,
+    scopes: [`auth:secret:delete:${name}`],
+    ttl: MAX_GRANT_TTL,
+    timeoutMs: APPROVAL_TIMEOUT_MS,
+    allowSecretOutput: false,
+    params: { ref, ...params },
+  }
+}
+
+async function startRefBrokerRequest(buildPayload, ref, params = {}) {
+  const api = await loadService()
+  await ensureBroker()
+  const name = String(ref?.name || '')
+  if (!name) throw Object.assign(new Error('Credential ref is missing a name.'), { code: 'invalid_request' })
+  const payload = buildPayload(ref, params)
+  if (pendingApproval && sameApprovalRequest(pendingApproval.approval, { operation: { kind: payload.operation, target: name } })) {
+    return {
+      ok: false,
+      code: 'approval_pending',
+      operationId: activeGrant && activeGrant.operationId ? activeGrant.operationId : randomUUID(),
+      approval: pendingApproval.approval,
+    }
+  }
+  const operationId = randomUUID()
+  const promise = Promise.resolve().then(() =>
+    api.createLocalAuthBrokerClient(context()).request(payload),
+  )
+  activeGrant = { operationId, target: name, promise }
+  const result = await raceForPending(promise)
+  if (result.type === 'pending') {
+    return {
+      ok: false,
+      code: 'approval_pending',
+      operationId,
+      approval: pendingApproval.approval,
+    }
+  }
+  if (result.type === 'error') throw result.err
+  activeGrant = null
+  return responseFromBrokerGrant(result.value, operationId, name)
+}
+
 async function startRefGrant(ref, forceRefresh = false) {
   const api = await loadService()
   await ensureBroker()
@@ -467,6 +538,21 @@ async function discoverProviders(payload = {}) {
   return { ok: true, data }
 }
 
+async function discoverProvidersByRef(payload = {}) {
+  await loadService()
+  const auth = new service.AuthService(context())
+  if (typeof auth.discoverProvidersBySource !== 'function') {
+    return { ok: true, data: [], refsAvailable: false }
+  }
+  const data = await auth.discoverProvidersBySource({
+    filter: {
+      reusability: payload.reusableOnly === false ? undefined : 'reusable',
+      hasSecret: payload.hasSecret === false ? undefined : true,
+    },
+  })
+  return { ok: true, data, refsAvailable: true }
+}
+
 async function writeSecret(payload = {}) {
   return await startBrokerRequest('auth:secret:write', payload.name, {
     secret: payload.secret,
@@ -479,6 +565,24 @@ async function writeSecret(payload = {}) {
 
 async function deleteSecret(payload = {}) {
   return await startBrokerRequest('auth:secret:delete', payload.name, payload.forceRefresh ? { forceRefresh: true } : {})
+}
+
+async function writeRefSecret(payload = {}) {
+  return await startRefBrokerRequest(brokerRefWritePayload, payload.ref || {}, {
+    secret: payload.secret,
+    template: 'custom-http',
+    metadata: payload.metadata || {},
+    custom: payload.custom || {},
+    ...(payload.forceRefresh ? { forceRefresh: true } : {}),
+  })
+}
+
+async function deleteRefSecret(payload = {}) {
+  return await startRefBrokerRequest(
+    brokerRefDeletePayload,
+    payload.ref || {},
+    payload.forceRefresh ? { forceRefresh: true } : {},
+  )
 }
 
 async function stop() {
@@ -503,6 +607,8 @@ async function handle(message) {
       return deny()
     case 'discoverProviders':
       return await discoverProviders(message.payload || {})
+    case 'discoverProvidersByRef':
+      return await discoverProvidersByRef(message.payload || {})
     case 'discoverAuthRefs':
       return await discoverAuthRefs(message.payload || {})
     case 'readSecretGrant':
@@ -513,6 +619,10 @@ async function handle(message) {
       return await writeSecret(message.payload || {})
     case 'deleteSecret':
       return await deleteSecret(message.payload || {})
+    case 'writeRefSecret':
+      return await writeRefSecret(message.payload || {})
+    case 'deleteRefSecret':
+      return await deleteRefSecret(message.payload || {})
     default:
       return { ok: false, code: 'invalid_request', message: `Unknown bridge command: ${message.command}` }
   }

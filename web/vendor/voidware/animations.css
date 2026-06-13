@@ -312,7 +312,7 @@
   ) !important;
   background-size: 200% 100% !important;
   animation: vw-rainbow-sweep var(--vw-rainbow-fill-duration, 3.2s) linear infinite;
-  color: #ffffff !important;
+  color: var(--vw-text) !important;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 

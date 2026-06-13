@@ -233,6 +233,9 @@ def resolve_cli() -> list[str] | None:
         parts = shlex.split(override)
         if parts:
             return parts
+    node_modules = ROOT / "node_modules" / "@shxdowcollective" / "voidware-cli" / "dist" / "bin.js"
+    if node_modules.exists():
+        return ["node", str(node_modules)]
     found = shutil.which("voidware")
     if found:
         return [found]
@@ -428,6 +431,7 @@ def _request_args(
     metadata: dict[str, Any] | None = None,
     custom: dict[str, Any] | None = None,
     secret_stdin: bool = False,
+    ref: dict[str, Any] | None = None,
 ) -> list[str]:
     args = [
         "auth",
@@ -456,6 +460,8 @@ def _request_args(
         args.extend(["--metadata", json.dumps(metadata, sort_keys=True)])
     if custom:
         args.extend(["--custom", json.dumps(custom, sort_keys=True)])
+    if ref:
+        args.extend(["--ref", json.dumps(ref, sort_keys=True)])
     if secret_stdin:
         args.append("--secret-stdin")
     return args
@@ -781,6 +787,22 @@ def _delete_cached_grant(account: str) -> None:
     _keyring_delete(LEGACY_CLIENT_GRANT_SERVICE_NAME, account)
 
 
+def _invalidate_secret_mutation_caches(name: str, *, credential_ref: dict[str, Any] | None = None) -> None:
+    ref = _parse_credential_ref(credential_ref)
+    _APPROVED_SECRET_CACHE.pop(name, None)
+    ref_key = _ref_identity_key(ref)
+    if ref_key:
+        _APPROVED_SECRET_CACHE.pop(ref_key, None)
+    read_scope = f"auth:secret:read:{name}"
+    if ref:
+        # Ref reads cache the durable grant under both the ref op kind
+        # (auth:ref:read) and the secret op kind; purge both so a mutation
+        # never leaves a stale ref-scoped read grant.
+        _delete_cached_grant(_grant_cache_account("auth:ref:read", name, read_scope, ref=ref))
+        _delete_cached_grant(_grant_cache_account("auth:secret:read", name, read_scope, ref=ref))
+    _delete_cached_grant(_grant_cache_account("auth:secret:read", name, read_scope))
+
+
 def _store_cached_grant(
     account: str,
     data: dict[str, Any],
@@ -1037,18 +1059,74 @@ def _same_name_ambiguity_warnings(rows: list[dict[str, Any]]) -> list[str]:
     return warnings
 
 
-def discover_credential_candidates() -> dict[str, Any]:
-    provider_rows = discover_provider_credentials(reusable_only=True)
-    ref_rows, refs_available = discover_auth_refs()
-    provider_names = {str(item.get("name") or "") for item in provider_rows if item.get("name")}
-    generic_rows = [
-        row for row in ref_rows
-        if row.get("has_secret") and str(row.get("name") or "") not in provider_names
-    ]
-    warnings = _same_name_ambiguity_warnings(ref_rows)
-    if not refs_available:
-        warnings.append("Exact-source credential refs are unavailable; name-only selection may be ambiguous.")
+def _safe_provider_by_ref_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Shape a `discoverProviderCredentialsByRef` row into an LLM-Dash candidate.
 
+    Each upstream row already embeds the exact-source `ref` plus provider meta
+    (baseURL/modelsURL), so the LLM-Dash-side fields (`source_label`,
+    `managed_by_llmdash`, `locked`, `unreadable`) are derived from that ref —
+    no hand-rolled name join needed.
+    """
+    ref = safe_credential_ref(row.get("ref"))
+    if not ref:
+        return {}
+    name = str(row.get("name") or ref.get("name") or "")
+    if not name:
+        return {}
+    source = str(row.get("source") or ref.get("source") or "")
+    meta = ref.get("meta") if isinstance(ref.get("meta"), dict) else {}
+    custom = meta.get("custom") if isinstance(meta.get("custom"), dict) else {}
+    shaped: dict[str, Any] = {
+        "name": name,
+        "label": str(row.get("label") or ref.get("label") or name),
+        "source": source,
+        "sources": [source] if source else [],
+        "source_label": source_label(source),
+        "ref": ref,
+        "hasSecret": bool(row.get("hasSecret", ref.get("hasSecret", True))),
+        "keyringBacked": bool(row.get("keyringBacked", ref.get("keyringBacked", False))),
+        "reusability": str(row.get("reusability") or ""),
+        "managed_by_llmdash": credential_managed_by_llmdash(ref=ref, custom=custom, name=name),
+        "locked": bool(ref.get("locked")),
+        "unreadable": bool(ref.get("unreadable")),
+    }
+    for key in ("providerFamily", "protocol", "baseURL", "modelsURL", "chatURL", "apiFormat"):
+        if row.get(key):
+            shaped[key] = row[key]
+    safe_custom = row.get("safeCustom")
+    if isinstance(safe_custom, dict):
+        shaped["safeCustom"] = _safe_ref_meta(safe_custom)
+    return shaped
+
+
+def discover_provider_credentials_by_ref(*, reusable_only: bool = True) -> tuple[list[dict[str, Any]], bool]:
+    """Ref-qualified provider discovery: one row per exact provider credential source.
+
+    Returns `(rows, available)`. `available` is False when the ref-qualified
+    path cannot run (bridge unavailable or an older Voidware runtime without
+    `discoverProvidersBySource`), so callers fall back to the name join.
+    """
+    if _is_legacy_install_over_auth_marker():
+        return [], False
+    try:
+        response = _BRIDGE.request("discoverProvidersByRef", {"reusableOnly": reusable_only}, timeout=12)
+        data = response.get("data")
+        if isinstance(data, list):
+            if not bool(response.get("refsAvailable", True)):
+                return [], False
+            rows = [_safe_provider_by_ref_row(item) for item in data if isinstance(item, dict)]
+            return [row for row in rows if row], True
+    except VoidwareAuthError as exc:
+        if exc.code not in {"bridge_unavailable", "node_unavailable", "node_unsupported"}:
+            raise
+    return [], False
+
+
+def _join_provider_rows_with_refs(
+    provider_rows: list[dict[str, Any]],
+    ref_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Legacy name-join fallback for installs without ref-qualified discovery."""
     refs_by_name: dict[str, list[dict[str, Any]]] = {}
     for row in ref_rows:
         if not row.get("has_secret"):
@@ -1076,6 +1154,28 @@ def discover_credential_candidates() -> dict[str, Any]:
                 provider_candidates.append(merged)
         else:
             provider_candidates.append(provider_row)
+    return provider_candidates
+
+
+def discover_credential_candidates() -> dict[str, Any]:
+    ref_rows, refs_available = discover_auth_refs()
+    warnings = _same_name_ambiguity_warnings(ref_rows)
+    if not refs_available:
+        warnings.append("Exact-source credential refs are unavailable; name-only selection may be ambiguous.")
+
+    by_ref_rows, by_ref_available = discover_provider_credentials_by_ref(reusable_only=True)
+    if by_ref_available:
+        provider_candidates = by_ref_rows
+        provider_names = {str(row.get("name") or "") for row in by_ref_rows if row.get("name")}
+    else:
+        provider_rows = discover_provider_credentials(reusable_only=True)
+        provider_names = {str(item.get("name") or "") for item in provider_rows if item.get("name")}
+        provider_candidates = _join_provider_rows_with_refs(provider_rows, ref_rows)
+
+    generic_rows = [
+        row for row in ref_rows
+        if row.get("has_secret") and str(row.get("name") or "") not in provider_names
+    ]
 
     return {
         "refs_available": refs_available,
@@ -1122,22 +1222,37 @@ def write_secret(
     metadata: dict[str, Any] | None = None,
     custom: dict[str, Any] | None = None,
     require_fresh_grant: bool = False,
+    credential_ref: dict[str, Any] | str | None = None,
 ) -> None:
     _move_legacy_install_over_auth_marker()
+    ref = _parse_credential_ref(credential_ref)
     if require_fresh_grant:
-        _APPROVED_SECRET_CACHE.pop(name, None)
+        _invalidate_secret_mutation_caches(name, credential_ref=ref)
     try:
-        response = _BRIDGE.request(
-            "writeSecret",
-            {
-                "name": name,
-                "secret": secret,
-                "metadata": metadata or {},
-                "custom": custom or {},
-                "forceRefresh": bool(require_fresh_grant),
-            },
-            timeout=APPROVAL_BROKER_TIMEOUT,
-        )
+        if ref:
+            response = _BRIDGE.request(
+                "writeRefSecret",
+                {
+                    "ref": ref,
+                    "secret": secret,
+                    "metadata": metadata or {},
+                    "custom": custom or {},
+                    "forceRefresh": bool(require_fresh_grant),
+                },
+                timeout=APPROVAL_BROKER_TIMEOUT,
+            )
+        else:
+            response = _BRIDGE.request(
+                "writeSecret",
+                {
+                    "name": name,
+                    "secret": secret,
+                    "metadata": metadata or {},
+                    "custom": custom or {},
+                    "forceRefresh": bool(require_fresh_grant),
+                },
+                timeout=APPROVAL_BROKER_TIMEOUT,
+            )
         if response.get("ok") is False:
             raise VoidwareAuthError(
                 _redact(str(response.get("message") or "Voidware secret write failed.")),
@@ -1147,30 +1262,57 @@ def write_secret(
                     "operation_id": str(response.get("operationId") or ""),
                 },
             )
+        _invalidate_secret_mutation_caches(name, credential_ref=ref)
         return
     except VoidwareAuthError as exc:
         if exc.code not in {"bridge_unavailable", "node_unavailable", "node_unsupported"}:
             raise
-    _unwrap_or_raise(_run(_request_args(
-        "auth:secret:write",
-        target=name,
-        scope=f"auth:secret:write:{name}",
-        template="custom-http",
-        metadata=metadata,
-        custom=custom,
-        secret_stdin=True,
-    ), secret=secret))
+    if ref:
+        _unwrap_or_raise(_run(_request_args(
+            "auth:ref:write",
+            target=str(ref.get("name") or name),
+            scope=f"auth:secret:write:{name}",
+            template="custom-http",
+            metadata=metadata,
+            custom=custom,
+            secret_stdin=True,
+            ref=ref,
+        ), secret=secret))
+    else:
+        _unwrap_or_raise(_run(_request_args(
+            "auth:secret:write",
+            target=name,
+            scope=f"auth:secret:write:{name}",
+            template="custom-http",
+            metadata=metadata,
+            custom=custom,
+            secret_stdin=True,
+        ), secret=secret))
+    _invalidate_secret_mutation_caches(name, credential_ref=ref)
 
 
-def delete_secret(name: str, *, require_fresh_grant: bool = False) -> None:
+def delete_secret(
+    name: str,
+    *,
+    require_fresh_grant: bool = False,
+    credential_ref: dict[str, Any] | str | None = None,
+) -> None:
+    ref = _parse_credential_ref(credential_ref)
     if require_fresh_grant:
-        _APPROVED_SECRET_CACHE.pop(name, None)
+        _invalidate_secret_mutation_caches(name, credential_ref=ref)
     try:
-        response = _BRIDGE.request(
-            "deleteSecret",
-            {"name": name, "forceRefresh": bool(require_fresh_grant)},
-            timeout=APPROVAL_BROKER_TIMEOUT,
-        )
+        if ref:
+            response = _BRIDGE.request(
+                "deleteRefSecret",
+                {"ref": ref, "forceRefresh": bool(require_fresh_grant)},
+                timeout=APPROVAL_BROKER_TIMEOUT,
+            )
+        else:
+            response = _BRIDGE.request(
+                "deleteSecret",
+                {"name": name, "forceRefresh": bool(require_fresh_grant)},
+                timeout=APPROVAL_BROKER_TIMEOUT,
+            )
         if response.get("ok") is False:
             raise VoidwareAuthError(
                 _redact(str(response.get("message") or "Voidware secret delete failed.")),
@@ -1180,15 +1322,25 @@ def delete_secret(name: str, *, require_fresh_grant: bool = False) -> None:
                     "operation_id": str(response.get("operationId") or ""),
                 },
             )
+        _invalidate_secret_mutation_caches(name, credential_ref=ref)
         return
     except VoidwareAuthError as exc:
         if exc.code not in {"bridge_unavailable", "node_unavailable", "node_unsupported"}:
             raise
-    _unwrap_or_raise(_run(_request_args(
-        "auth:secret:delete",
-        target=name,
-        scope=f"auth:secret:delete:{name}",
-    )))
+    if ref:
+        _unwrap_or_raise(_run(_request_args(
+            "auth:ref:delete",
+            target=str(ref.get("name") or name),
+            scope=f"auth:secret:delete:{name}",
+            ref=ref,
+        )))
+    else:
+        _unwrap_or_raise(_run(_request_args(
+            "auth:secret:delete",
+            target=name,
+            scope=f"auth:secret:delete:{name}",
+        )))
+    _invalidate_secret_mutation_caches(name, credential_ref=ref)
 
 
 def pending_approval() -> dict[str, Any]:
@@ -1287,17 +1439,87 @@ def _grant_cache_accounts_for_names(names: tuple[str, ...] | list[str]) -> set[s
     return accounts
 
 
+def _client_grant_index_path() -> Path:
+    # Mirrors voidware's userClientGrantIndexPath(): <shxdow_dir>/data/client-grant-index.json.
+    return _shxdow_dir() / "data" / "client-grant-index.json"
+
+
+def _index_entry_matches_llmdash(entry: dict[str, Any]) -> bool:
+    app = str(entry.get("app") or "").strip()
+    repo = str(entry.get("repoPath") or "").strip()
+    if app and app not in {APP_NAME, "llm-dash"}:
+        return False
+    if repo and repo != str(ROOT):
+        return False
+    return app in {APP_NAME, "llm-dash"} or repo == str(ROOT)
+
+
+def _client_grant_index_accounts() -> set[str]:
+    # Enumerate every LLM-Dash grant-cache account voidware recorded in the
+    # durable client-grant index, regardless of the auth fingerprint it was
+    # written under. This is what lets the purge reach entries that the
+    # fingerprint-derived path cannot reconstruct.
+    data = _read_json_file(_client_grant_index_path())
+    if not isinstance(data, dict) or data.get("v") != 1:
+        return set()
+    entries = data.get("entries")
+    if not isinstance(entries, list):
+        return set()
+    accounts: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, dict) or not _index_entry_matches_llmdash(entry):
+            continue
+        account = str(entry.get("account") or "").strip()
+        if account:
+            accounts.add(account)
+    return accounts
+
+
+def _rewrite_client_grant_index_without(accounts: set[str]) -> None:
+    path = _client_grant_index_path()
+    data = _read_json_file(path)
+    if not isinstance(data, dict):
+        return
+    entries = data.get("entries")
+    if not isinstance(entries, list):
+        return
+    kept = [
+        entry
+        for entry in entries
+        if not (isinstance(entry, dict) and str(entry.get("account") or "").strip() in accounts)
+    ]
+    if len(kept) == len(entries):
+        return
+    try:
+        path.write_text(json.dumps({"v": 1, "entries": kept}, indent=2), encoding="utf-8")
+    except OSError:
+        return
+
+
 def _delete_legacy_grant_cache_entries(secret_names: tuple[str, ...] | list[str] = ()) -> list[str]:
     removed: list[str] = []
+    purged_accounts: set[str] = set()
     for account in sorted(_LEGACY_GRANT_ACCOUNTS):
         _keyring_delete(LEGACY_CLIENT_GRANT_SERVICE_NAME, account)
         _LEGACY_GRANT_ACCOUNTS.discard(account)
+        purged_accounts.add(account)
         removed.append(f"legacy-grant-cache:{account}")
     for account in sorted(_grant_cache_accounts_for_names([*DEFAULT_LLMDASH_SECRET_NAMES, *secret_names])):
         for service in (LEGACY_CLIENT_GRANT_SERVICE_NAME, OFFICIAL_CLIENT_GRANT_SERVICE_NAME):
             if _keyring_get(service, account):
                 _keyring_delete(service, account)
                 removed.append(f"grant-cache:{service}:{account}")
+        purged_accounts.add(account)
+    # Index-driven purge: covers ref-scoped accounts and entries written under
+    # stale auth fingerprints that the derived path above cannot reconstruct.
+    index_accounts = _client_grant_index_accounts()
+    new_index_accounts = sorted(index_accounts - purged_accounts)
+    for account in new_index_accounts:
+        for service in (LEGACY_CLIENT_GRANT_SERVICE_NAME, OFFICIAL_CLIENT_GRANT_SERVICE_NAME):
+            _keyring_delete(service, account)
+        removed.append(f"grant-cache-index:{account}")
+    if index_accounts:
+        _rewrite_client_grant_index_without(index_accounts)
     return removed
 
 

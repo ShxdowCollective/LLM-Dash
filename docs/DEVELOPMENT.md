@@ -30,7 +30,11 @@ python3 -m venv .venv
 source .venv/bin/activate    # or .venv\Scripts\activate on Windows
 pip install -r requirements.txt
 
-# Install package assets used by Voidware refresh/migration work
+# Install package assets used by Voidware refresh/migration work.
+# @shxdowcollective/voidware + voidware-cli resolve from GitHub Packages, so
+# export a token first. .npmrc reads ${GH_PACKAGES_KEY} from the environment
+# (keep it in the gitignored .env; see .env.example).
+set -a; . ./.env; set +a
 npm ci
 
 # Launch the dashboard
@@ -87,7 +91,7 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 | `server.py` | FastAPI app: static mounts, API routes, bootstrap, job management |
 | `scripts/config.py` | Provider config + credential pipeline (env → selected Voidware provider → Voidware broker; legacy keyring reads are migration-only) |
 | `scripts/voidware_auth.py` | Python controller for Voidware provider discovery, app-owned approval bridge lifecycle, and broker-backed provider/Exa/LLM Stats API keys |
-| `scripts/voidware_app_broker.mjs` | Node worker that imports Voidware 1.0.4 package/CLI service APIs and hosts LLM-Dash-owned approval prompts |
+| `scripts/voidware_app_broker.mjs` | Node worker that imports Voidware 1.1.0 package/CLI service APIs (cli resolved from `node_modules`) and hosts LLM-Dash-owned approval prompts |
 | `scripts/vendor_voidware_css.mjs` | Copies `@shxdowcollective/voidware` CSS into `web/vendor/voidware/` and refreshes provenance |
 | `scripts/voidware_package_smoke.mjs` | Verifies package CSS sources and runtime exports (`auth`, `auth-templates`, `logging`) |
 | `scripts/init_db.py` | First-run DB creation from `schema.sql` + 34-model seed |
@@ -104,7 +108,7 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 | File | Responsibility |
 |---|---|
 | `web/index.html` | App shell, font imports, mount points |
-| `web/style.css` | App-specific Voidware 1.0.4 app layer and component styles |
+| `web/style.css` | App-specific Voidware 1.1.0 app layer and component styles |
 | `web/app.js` | sql.js bootstrap, route state, area renderers, Settings workflows, overlays |
 | `web/provider-presets.json` | Static catalog of provider presets kept for API compatibility |
 | `web/vendor/` | Vendored libraries (sql-wasm, marked.js, uPlot) — committed, not installed |
@@ -154,19 +158,23 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 
 ### CSS
 
-- Voidware v1.0.4 is pinned in `package.json`; committed runtime CSS is still
-  vendored under `web/vendor/voidware/` for the zero-build launcher contract.
-  Refresh it from the installed package with:
+- Voidware v1.1.0 is pinned in `package.json` (`@shxdowcollective/voidware`
+  for auth/CSS, `@shxdowcollective/voidware-cli` for the broker service + bin);
+  committed runtime CSS is still vendored under `web/vendor/voidware/` for the
+  zero-build launcher contract. Refresh it from the installed package with:
 
   ```bash
+  set -a; . ./.env; set +a   # token for GitHub Packages
   npm ci
   npm run vendor:voidware
   ```
 
   Keep provenance current in `web/vendor/voidware/VERSION.md`. The refresh
-  script excludes `theme-template.css` and verifies the `index.css` import
-  chain after copy. Run `npm run smoke:voidware` to confirm package CSS sources
-  and runtime exports, or `npm run verify:voidware` for refresh + smoke together.
+  script now vendors all package CSS including `theme-template.css` and verifies
+  the `index.css` import chain after copy. Run `npm run smoke:voidware` to
+  confirm package CSS sources, runtime exports, and that the cli service
+  resolves from `node_modules`, or `npm run verify:voidware` for refresh + smoke
+  together.
 - Shadow-as-border: `box-shadow: 0 0 0 1px var(--vw-border)` instead of `border`
 - Focus: `outline` with `outline-offset`, not box-shadow
 - Typography: `--vw-font-body` (Inter) for prose, `--vw-font-mono`

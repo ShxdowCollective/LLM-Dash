@@ -15,9 +15,8 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const PKG_ROOT = join(ROOT, 'node_modules/@shxdowcollective/voidware')
 const PKG_CSS = join(PKG_ROOT, 'src/css')
 const VENDOR_DIR = join(ROOT, 'web/vendor/voidware')
-const EXCLUDE = new Set(['theme-template.css'])
 const IMPORT_RE = /@import\s+url\(["']([^"']+)["']\)/g
-const EXPECTED_VOIDWARE_VERSION = '1.0.4'
+const EXPECTED_VOIDWARE_VERSION = '1.1.0'
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'))
@@ -39,7 +38,7 @@ function copyCssFiles(sourceDir) {
     if (name.endsWith('.css')) rmSync(join(VENDOR_DIR, name))
   }
   for (const name of readdirSync(sourceDir).sort()) {
-    if (!name.endsWith('.css') || EXCLUDE.has(name)) continue
+    if (!name.endsWith('.css')) continue
     copyFileSync(join(sourceDir, name), join(VENDOR_DIR, name))
     copied.push(name)
   }
@@ -99,8 +98,6 @@ function writeVersionMarkdown({ version, copiedFiles, importChain }) {
     '',
     '- `index.css`',
     ...files.map((name) => `- \`${name}\``),
-    '',
-    '`theme-template.css` is intentionally excluded because LLM-Dash is not vendoring a theme authoring template.',
     '',
     '## Import chain',
     '',
