@@ -12,7 +12,12 @@ Follow this skill end-to-end, no shortcuts.
 ## 0. Context
 
 - Working directory: the repo root (parent of `skill/`).
-- SQLite DB: `data/dash.sqlite`. Schema at `scripts/schema.sql`.
+- SQLite DB: `data/dash.sqlite`. Schema at `scripts/schema.sql`. **Not auto-seeded.**
+  An empty install boots into the setup wizard (`needs_setup`) and is seeded via
+  `scripts/seed_catalog.py` (`POST /api/seed`). To run an update on an empty
+  catalog, seed it first — through the wizard, or offline with
+  `python scripts/init_db.py` (34-model preseed) — since an update run requires an
+  existing DB. Seeding writes a changelog + `run_metrics` row like a normal run.
 - Changelogs: `changelogs/YYYY-MM-DD.md`. **Append-only.** Never modify prior files.
 - Run metrics: `run_metrics` table in SQLite + a human-readable mirror at
   `data/run_metrics.csv`.

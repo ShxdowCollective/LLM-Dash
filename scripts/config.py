@@ -36,6 +36,9 @@ EXA_API_KEY_ENVS = ("EXA_API_KEY", "LLM_DASH_EXA_API_KEY")
 LLMSTATS_KEY_NAME = "LLM_STATS_API_KEY"
 LLMSTATS_API_KEY_ENVS = ("LLM_STATS_API_KEY", "LLM_DASH_LLMSTATS_API_KEY")
 LLMSTATS_BASE_URL = "https://api.llm-stats.com/stats"
+AA_KEY_NAME = "AA_API_KEY"
+AA_API_KEY_ENVS = ("AA_API_KEY", "ARTIFICIAL_ANALYSIS_API_KEY", "LLM_DASH_AA_API_KEY")
+AA_BASE_URL = "https://artificialanalysis.ai/api/v2"
 
 SENSITIVE_HEADER_PARTS = ("authorization", "api-key", "apikey", "x-api-key", "token", "secret", "key")
 ENDPOINT_MODE_APPEND_V1 = "append_v1"
@@ -43,26 +46,30 @@ ENDPOINT_MODE_ROOT = "root"
 ENDPOINT_MODES = {ENDPOINT_MODE_APPEND_V1, ENDPOINT_MODE_ROOT}
 SECRET_REMOVE_FALLBACK_CODES = {"broker_unavailable", "broker_timeout", "cli_unavailable"}
 CONFIG_VERSION = 2
-CREDENTIAL_SLOTS = ("provider", "exa", "llmstats")
+CREDENTIAL_SLOTS = ("provider", "exa", "llmstats", "aa")
 SLOT_ENV_KEYS = {
     "provider": PROVIDER_API_KEY_ENVS,
     "exa": EXA_API_KEY_ENVS,
     "llmstats": LLMSTATS_API_KEY_ENVS,
+    "aa": AA_API_KEY_ENVS,
 }
 SLOT_KEY_NAMES = {
     "provider": PROVIDER_KEY_NAMES,
     "exa": (EXA_KEY_NAME,),
     "llmstats": (LLMSTATS_KEY_NAME,),
+    "aa": (AA_KEY_NAME,),
 }
 SLOT_DEFAULT_SECRET_NAMES = {
     "provider": voidware_auth.PROVIDER_SECRET_NAME,
     "exa": voidware_auth.EXA_SECRET_NAME,
     "llmstats": voidware_auth.LLMSTATS_SECRET_NAME,
+    "aa": voidware_auth.AA_SECRET_NAME,
 }
 SLOT_MANAGED_KINDS = {
     "provider": "agent-provider",
     "exa": "exa",
     "llmstats": "llmstats",
+    "aa": "aa",
 }
 
 
@@ -257,7 +264,7 @@ def _migrate_config_v2(data: dict[str, Any]) -> dict[str, Any]:
     migrated["version"] = CONFIG_VERSION
     migrated.setdefault("app", APP_NAME)
     discovered = _discovered_secret_names()
-    for slot in ("exa", "llmstats"):
+    for slot in ("exa", "llmstats", "aa"):
         section = dict(_load_slot_section(migrated, slot))
         prefix = _slot_field_prefix(slot)
         if not section.get(f"{prefix}_name"):
@@ -861,11 +868,13 @@ def save_slot_api_key(slot: str, api_key: str) -> CredentialSlotConfig:
         "provider": "LLM-Dash Agent Provider",
         "exa": "LLM-Dash Exa",
         "llmstats": "LLM-Dash LLM Stats",
+        "aa": "LLM-Dash Artificial Analysis",
     }
     env_names = {
         "provider": PROVIDER_KEY_NAME,
         "exa": EXA_KEY_NAME,
         "llmstats": LLMSTATS_KEY_NAME,
+        "aa": AA_KEY_NAME,
     }
     _save_secret(
         default_name,
@@ -941,6 +950,7 @@ def public_provider_state() -> dict[str, Any]:
     config = load_provider_config()
     exa_slot = load_credential_slot("exa")
     llmstats_slot = load_credential_slot("llmstats")
+    aa_slot = load_credential_slot("aa")
     provider_auth = _credential_source(
         PROVIDER_API_KEY_ENVS,
         PROVIDER_KEY_NAMES,
@@ -965,6 +975,14 @@ def public_provider_state() -> dict[str, Any]:
         llmstats_slot.credential_ref,
         llmstats_slot.credential_grant,
     )
+    aa_auth = _credential_source(
+        AA_API_KEY_ENVS,
+        AA_KEY_NAME,
+        voidware_auth.AA_SECRET_NAME,
+        aa_slot.credential_name,
+        aa_slot.credential_ref,
+        aa_slot.credential_grant,
+    )
     has_provider = bool(config.base_url and config.default_model and provider_auth.get("configured"))
     bundle = ProviderBundle(config=config, secrets=ProviderSecrets(api_key=""))
     return {
@@ -982,6 +1000,7 @@ def public_provider_state() -> dict[str, Any]:
         "provider_credential_grant": config.provider_credential_grant or {},
         "exa_configured": bool(exa_auth.get("configured")),
         "llmstats_configured": bool(llmstats_auth.get("configured")),
+        "aa_configured": bool(aa_auth.get("configured")),
         "credential_slots": {
             "provider": {
                 "name": config.provider_credential_name,
@@ -1007,6 +1026,14 @@ def public_provider_state() -> dict[str, Any]:
                 "grant_status": llmstats_auth.get("grant_status") or voidware_auth.grant_renewal_status(llmstats_slot.credential_grant),
                 "managed_by_llmdash": llmstats_auth.get("managed_by_llmdash", False),
             },
+            "aa": {
+                "name": aa_slot.credential_name,
+                "ref": voidware_auth.safe_credential_ref(aa_slot.credential_ref),
+                "meta": aa_slot.credential_meta or {},
+                "grant": aa_slot.credential_grant or {},
+                "grant_status": aa_auth.get("grant_status") or voidware_auth.grant_renewal_status(aa_slot.credential_grant),
+                "managed_by_llmdash": aa_auth.get("managed_by_llmdash", False),
+            },
         },
         "auth": {
             "precedence": ["env", "voidware-provider", "voidware-broker", "voidware-keystore", "keyring-legacy"],
@@ -1014,6 +1041,7 @@ def public_provider_state() -> dict[str, Any]:
             "provider": provider_auth,
             "exa": exa_auth,
             "llmstats": llmstats_auth,
+            "aa": aa_auth,
         },
     }
 
@@ -1239,6 +1267,26 @@ def save_llmstats_api_key(api_key: str) -> None:
 def remove_llmstats_api_key() -> None:
     clear_credential_slot_selection("llmstats")
     _remove_secret(voidware_auth.LLMSTATS_SECRET_NAME, (LLMSTATS_KEY_NAME,))
+
+
+def load_aa_api_key() -> str:
+    slot = load_credential_slot("aa")
+    return _read_secret(
+        AA_API_KEY_ENVS,
+        AA_KEY_NAME,
+        voidware_auth.AA_SECRET_NAME,
+        slot.credential_name,
+        slot.credential_ref,
+    )
+
+
+def save_aa_api_key(api_key: str) -> None:
+    save_slot_api_key("aa", api_key)
+
+
+def remove_aa_api_key() -> None:
+    clear_credential_slot_selection("aa")
+    _remove_secret(voidware_auth.AA_SECRET_NAME, (AA_KEY_NAME,))
 
 
 def remove_provider_api_key() -> None:

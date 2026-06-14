@@ -16,7 +16,7 @@
   ];
   const TIER_ORDER = ["S", "A", "B", "C", "D", "F"];
   const MAX_COMPARE = 4;
-  const STORE_KEY = "llm-dash-ui-state-v5";
+  const STORE_KEY = "llm-dash-ui-state-v6";
   const ZOOM_MIN = 0.7, ZOOM_MAX = 1.4, GRADE_ZOOM = 0.85;
 
   // Fixed input-modality vocabulary (schema_version 4). Each modality gets an
@@ -71,8 +71,8 @@
   const META_POLL_MS = 15000;
   const RUN_POLL_MS = 3000;
   const BOOT_POLL_MS = 900;
-  const CREDENTIAL_SLOTS = ["provider", "exa", "llmstats"];
-  const SLOT_TITLES = { provider: "Connection", exa: "Exa", llmstats: "LLM Stats" };
+  const CREDENTIAL_SLOTS = ["provider", "exa", "llmstats", "aa"];
+  const SLOT_TITLES = { provider: "Connection", exa: "Exa", llmstats: "LLM Stats", aa: "Artificial Analysis" };
   const DEFAULT_SLOT_FORM = () => ({ pickKey: "", apiKey: "", mode: "select" });
   const EMPTY_APPROVAL = () => ({
     open: false,
@@ -102,7 +102,7 @@
     releasedAfter: "",
     inputCapabilities: [],
     hideDeprecated: false,
-    tableZoom: 1.12,
+    tableZoom: 1.0,
     colWidths: {},
     filtersOpen: false,
     chartMode: "scatter",
@@ -118,6 +118,7 @@
     models: {
       title: "Models",
       subpages: [
+        ["list", "List"],
         ["table", "Table"],
         ["chart", "Chart"],
       ],
@@ -148,7 +149,7 @@
     ready: false,
     error: "",
     area: "models",
-    subpage: { models: "table", settings: "provider" },
+    subpage: { models: "list", settings: "provider" },
     models: [],
     filteredModels: [],
     totalModelCount: 0,
@@ -163,6 +164,7 @@
     toastId: 0,
     searchDebounce: 0,
     runTimer: 0,
+    seedTimer: 0,
     metaTimer: 0,
     chartResize: 0,
     resetMode: false,
@@ -183,7 +185,20 @@
       provider: DEFAULT_SLOT_FORM(),
       exa: DEFAULT_SLOT_FORM(),
       llmstats: DEFAULT_SLOT_FORM(),
+      aa: DEFAULT_SLOT_FORM(),
     },
+    catalog: {
+      aaCount: 50,
+      aaIndex: "intelligence",
+      llmstatsCount: 25,
+      exaCount: 25,
+      openrouterCount: 25,
+      customCount: 25,
+      customPrompt: "",
+      customEndpoint: "",
+      customCredential: "",
+    },
+    seed: { id: "", state: "", tail: "", error: "", preset: "", started: 0 },
     presets: [],
     schedule: {},
     run: { open: false, id: "", state: "idle", started: 0, tail: "", error: "" },
@@ -233,7 +248,22 @@
 
   async function start() {
     try {
-      await waitForBootstrap();
+      const bootstrap = await waitForBootstrap();
+      if (bootstrap === "needs_setup") {
+        state.setupMode = true;
+        // Enter at the first step (Connection) so a fresh/full-reset machine with
+        // no provider configured is walked through the linear flow before Catalog.
+        state.setupStep = "provider";
+        await Promise.all([loadProvider(), loadPresets(), loadCredentialDiscovery(), loadSchedule()]);
+        hydrateForms();
+        state.ready = true;
+        els.app.removeAttribute("data-booting");
+        navigate("settings", "provider");
+        render();
+        pollMeta();
+        state.metaTimer = window.setInterval(pollMeta, META_POLL_MS);
+        return;
+      }
       await Promise.all([loadDatabase(), loadProvider(), loadPresets(), loadCredentialDiscovery(), loadSchedule()]);
       hydrateForms();
       state.ready = true;
@@ -253,7 +283,8 @@
   async function waitForBootstrap() {
     for (;;) {
       const data = await api("/api/bootstrap-status").catch((error) => ({ state: "error", detail: message(error) }));
-      if (data.state === "ready" || data.state === "unsupported") return;
+      if (data.state === "ready" || data.state === "unsupported") return data.state;
+      if (data.state === "needs_setup") return "needs_setup";
       if (data.state === "error") throw new Error(data.detail || data.message || "Bootstrap failed.");
       renderBoot(data.message || "Preparing dashboard database...");
       await sleep(BOOT_POLL_MS);
@@ -264,13 +295,18 @@
     if (typeof window.initSqlJs !== "function") throw new Error("sql.js did not load.");
     state.SQL = await window.initSqlJs({ locateFile: (file) => "vendor/" + file });
     const res = await fetch("/data/dash.sqlite?t=" + Date.now(), { cache: "no-store" });
-    if (!res.ok) throw new Error("Could not load dash.sqlite.");
+    if (!res.ok) {
+      if (state.db) state.db.close();
+      state.db = null;
+      return;
+    }
     if (state.db) state.db.close();
     state.db = new state.SQL.Database(new Uint8Array(await res.arrayBuffer()));
     loadStaticData();
   }
 
   function loadStaticData() {
+    if (!state.db) return;
     state.totalModelCount = row("SELECT COUNT(*) AS count FROM models")?.count || 0;
     state.vendorOptions = rows("SELECT DISTINCT vendor FROM models ORDER BY vendor").map((r) => r.vendor).filter(Boolean);
     state.changelogs = rows("SELECT date, title, path, summary, new_models_json, changed_json FROM changelogs ORDER BY date DESC");
@@ -333,6 +369,7 @@
   }
 
   function rows(sql, params) {
+    if (!state.db) return [];
     const stmt = state.db.prepare(sql);
     const out = [];
     try {
@@ -349,6 +386,11 @@
   }
 
   function refreshModels() {
+    if (!state.db) {
+      state.models = [];
+      state.filteredModels = [];
+      return;
+    }
     const where = [];
     const params = [];
     const ui = state.ui;
@@ -498,6 +540,11 @@
   }
 
   function renderSubnav() {
+    if (state.setupMode) {
+      els.subnav.hidden = true;
+      els.subnav.replaceChildren();
+      return;
+    }
     const config = AREA[state.area] || AREA.models;
     if (!config.subpages.length) {
       els.subnav.hidden = true;
@@ -517,11 +564,15 @@
   }
 
   function renderModels() {
+    if (!state.db) {
+      return emptyState("No catalog yet", "Complete setup to seed your model catalog.", "Open Setup", () => navigate("settings", "catalog"));
+    }
     refreshModels();
     normalizeChartAxes();
+    const view = state.subpage.models;
     return h("section", { class: "models-workbench" }, [
       renderModelToolbar(),
-      state.subpage.models === "chart" ? renderChart() : renderTable(),
+      view === "chart" ? renderChart() : view === "table" ? renderTable() : renderList(),
     ]);
   }
 
@@ -705,6 +756,85 @@
       h("div", { class: "models-mobile-list" }, state.filteredModels.map((model, index) => modelCard(model, index))),
       renderCompareArea(),
     ]);
+  }
+
+  function renderList() {
+    if (!state.totalModelCount) return emptyState("No models tracked yet", "Run Refresh to discover and score models.", "Run Refresh", handleRefresh);
+    if (!state.filteredModels.length) return emptyState("No models match this view", "Clear filters or search for another vendor.", "Reset view", resetFilters);
+    return h("section", { class: "model-list-layout" }, [
+      h("div", { class: "list-sort-bar" }, [
+        h("label", { class: "field compact list-sort-field" }, [
+          h("span", null, "Sort"),
+          h("select", { value: state.ui.sortKey, onchange: (e) => setSort(e.target.value) },
+            MOBILE_SORTS.map(([key, label]) => h("option", { value: key }, label))),
+        ]),
+      ]),
+      h("div", { class: "model-list vw-scroll-shadow" },
+        state.filteredModels.map((model, index) => listRow(model, index))),
+      renderCompareArea(),
+    ]);
+  }
+
+  function listRow(model, index) {
+    const color = safeColor(model.color);
+    return h("div", {
+      class: rowClasses(model.id) + " model-list-row",
+      tabindex: "0",
+      role: "button",
+      style: { "--model-color": color },
+      onclick: () => setInspect(model.id),
+      onkeydown: (e) => rowKey(e, index, model.id),
+    }, [
+      h("span", { class: "list-rank" }, index + 1),
+      compareCheckbox(model),
+      providerLogo(model, 24),
+      listIdentity(model),
+      listOverallChip(overall(model), color),
+      listValueChip(valueScore(model)),
+      h("span", { class: "list-cost" }, fmtScore(model.cost)),
+      scoreSpark(model),
+    ]);
+  }
+
+  function listIdentity(model) {
+    return h("div", { class: "list-model-identity" }, [
+      h("strong", { class: "list-model-name" }, highlight(model.name || "Unknown model")),
+      h("span", { class: "list-model-vendor" }, model.vendor || "Unknown"),
+    ]);
+  }
+
+  function listOverallChip(score, modelColor) {
+    const t = tier(score);
+    return h("span", {
+      class: "list-grade-chip list-overall-chip " + t.cls,
+      style: { "--model-color": modelColor },
+      title: "Overall " + fmtScore(score) + " · " + t.label + " tier",
+    }, t.label);
+  }
+
+  function listValueChip(score) {
+    const t = tier(score);
+    return h("span", {
+      class: "list-grade-chip list-value-chip " + t.cls,
+      title: "Value " + fmtScore(score) + " · " + t.label + " tier",
+    }, t.label);
+  }
+
+  function scoreSpark(model) {
+    const bars = [
+      ["intelligence", "Intelligence", "var(--spark-intel)"],
+      ["coding", "Coding", "var(--spark-coding)"],
+      ["agents", "Agent", "var(--spark-agents)"],
+      ["speed", "Speed", "var(--spark-speed)"],
+    ];
+    return h("div", { class: "score-spark", "aria-hidden": "true" }, bars.map(([key, label, hue]) => {
+      const val = clamp(Number(model[key]) || 0, 0, 10);
+      return h("span", {
+        class: "score-spark-bar",
+        style: { "--spark-fill": (val / 10 * 100) + "%", "--spark-hue": hue },
+        title: label + " " + fmtScore(model[key]),
+      });
+    }));
   }
 
   function headerCell(col) {
@@ -1124,6 +1254,7 @@
   }
 
   function renderChangelog() {
+    if (!state.db) return emptyState("No changelog entries yet", "Seed the catalog from Setup before running updates.", "Open Setup", () => navigate("settings", "catalog"));
     if (!state.changelogs.length) return emptyState("No changelog entries yet", "Run Refresh to create the first append-only update note.", "Run Refresh", handleRefresh);
     const active = state.changelogs.find((c) => c.date === state.activeChangelogDate) || state.changelogs[0];
     ensureChangelog(active);
@@ -1158,6 +1289,7 @@
   }
 
   function renderStats() {
+    if (!state.db) return emptyState("No run telemetry yet", "Seed the catalog from Setup before running updates.", "Open Setup", () => navigate("settings", "catalog"));
     if (!state.metrics.length) {
       return emptyState("No run telemetry yet", "After Refresh completes, token use, cost, duration, and agent stats will appear here.", "Run Refresh", handleRefresh);
     }
@@ -1219,9 +1351,10 @@
 
   const SETUP_STEPS = [
     ["provider", "Connection"],
-    ["models", "Models"],
+    ["models", "Agent model"],
     ["research", "Research"],
-    ["schedule", "Schedule"],
+    ["catalog", "Catalog"],
+    ["seed", "Seed"],
     ["finish", "Finish"],
   ];
 
@@ -1230,7 +1363,7 @@
     return h("nav", { class: "setup-rail panel-card", "aria-label": "Setup steps" }, [
       h("div", { class: "setup-rail-head" }, [
         h("strong", { class: "setup-rail-title" }, "Setup"),
-        h("p", { class: "setup-rail-copy" }, "Configure connection, models, research, and schedule."),
+        h("p", { class: "setup-rail-copy" }, "Connect a provider, add research keys, seed your catalog, and you're in."),
       ]),
       h("ol", { class: "setup-rail-steps" }, SETUP_STEPS.map(([key, label], index) => {
         const active = current === key;
@@ -1248,24 +1381,40 @@
   }
 
   function settingsFinish() {
+    const seeded = catalogReady();
     return h("section", { class: "settings-panel panel-card setup-finish-panel", "aria-label": "Finish setup" }, [
       h("h2", { class: "settings-panel-title" }, "Finish setup"),
-      h("p", { class: "settings-summary" }, "Connection, models, research, and schedule are saved locally. Open the Models dashboard when you are ready."),
+      h("p", { class: "settings-summary" }, seeded
+        ? "Connection, agent model, and research keys are saved locally. Open the Models dashboard when you are ready."
+        : "Your catalog is still empty. Seed it from the Catalog step before opening the dashboard."),
       h("div", { class: "action-row" }, [
-        h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: finishSetup }, "Open Models dashboard"),
-        h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: () => navigate("settings", "provider") }, "Review Connection"),
+        h("button", { class: "vw-btn vw-btn-primary", type: "button", disabled: !seeded, onclick: finishSetup }, "Open Models dashboard"),
+        h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: () => navigate("settings", seeded ? "provider" : "catalog") }, seeded ? "Review Connection" : "Go to Catalog"),
       ]),
     ]);
   }
 
+  // A catalog is ready once the in-browser DB has at least one model. Guards the
+  // wizard from "finishing" into an empty dashboard before a seed lands.
+  function catalogReady() {
+    return Boolean(state.db) && Number(state.totalModelCount) > 0;
+  }
+
   function finishSetup() {
+    if (!catalogReady()) {
+      navigate("settings", "catalog");
+      toast("Seed your catalog before opening the dashboard.", "warning");
+      return;
+    }
     state.setupMode = false;
     state.setupStep = "provider";
-    navigate("models", "table");
+    navigate("models", "list");
   }
 
   function renderSettingsSubpage() {
     if (state.setupMode && state.subpage.settings === "finish") return settingsFinish();
+    if (state.subpage.settings === "catalog") return settingsCatalog();
+    if (state.subpage.settings === "seed") return settingsSeed();
     if (state.subpage.settings === "models") return settingsModels();
     if (state.subpage.settings === "research") return settingsResearch();
     if (state.subpage.settings === "schedule") return settingsSchedule();
@@ -1273,11 +1422,264 @@
     return settingsProvider();
   }
 
+  function catalogCountSelect(catalog, key, counts) {
+    return h("label", { class: "field catalog-field" }, [
+      h("span", null, "Count"),
+      h("select", {
+        value: String(catalog[key]),
+        onchange: (e) => { catalog[key] = Number(e.target.value); },
+      }, counts.map((n) => h("option", { value: String(n) }, String(n)))),
+    ]);
+  }
+
+  function catalogIndexRadios(catalog) {
+    const options = [
+      ["intelligence", "Intelligence"],
+      ["coding", "Coding"],
+      ["agentic", "Agentic"],
+    ];
+    return h("fieldset", { class: "catalog-index-field" }, [
+      h("legend", null, "Rank by"),
+      h("div", { class: "catalog-index-options" }, options.map(([value, label]) => h("label", { class: "catalog-radio" }, [
+        h("input", {
+          type: "radio",
+          name: "aa-index",
+          value,
+          checked: catalog.aaIndex === value,
+          onchange: () => { catalog.aaIndex = value; render(); },
+        }),
+        h("span", null, label),
+      ]))),
+    ]);
+  }
+
+  function renderCatalogCard(card) {
+    const disabled = !card.enabled;
+    return h("article", {
+      class: "catalog-card panel-card" + (disabled ? " is-disabled" : ""),
+      "aria-label": card.title,
+    }, [
+      h("h3", { class: "catalog-card-title" }, card.title),
+      h("p", { class: "catalog-card-copy" }, card.description),
+      h("div", { class: "catalog-card-fields" }, card.inputs),
+      disabled && card.gateHint ? h("p", { class: "catalog-card-hint" }, card.gateHint) : null,
+      h("button", {
+        class: "vw-btn vw-btn-primary",
+        type: "button",
+        disabled,
+        onclick: card.onSeed,
+      }, "Seed catalog"),
+    ]);
+  }
+
+  function settingsCatalog() {
+    const c = state.catalog;
+    return h("section", { class: "settings-panel panel-card", "aria-label": "Catalog" }, [
+      h("h2", { class: "settings-panel-title" }, "Catalog"),
+      h("p", { class: "settings-summary" }, "Pick a seed strategy to populate your model catalog. Each card runs the research agent against a different source."),
+      h("div", { class: "catalog-grid" }, [
+        renderCatalogCard({
+          title: "Artificial Analysis",
+          description: "Top models from the AA Data API, ranked by your chosen index.",
+          enabled: Boolean(state.provider.aa_configured),
+          gateHint: "Add an Artificial Analysis key in the Research step to enable.",
+          inputs: [catalogCountSelect(c, "aaCount", [10, 50, 100]), catalogIndexRadios(c)],
+          onSeed: () => startSeed({ preset: "aa", count: c.aaCount, index: c.aaIndex }),
+        }),
+        renderCatalogCard({
+          title: "LLM Stats",
+          description: "Top models from the LLM Stats catalog API.",
+          enabled: Boolean(state.provider.llmstats_configured),
+          gateHint: "Add an LLM Stats key in the Research step to enable.",
+          inputs: [catalogCountSelect(c, "llmstatsCount", [10, 25, 50])],
+          onSeed: () => startSeed({ preset: "llmstats", count: c.llmstatsCount }),
+        }),
+        renderCatalogCard({
+          title: "Exa search",
+          description: "Discover models via Exa MCP web research (free tier works).",
+          enabled: true,
+          inputs: [catalogCountSelect(c, "exaCount", [10, 25, 50])],
+          onSeed: () => startSeed({ preset: "exa", count: c.exaCount }),
+        }),
+        renderCatalogCard({
+          title: "OpenRouter",
+          description: "Models from the public OpenRouter catalog (largest-context first).",
+          enabled: true,
+          inputs: [catalogCountSelect(c, "openrouterCount", [10, 25, 50])],
+          onSeed: () => startSeed({ preset: "openrouter", count: c.openrouterCount }),
+        }),
+        renderCatalogCard({
+          title: "Custom prompt",
+          description: "Describe what to discover; the agent builds the catalog from your brief.",
+          enabled: true,
+          inputs: [
+            h("label", { class: "field catalog-field" }, [
+              h("span", null, "Discovery brief"),
+              h("textarea", {
+                class: "catalog-prompt",
+                rows: 4,
+                value: c.customPrompt,
+                placeholder: "e.g. Top coding models released in 2026 with public benchmarks…",
+                oninput: (e) => { c.customPrompt = e.target.value; },
+              }),
+            ]),
+            catalogCountSelect(c, "customCount", [10, 25, 50]),
+          ],
+          onSeed: () => startSeed({ preset: "custom-prompt", count: c.customCount, prompt: c.customPrompt.trim() }),
+        }),
+        renderCatalogCard({
+          title: "Custom endpoint",
+          description: "Fetch models from an OpenAI-compatible /models endpoint.",
+          enabled: Boolean(state.provider.has_provider),
+          gateHint: "Add a provider connection in the Connection step to enable.",
+          inputs: [
+            h("label", { class: "field catalog-field" }, [
+              h("span", null, "Endpoint URL"),
+              input(c, "customEndpoint", "https://api.example.com/v1/models"),
+            ]),
+            h("label", { class: "field catalog-field" }, [
+              h("span", null, "Credential name (optional)"),
+              input(c, "customCredential", "Leave blank to use the connection key"),
+            ]),
+            catalogCountSelect(c, "customCount", [10, 25, 50]),
+          ],
+          onSeed: () => {
+            const payload = { preset: "custom-endpoint", count: c.customCount, endpoint: c.customEndpoint.trim() };
+            if (c.customCredential.trim()) payload.credential = c.customCredential.trim();
+            startSeed(payload);
+          },
+        }),
+      ]),
+      h("div", { class: "action-row" }, [
+        h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: () => navigate("settings", "research") }, "Back"),
+      ]),
+    ]);
+  }
+
+  function seedPhaseLabel(tail) {
+    const text = String(tail || "");
+    const batchMatch = text.match(/seed_batch\s+(\d+)\/(\d+)/);
+    if (batchMatch) return `Scoring models (batch ${batchMatch[1]} of ${batchMatch[2]})…`;
+    if (text.includes("seed_complete")) return "Finishing up…";
+    return "Preparing the seed run…";
+  }
+
+  function seedTailPreview(tail, maxLines) {
+    const lines = String(tail || "").trim().split("\n").filter(Boolean);
+    return lines.slice(-(maxLines || 8)).join("\n");
+  }
+
+  function settingsSeed() {
+    const seed = state.seed;
+    if (!seed.id) {
+      return h("section", { class: "settings-panel panel-card", "aria-label": "Seed" }, [
+        h("h2", { class: "settings-panel-title" }, "Seed"),
+        h("p", { class: "settings-summary" }, "Pick a strategy on the Catalog step to begin."),
+        h("div", { class: "action-row" }, [
+          h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: () => navigate("settings", "catalog") }, "Back to Catalog"),
+        ]),
+      ]);
+    }
+    if (seed.state === "succeeded") {
+      const count = state.totalModelCount;
+      return h("section", { class: "settings-panel panel-card seed-done-panel", "aria-label": "Seed complete" }, [
+        h("div", { class: "seed-complete", "aria-hidden": "true" }, [
+          h("span", { class: "seed-complete-check" }),
+        ]),
+        h("h2", { class: "settings-panel-title seed-done-title" }, "Catalog seeded"),
+        count ? h("p", { class: "settings-summary" }, `${count} model${count === 1 ? "" : "s"} ready in your dashboard.`) : null,
+        h("div", { class: "action-row" }, [
+          h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: finishSetup }, "Let's start!"),
+        ]),
+      ]);
+    }
+    if (seed.state === "failed" || seed.error) {
+      return h("section", { class: "settings-panel panel-card seed-error-panel", "aria-label": "Seed failed" }, [
+        h("h2", { class: "settings-panel-title" }, "Seed failed"),
+        h("pre", { class: "seed-log seed-log-error" }, seed.error || "Seed failed."),
+        h("div", { class: "action-row" }, [
+          h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: () => { state.seed = { id: "", state: "", tail: "", error: "", preset: "", started: 0 }; navigate("settings", "catalog"); } }, "Try again"),
+        ]),
+        h("p", { class: "settings-note seed-cli-hint" }, [
+          "Or seed from the terminal: ",
+          h("code", null, "python scripts/seed_catalog.py --preset exa --count 10"),
+        ]),
+      ]);
+    }
+    const preview = seedTailPreview(seed.tail);
+    return h("section", { class: "settings-panel panel-card seed-running-panel", "aria-label": "Seed in progress" }, [
+      h("h2", { class: "settings-panel-title" }, "Seeding catalog"),
+      h("div", { class: "seed-status run-status" }, [
+        h("span", { class: "vw-spinner", "aria-hidden": "true" }),
+        h("p", { class: "seed-phase-label" }, seedPhaseLabel(seed.tail)),
+      ]),
+      preview ? h("pre", { class: "seed-log" }, preview) : null,
+    ]);
+  }
+
+  async function startSeed(payload) {
+    if (!state.provider.has_provider) {
+      navigate("settings", "provider");
+      toast("Add a provider connection first.", "warning");
+      return;
+    }
+    if (payload.preset === "custom-prompt" && !payload.prompt) {
+      toast("Enter a discovery brief first.", "warning");
+      return;
+    }
+    if (payload.preset === "custom-endpoint" && !payload.endpoint) {
+      toast("Enter an endpoint URL first.", "warning");
+      return;
+    }
+    try {
+      const data = await api("/api/seed", { method: "POST", body: payload });
+      state.seed = {
+        id: data.id,
+        state: data.state || "running",
+        tail: "",
+        error: "",
+        started: Date.now(),
+        preset: payload.preset,
+      };
+      navigate("settings", "seed");
+      render();
+      pollSeed();
+    } catch (error) {
+      toast(message(error), "error");
+    }
+  }
+
+  async function pollSeed() {
+    if (!state.seed.id) return;
+    window.clearTimeout(state.seedTimer);
+    try {
+      const data = await api("/api/run-update/" + encodeURIComponent(state.seed.id));
+      state.seed.state = data.state || "running";
+      state.seed.tail = data.tail || "";
+      if (state.seed.state === "succeeded") {
+        await loadDatabase();
+        refreshModels();
+        state.seed.state = "succeeded";
+        render();
+      } else if (state.seed.state === "failed") {
+        state.seed.error = data.tail || "Seed failed.";
+        render();
+      } else {
+        render();
+        state.seedTimer = window.setTimeout(pollSeed, RUN_POLL_MS);
+      }
+    } catch (error) {
+      state.seed.error = message(error);
+      state.seed.state = "failed";
+      render();
+    }
+  }
+
   const RESET_SCOPES = [
     { scope: "stats", token: "STATS", title: "Reset stats", copy: "Clear run telemetry (tokens, cost, duration, agent leaderboard) and regenerate the metrics CSV. Models, scores, and changelogs stay." },
     { scope: "changelog", token: "CHANGELOG", title: "Reset changelog", copy: "Delete every changelog entry and its run metrics. This is the only sanctioned exception to the append-only rule — update runs never delete history." },
-    { scope: "models", token: "MODELS", title: "Reset models", copy: "Clear all models and scores, then re-seed the bootstrap model set so the dashboard isn't empty. Changelogs and stats stay." },
-    { scope: "full", token: "RESET", title: "Full reset", copy: "Wipe the local database, metrics CSV, run logs, app config, schedule, and LLM-Dash broker grants, then re-seed on reload. Voidware credentials are preserved." },
+    { scope: "models", token: "MODELS", title: "Reset models", copy: "Clear all models and scores and reset the last update to never, then re-seed the catalog from the setup wizard. Changelogs and stats stay." },
+    { scope: "full", token: "RESET", title: "Full reset", copy: "Wipe the local database, metrics CSV, run logs, app config, schedule, and LLM-Dash broker grants, then guide you through setup. Voidware credentials are preserved." },
   ];
 
   function settingsReset() {
@@ -1303,7 +1705,7 @@
     const counts = [];
     if (cleared.length) counts.push(`${cleared.length} cleared`);
     if (removed.length) counts.push(`${removed.length} removed`);
-    if (typeof reseeded === "number") counts.push(`${reseeded} reseeded`);
+    if (typeof reseeded === "number" && reseeded > 0) counts.push(`${reseeded} reseeded`);
     if (warnings.length) counts.push(`${warnings.length} warning${warnings.length === 1 ? "" : "s"}`);
     const tone = op.error ? "error" : op.phase === "done" ? "success" : "busy";
     return h("div", { class: "reset-status reset-status-" + tone, role: "status", "aria-live": "polite" }, [
@@ -1312,7 +1714,7 @@
       op.phase === "running" ? h("p", { class: "reset-status-copy" }, "Applying local reset. Do not close this tab.") : null,
       op.phase === "done" && counts.length ? h("p", { class: "reset-status-copy" }, counts.join(" · ")) : null,
       op.phase === "done" && cleared.length ? h("p", { class: "reset-status-detail" }, "Cleared: " + cleared.join(", ")) : null,
-      op.phase === "done" && typeof reseeded === "number" ? h("p", { class: "reset-status-detail" }, "Reseeded " + reseeded + " bootstrap model(s).") : null,
+      op.phase === "done" && typeof reseeded === "number" && reseeded > 0 ? h("p", { class: "reset-status-detail" }, "Reseeded " + reseeded + " bootstrap model(s).") : null,
       op.phase === "done" && warnings.length ? h("ul", { class: "reset-status-warnings" }, warnings.map((item) => h("li", null, item))) : null,
     ]);
   }
@@ -1387,7 +1789,17 @@
       return;
     }
     if (scope === "changelog") { state.changelogBodies = {}; state.activeChangelogDate = ""; }
-    if (scope === "models") { state.ui.compare = []; state.ui.inspect = ""; state.focusIndex = 0; }
+    if (scope === "models") {
+      state.ui.compare = [];
+      state.ui.inspect = "";
+      state.focusIndex = 0;
+      await loadDatabase();
+      state.setupMode = true;
+      state.setupStep = "catalog";
+      await pollMeta();
+      navigate("settings", "catalog");
+      return;
+    }
     await loadDatabase();
     await pollMeta();
     refreshModels();
@@ -1706,7 +2118,7 @@
 
   function settingsModels() {
     const f = state.forms.models;
-    return panel("Models", "Choose the default model and an optional backup for update runs.", [
+    return panel("Agent model", "Choose the default model and an optional backup the research agent uses for seeding and update runs.", [
       h("label", { class: "field" }, [h("span", null, "Default model"), input(f, "default_model", "e.g. gpt-4.1")]),
       h("label", { class: "field" }, [h("span", null, "Backup model"), input(f, "backup_model", "Optional fallback")]),
       h("div", { class: "action-row" }, [
@@ -1729,8 +2141,14 @@
         h("span", null, "LLM Stats"),
       ]),
       renderCredentialSlot("llmstats", { title: "LLM Stats API key" }),
+      h("div", { class: "status-row" }, [
+        statusPill(state.provider.aa_configured ? "Configured" : "Not configured", state.provider.aa_configured ? "fresh" : "unknown"),
+        h("span", null, "Artificial Analysis"),
+      ]),
+      renderCredentialSlot("aa", { title: "Artificial Analysis API key" }),
       h("div", { class: "action-row" }, [
         h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: () => testLLMStats() }, "Test LLM Stats"),
+        h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: () => testAA() }, "Test Artificial Analysis"),
       ]),
     ]);
   }
@@ -1811,6 +2229,16 @@
       toast(data.ok ? "LLM Stats is reachable" : "LLM Stats test failed", data.ok ? "success" : "warning");
     } catch (error) {
       if (!isRetry && await openApproval(error, () => testLLMStats(true), { slot: "llmstats" })) return;
+      toast(message(error), "error");
+    }
+  }
+
+  async function testAA(isRetry) {
+    try {
+      const data = await api("/api/aa/test-connection");
+      toast(data.ok ? "Artificial Analysis is reachable" : "Artificial Analysis test failed", data.ok ? "success" : "warning");
+    } catch (error) {
+      if (!isRetry && await openApproval(error, () => testAA(true), { slot: "aa" })) return;
       toast(message(error), "error");
     }
   }
@@ -2038,6 +2466,7 @@
       btn.toggleAttribute("aria-current", current);
       btn.classList.toggle("active", current);
     });
+    if (els.refresh) els.refresh.disabled = Boolean(state.setupMode);
     updateFreshness();
     els.sidebar.classList.toggle("open", state.drawerOpen);
     els.sidebar.dataset.vwOpen = state.drawerOpen ? "true" : "false";
@@ -2062,7 +2491,7 @@
   }
 
   function bindShell() {
-    document.querySelectorAll(".view-btn[data-area]").forEach((btn) => btn.addEventListener("click", () => navigate(btn.dataset.area, btn.dataset.view === "chart" ? "chart" : btn.dataset.area === "models" ? "table" : btn.dataset.area === "settings" ? "provider" : "index")));
+    document.querySelectorAll(".view-btn[data-area]").forEach((btn) => btn.addEventListener("click", () => navigate(btn.dataset.area, btn.dataset.view === "chart" ? "chart" : btn.dataset.area === "models" ? "list" : btn.dataset.area === "settings" ? "provider" : "index")));
     els.refresh.addEventListener("click", handleRefresh);
     els.help.addEventListener("click", () => { state.helpOpen = true; render(); });
     els.toggle.addEventListener("click", () => { state.drawerOpen = true; render(); });
@@ -2091,7 +2520,7 @@
       event.preventDefault();
       document.getElementById("model-search")?.focus();
     } else if (event.key === "e") exportModels();
-    else if (event.key === "r") handleRefresh();
+    else if (event.key === "r" && !state.setupMode) handleRefresh();
     else if (event.key === "?") { state.helpOpen = true; render(); }
     else if (event.key === "j" || event.key === "k") moveFocus(event.key === "j" ? 1 : -1);
   }
@@ -2103,6 +2532,10 @@
   }
 
   function navigate(area, subpage) {
+    if (state.setupMode && ["models", "changelog", "stats"].includes(area)) {
+      area = "settings";
+      subpage = state.setupStep || state.subpage.settings;
+    }
     state.area = area || "models";
     if (subpage && state.subpage[state.area] !== undefined) state.subpage[state.area] = subpage;
     if (state.setupMode && area === "settings" && subpage) state.setupStep = subpage;
@@ -2114,10 +2547,10 @@
   function parseHash(hash) {
     const raw = String(hash || "").replace(/^#/, "");
     const legacy = { table: ["models", "table"], chart: ["models", "chart"], data: ["settings", "provider"], settings: ["settings", "provider"], changelog: ["changelog", "index"], stats: ["stats", "index"] };
-    if (!raw) return ["models", "table"];
+    if (!raw) return ["models", "list"];
     if (legacy[raw]) return legacy[raw];
     const [area, sub] = raw.split(/[/?]/);
-    return [AREA[area] ? area : "models", sub || (area === "settings" ? "provider" : area === "models" ? "table" : "index")];
+    return [AREA[area] ? area : "models", sub || (area === "settings" ? "provider" : area === "models" ? "list" : "index")];
   }
 
   function applyRoute(route) {
@@ -2126,7 +2559,7 @@
   }
 
   function hashFor(area, sub) {
-    if (area === "models") return "#models/" + (sub || "table");
+    if (area === "models") return "#models/" + (sub || "list");
     if (area === "settings") return "#settings/" + (sub || "provider");
     return "#" + area;
   }
@@ -2185,7 +2618,7 @@
     if (state.area !== "models" || !state.filteredModels.length) return;
     const idx = clamp(Number.isFinite(from) ? from + delta : state.focusIndex + delta, 0, state.filteredModels.length - 1);
     state.focusIndex = idx;
-    document.querySelectorAll("table.models tbody tr")[idx]?.focus();
+    document.querySelectorAll("table.models tbody tr, .model-list-row")[idx]?.focus();
   }
 
   function setSort(key) {

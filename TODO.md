@@ -7,40 +7,14 @@ Use `[ ]` only for still-open work.
 
 ## Now
 
-**Setup wizard seeding + reset overhaul + table redesign — PLANNED
-(2026-06-13).** Plan:
-[`docs/plans/2026-06-13-setup-wizard-seeding-table-redesign.md`](docs/plans/2026-06-13-setup-wizard-seeding-table-redesign.md)
-(pro-reviewed). No implementation yet. Six parallel tracks:
+No active development task. Next data refresh runs via
+[`skill/SKILL.md`](skill/SKILL.md).
 
-- [ ] **A — Reset semantics + warning UX.** Silence the phantom "broker
-  unavailable" grant warning (live + dry-run); `reset_models` clears the catalog
-  + drops `last_updated` (no bootstrap re-seed); full reset stops auto-reseeding.
-  Honest reset copy + models→wizard redirect. Update `tests/test_m13.py`.
-- [ ] **B — No default DB.** New `needs_setup` bootstrap state; stop auto-running
-  `init_db.py` on first launch (keep it as the CLI/skill preseed escape hatch);
-  frontend boots into the wizard when the catalog is empty; null-DB guards so the
-  app never fetches a missing `dash.sqlite`.
-- [ ] **C — Wizard single-nav chrome.** Kill the two-menu confusion (shell tabs
-  *and* the setup rail render together today). One linear stepper; rename "Models"
-  step → "Agent model" to free up "Catalog".
-- [ ] **D — Catalog presets + seed backend.** New `seed_catalog()` prompt builder
-  + `/api/seed` endpoint reusing the agent harness; presets gated by configured
-  keys: AA top 10/50/100 (AA Data API, user-picks Intelligence/Coding/Agentic
-  index — adds a new `aa` credential slot), LLM Stats top N, Exa top N, OpenRouter
-  top X, custom prompt, custom OpenAI-compatible endpoint via Voidware creds.
-  Schema bootstrap before first apply; batch 50–100 models; extend the job lock to
-  seed + run-update.
-- [ ] **E — Seed progress + completion.** Live progress in the wizard, snazzy
-  completion animation (reduced-motion safe), "Let's start!" → Dashboard, plus a
-  CLI/skill seed escape hatch on failure.
-- [ ] **F — Table repolish / List view (independent).** Compact List view +
-  tighter table defaults to fit more models without hurting readability; bump the
-  UI prefs key. Visual nano-agent review.
-
-Suggested PR split: **F + A** early (low-risk), then **A→B→C→D→E** as the wizard
-PR (C/D/E sequential on `web/app.js`).
-
-Next data refresh still runs via [`skill/SKILL.md`](skill/SKILL.md).
+Possible follow-ups (not started):
+- Visual nano-agent pass on the List view + tightened Table at 2560/1440/390
+  (readability/contrast/truncation) — code is in, screenshots not yet captured.
+- A live end-to-end seed against a real BYOK provider (costs money) to exercise
+  the AA/LLM Stats/OpenRouter/Exa presets and the batching path beyond unit tests.
 
 Standing maintenance notes (not tasks — handled as they come up during update
 runs):
@@ -52,6 +26,28 @@ runs):
 - Prefer exact per-model `card_url`s as update runs read new model cards.
 
 ## Recent Completed
+
+**Setup wizard seeding + reset overhaul + table redesign — DONE
+(2026-06-13).** Implemented all six tracks from
+[`docs/plans/2026-06-13-setup-wizard-seeding-table-redesign.md`](docs/plans/2026-06-13-setup-wizard-seeding-table-redesign.md)
+via nano-agents (orchestrated + diff-reviewed). **A:** silenced the phantom
+broker-unavailable grant warning (live + dry-run → stderr); `reset_models` clears
+the catalog + drops `meta.last_updated` (no reseed). **B:** no default DB — empty
+install returns bootstrap `needs_setup` (no auto `init_db.py`); frontend boots into
+the wizard; null-DB guards; `init_db.py` kept as the offline CLI preseed.
+**C:** single-nav wizard (Connection → Research → Catalog → Seed → Finish); the
+two-menu bug is gone (shell subnav hidden in setup); dashboard locked during setup.
+**D:** new `scripts/seed_catalog.py` (shared `ensure_schema`, candidate prefetch,
+batched scoring, single `apply_update`), `POST /api/seed` + job lock on both seed
+and run-update, new `aa` credential slot (AA Data API, Intelligence/Coding/Agentic
+index) mirroring `llmstats`, `POST/DELETE/GET /api/aa`. **E:** Catalog preset cards
+(gated by configured keys) + live seed progress + completion animation
+(reduced-motion safe) + "Let's start!" + CLI escape hatch. **F:** compact **List**
+view (now the default Models view, Table one click away), tighter Table density,
+prefs key → `llm-dash-ui-state-v6`. Models/full reset route back into the wizard.
+75 tests (5 new in `tests/test_seed_catalog.py`); needs_setup + seed dry-run smoked
+in-process. A live paid seed and a List-view screenshot pass are the open
+follow-ups. Docs synced (README, AGENTS, ARCHITECTURE, DEVELOPMENT, SKILL).
 
 **Voidware 1.1.0 package-native upgrade + credential follow-ups — DONE
 (2026-06-12).** Implemented

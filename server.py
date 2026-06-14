@@ -20,6 +20,7 @@ from pydantic import BaseModel
 
 from scripts import voidware_auth
 from scripts.config import (
+    AA_BASE_URL,
     LLMSTATS_BASE_URL,
     CREDENTIAL_SLOTS,
     ConfigError,
@@ -30,6 +31,7 @@ from scripts.config import (
     clear_credential_slot_selection,
     delete_slot_credential,
     discover_all_credential_slots,
+    load_aa_api_key,
     load_llmstats_api_key,
     load_provider_config,
     load_provider_bundle,
@@ -37,13 +39,14 @@ from scripts.config import (
     normalize_base_url,
     normalize_endpoint_mode,
     public_provider_state,
+    remove_aa_api_key,
     remove_exa_api_key,
     remove_llmstats_api_key,
     remove_provider_api_key,
+    save_aa_api_key,
     save_exa_api_key,
     save_provider,
     save_slot_api_key,
-    save_exa_api_key,
     save_llmstats_api_key,
     select_credential_slot,
     update_slot_api_key,
@@ -59,6 +62,7 @@ CHANGELOGS_DIR = ROOT / "changelogs"
 DB_PATH = DATA_DIR / "dash.sqlite"
 INIT_DB_PATH = ROOT / "scripts" / "init_db.py"
 RUN_UPDATE_PATH = ROOT / "scripts" / "run_update.py"
+SEED_CATALOG_PATH = ROOT / "scripts" / "seed_catalog.py"
 LOGS_DIR = ROOT / "logs"
 PROVIDER_PRESETS_PATH = WEB_DIR / "provider-presets.json"
 
@@ -105,6 +109,19 @@ class ExaPayload(BaseModel):
 
 class LLMStatsPayload(BaseModel):
     api_key: str
+
+
+class AAPayload(BaseModel):
+    api_key: str
+
+
+class SeedPayload(BaseModel):
+    preset: str
+    count: int = 25
+    index: str = ""
+    prompt: str = ""
+    endpoint: str = ""
+    credential: str = ""
 
 
 class VoidwareGrantPayload(BaseModel):
@@ -368,13 +385,9 @@ def ensure_bootstrap_started() -> None:
             return
         if _bootstrap_state["state"] == "error":
             return
-        if _bootstrap_thread and _bootstrap_thread.is_alive():
-            return
-        _bootstrap_state["state"] = "initializing"
-        _bootstrap_state["message"] = "Seeding dashboard database..."
-        _bootstrap_state["detail"] = "Running scripts/init_db.py once for the first launch."
-        _bootstrap_thread = threading.Thread(target=_run_bootstrap, name="llm-dash-bootstrap", daemon=True)
-        _bootstrap_thread.start()
+        _bootstrap_state["state"] = "needs_setup"
+        _bootstrap_state["message"] = "No catalog yet — run setup to seed the dashboard."
+        _bootstrap_state["detail"] = ""
 
 
 def _launch_windows_terminal(cwd: Path) -> str | None:
@@ -880,6 +893,63 @@ async def test_llmstats_connection() -> dict[str, Any]:
         raise HTTPException(status_code=502, detail=_redact_known_secrets(str(exc)))
 
 
+@app.post("/api/aa")
+def post_aa(payload: AAPayload) -> dict[str, Any]:
+    try:
+        save_aa_api_key(payload.api_key)
+        return {"aa_configured": True}
+    except voidware_auth.VoidwareAuthError as exc:
+        raise _voidware_auth_http_error(exc) from exc
+    except ConfigError as exc:
+        raise _http_error(exc)
+
+
+@app.delete("/api/aa")
+def delete_aa() -> dict[str, Any]:
+    try:
+        remove_aa_api_key()
+        return {"aa_configured": False}
+    except ConfigError as exc:
+        raise _http_error(exc)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/aa/test-connection")
+async def test_aa_connection() -> dict[str, Any]:
+    import httpx
+
+    key = load_aa_api_key()
+    if not key:
+        raise HTTPException(status_code=400, detail="Artificial Analysis API key is not configured.")
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.get(
+                f"{AA_BASE_URL}/language/models/free",
+                headers={"x-api-key": key, "Accept": "application/json"},
+            )
+        if response.status_code == 429:
+            raise HTTPException(
+                status_code=429,
+                detail="Artificial Analysis API rate limit exceeded. Free tier allows 100 requests/day.",
+            )
+        try:
+            data: Any = response.json()
+        except ValueError:
+            data = {}
+        models_count = 0
+        if isinstance(data, list):
+            models_count = len(data)
+        elif isinstance(data, dict):
+            items = data.get("data") or data.get("models") or []
+            models_count = len(items) if isinstance(items, list) else 0
+        return {"ok": response.status_code == 200, "status_code": response.status_code, "models_count": models_count}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=_redact_known_secrets(str(exc)))
+
+
 @app.delete("/api/provider/key")
 def delete_provider_key() -> dict[str, Any]:
     try:
@@ -918,6 +988,11 @@ def delete_schedule() -> dict[str, Any]:
 
 @app.post("/api/run-update")
 def run_update() -> dict[str, str]:
+    if _any_update_job_running():
+        raise HTTPException(
+            status_code=409,
+            detail="An update or seed job is running. Wait for it to finish before starting another.",
+        )
     try:
         bundle = load_provider_bundle()
         if not bundle.has_provider:
@@ -971,6 +1046,76 @@ def run_update_status(job_id: str) -> dict[str, Any]:
     return job
 
 
+@app.post("/api/seed")
+def post_seed(payload: SeedPayload) -> dict[str, str]:
+    if _any_update_job_running():
+        raise HTTPException(
+            status_code=409,
+            detail="An update or seed job is running. Wait for it to finish before starting another.",
+        )
+    try:
+        bundle = load_provider_bundle()
+        if not bundle.has_provider:
+            raise ConfigError("Agent Provider requires base_url, api_key, and default_model.")
+    except ConfigError as exc:
+        raise _http_error(exc)
+
+    job_id = uuid.uuid4().hex
+    log_path = _job_log_path(job_id)
+    log_path.parent.mkdir(exist_ok=True)
+    started_at = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    command = [
+        sys.executable,
+        str(SEED_CATALOG_PATH),
+        "--log-path",
+        str(log_path),
+        "--preset",
+        payload.preset,
+        "--count",
+        str(payload.count),
+    ]
+    if payload.index:
+        command.extend(["--index", payload.index])
+    if payload.prompt:
+        command.extend(["--prompt", payload.prompt])
+    if payload.endpoint:
+        command.extend(["--endpoint", payload.endpoint])
+    if payload.credential:
+        command.extend(["--credential", payload.credential])
+    log_file = log_path.open("a", encoding="utf-8")
+    try:
+        process = subprocess.Popen(
+            command,
+            cwd=ROOT,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        log_file.close()
+    except Exception as exc:
+        log_file.close()
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    with _jobs_lock:
+        _jobs[job_id] = {
+            "id": job_id,
+            "state": "running",
+            "started_at": started_at,
+            "completed_at": None,
+            "exit_code": None,
+            "log_path": str(log_path.relative_to(ROOT)),
+            "tail": "",
+        }
+    watcher = threading.Thread(
+        target=_watch_job,
+        args=(job_id, process, log_path),
+        name=f"llm-dash-seed-{job_id}",
+        daemon=True,
+    )
+    watcher.start()
+    return {"id": job_id, "state": "running"}
+
+
 @app.post("/api/reset")
 def post_reset(payload: ResetPayload) -> dict[str, Any]:
     """Scoped destructive reset for the same local operator who can run
@@ -982,7 +1127,7 @@ def post_reset(payload: ResetPayload) -> dict[str, Any]:
     if _any_update_job_running():
         raise HTTPException(
             status_code=409,
-            detail="An update job is running. Wait for it to finish before resetting.",
+            detail="An update or seed job is running. Wait for it to finish before resetting.",
         )
 
     scope = (payload.scope or "").strip().lower()
@@ -997,7 +1142,7 @@ def post_reset(payload: ResetPayload) -> dict[str, Any]:
     except Exception as exc:  # pragma: no cover - defensive
         raise HTTPException(status_code=500, detail=str(exc))
     if scope == "full":
-        # The DB was deleted; let the next request re-seed it.
+        # The DB was deleted; next bootstrap status returns needs_setup so the UI routes into setup.
         ensure_bootstrap_started()
     return {"ok": True, **summary}
 

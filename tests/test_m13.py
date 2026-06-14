@@ -135,15 +135,18 @@ def test_reset_changelog_clears_history_and_metrics(tmp_path):
     assert not list(rls.CHANGELOGS_DIR.glob("*.md"))
 
 
-def test_reset_models_reseeds(tmp_path):
+def test_reset_models_clears_catalog(tmp_path):
     db = _seed(tmp_path)
     _point_rls(tmp_path, db)
-    c = sqlite3.connect(db); c.execute("DELETE FROM model_scores"); c.execute("DELETE FROM models"); c.commit(); c.close()
     out = rls.reset_models()
-    after = _counts(db)
-    assert out["reseeded"] == 34
-    assert after["models"] == 34
-    assert after["scores"] == 34
+    assert out == {"scope": "models", "cleared": ["models", "model_scores"], "reseeded": 0}
+    c = sqlite3.connect(db)
+    try:
+        assert c.execute("SELECT COUNT(*) FROM models").fetchone()[0] == 0
+        assert c.execute("SELECT COUNT(*) FROM model_scores").fetchone()[0] == 0
+        assert c.execute("SELECT value FROM meta WHERE key='last_updated'").fetchone() is None
+    finally:
+        c.close()
 
 
 def test_reset_tokens_table_matches_scopes():

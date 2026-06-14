@@ -3,79 +3,86 @@ Casual handoff notes. Newest first.
 
 ---
 
-## Entry 119 — 2026-06-13
+## Entry 120 — 2026-06-13
 
-**Agent:** Claude Opus 4.8 (handle: Vesper, via shxdowflow + nano-agents)
-**Cycle:** Planning only — setup wizard seeding, reset overhaul, table redesign
-**Task:** Scope the work, write a reviewed implementation plan. No code changes.
+**Agent:** Claude Opus 4.8 (handle: Lyric, orchestrating via shxdowflow + nano-agents)
+**Cycle:** Setup wizard seeding + reset overhaul + table redesign — implementation
+**Task:** Build all six tracks of the Entry-119 plan, nano-agents only, review every diff
 
 ---
 
-Scoping run, no implementation. The user flagged the Settings setup flow as
-janky: two parallel menus during setup (the shell subpage tabs *and* a floating
-"Setup" rail card both render — `renderSettings()` mounts `renderSetupRail()`
-next to the shell subnav), and a full reset reports a phantom "1 warning →
-grant cleanup skipped: broker unavailable" for cleanup of something that doesn't
-exist on a fresh machine. Plus three feature asks: reset should clear the model
-DB and set "last update" to never; we should stop shipping/auto-seeding a default
-DB and instead seed the catalog from the wizard via the research agent (preset
-seed strategies gated by configured keys — AA / LLM Stats top N, Exa top N,
-OpenRouter top X, custom prompt, or a custom OpenAI-compatible endpoint+bearer
-via Voidware saved creds) with live progress + a completion animation + a
-"Let's start!" button; and a table repolish to fit more models (maybe a List
-view).
+Implemented
+[`docs/plans/2026-06-13-setup-wizard-seeding-table-redesign.md`](docs/plans/2026-06-13-setup-wizard-seeding-table-redesign.md)
+end to end. Per the goal I orchestrated and reviewed diffs only — five write-enabled
+pro nano-agents did the edits (A reset semantics; B+C setup flow; D1 seed backend;
+D2+E catalog/seed UI; F list view), and I read every diff, fixed findings, and ran
+all verification myself.
 
-Traced the relevant code myself and via nano-agents (Cursor flash explorer +
-pro plan reviewer). Key findings that shaped the plan:
+**What shipped:**
 
-- The research harness (`run_update.py generate_diff → run_agent_once →
-  apply_update`) already populates an empty DB via `INSERT ... ON CONFLICT(name)`
-  and `validate_update` accepts an all-new-models payload — so seeding can reuse
-  it, **but** `apply_update`/`run_update.py` assume the schema tables + DB file
-  already exist (only `init_db.py` runs `schema.sql`). Seed mode must
-  `executescript(schema.sql)` first. This was the reviewer's top catch.
-- First launch auto-seeds the 34-model bootstrap (`_startup →
-  ensure_bootstrap_started → init_db.py`); full reset deletes the DB then
-  *re-seeds* it via `ensure_bootstrap_started()` in `post_reset`. Both must stop
-  for the "no default DB" goal; introduce a `needs_setup` bootstrap state and
-  route the frontend into the wizard. Keep `init_db.py` as the documented CLI/
-  skill preseed escape hatch.
-- The DB is already gitignored (only `data/.gitkeep` tracked), so "no default
-  DB" is about killing the auto-bootstrap, not a gitignore change.
-- The "broker unavailable" warning is benign — the durable grant purge is
-  index-driven and doesn't need the broker — so it can be demoted to a debug log
-  (live + dry-run paths) while keeping real failures surfaced.
-- Reused job machinery (`/api/run-update` + `_watch_job` + tail polling) is the
-  natural backbone for `/api/seed` progress; the job lock needs to cover both
-  endpoints to avoid a scheduler-vs-seed race.
+- **A — reset semantics + warning.** `broker_unavailable` grant-cleanup is benign
+  on a fresh machine (durable purge is index-driven), so it's demoted from a
+  user-facing warning to a stderr debug line in both live + dry-run paths.
+  `reset_models()` now clears `models`/`model_scores` and **drops**
+  `meta.last_updated` (freshness reads "never") with no bootstrap reseed.
+- **B — no default DB.** `ensure_bootstrap_started()` no longer spawns
+  `init_db.py`; an empty catalog sets bootstrap state `needs_setup`. The frontend
+  routes into the wizard, `loadDatabase()` tolerates a 404 (`state.db = null`), and
+  every reader (`rows`/`loadStaticData`/`refreshModels`/`renderModels`/changelog/
+  stats) guards a null DB. `init_db.py` stays as the offline CLI preseed.
+- **C — one nav.** The shell subnav is hidden in `setupMode`, so the two-menu bug
+  is gone; the stepper is Connection → Research → Catalog → Seed → Finish. The
+  dashboard sidebar + footer Refresh are locked during setup.
+- **D — seed backend + presets.** New `scripts/seed_catalog.py` reuses the research
+  harness (`run_agent_once`/`validate_update`/`apply_update`): it prefetches a
+  candidate list (AA Data API, LLM Stats, OpenRouter public, custom endpoint),
+  scores in batches of 25, and does a **single** `apply_update` at the end (one
+  changelog + one `run_metrics` row + `last_updated`). Shared `ensure_schema()` in
+  `init_db.py` bootstraps the schema before first apply. New `aa` credential slot
+  mirrors `llmstats` end to end (config/voidware_auth/`public_provider_state` +
+  `POST/DELETE/GET /api/aa`). `POST /api/seed` reuses the job machinery; the
+  `_any_update_job_running()` lock now guards seed **and** run-update.
+- **E — progress + completion.** Catalog step renders preset cards gated by
+  configured keys (AA gated on `aa_configured`, etc.); the Seed step polls the job,
+  shows phase labels parsed from the log tail, then a reduced-motion-safe
+  completion animation + "Let's start!" → Dashboard, with a CLI escape hatch on
+  failure.
+- **F — List view.** Compact List view (rank, compare, logo, name/vendor, Overall +
+  Value grade chips, Cost, a 4-bar score sparkline) is now the **default** Models
+  view (Table one click away). Table default zoom 1.12→1.0 + tighter padding;
+  prefs key `…-v5`→`-v6`. Models/full reset both route back into the wizard.
 
-Wrote
-[`docs/plans/2026-06-13-setup-wizard-seeding-table-redesign.md`](docs/plans/2026-06-13-setup-wizard-seeding-table-redesign.md):
-six parallel tracks (A reset semantics + warning, B no-default-DB bootstrap
-gating, C single-nav wizard chrome, D catalog presets + seed backend, E seed
-progress + completion animation, F table/list repolish), with file scopes,
-dependencies, verification matrix, and a §8b addendum folding in 13 pro-review
-findings (schema bootstrap, catalog-readiness gating vs file existence, separate
-seed prompt builder, batching for 50–100 models, expanded null-DB guard list,
-job-lock concurrency, models-reset redirect, dry-run warning parity, the
-"Models" vs "Catalog" step naming collision, wizard hardening, tests +
-`AGENTS.md`/`ARCHITECTURE.md` doc updates, OpenRouter auth check, sequential
-C→D→E on `app.js`). TODO "Now" updated with the six tracks and a suggested PR
-split (F + A early, then A→B→C→D→E). The plan is gitignored under `docs/plans/*`
-so it lives on disk only; this entry + TODO carry the durable summary.
+**Review catches I fixed:** a Track-A regression (`test_voidware_auth` still
+asserted the broker warning — updated to assert it's silenced), and the wizard
+entry step (the `needs_setup` boot hardcoded Catalog — changed to Connection so a
+fresh/full-reset machine with no provider is walked through the linear flow first).
 
-**Update (same day):** user resolved both open decisions. (1) AA *does* have a
-Data API — `GET /api/v2/language/models/free`, `x-api-key`, free tier 100/day —
-so the AA preset is API-driven with a user-selectable ranking index
-(`artificial_analysis_intelligence_index` / `_coding_index` / `_agentic_index`).
-This adds a new `aa` credential slot mirroring the `llmstats` slot, and the
-server pre-fetches AA's catalog (name/creator/pricing/throughput + indices) as
-priors for the agent's 0–10 scoring. Plan Track D + §8 updated. (2) Build the
-List view (not just a tightened table) — making List the default Models view,
-Table one click away. Plan Track F updated.
+**Verification:** 75 tests green (5 new in `tests/test_seed_catalog.py` covering
+`ensure_schema` idempotency, all-new `validate_update`/`apply_update`, the `aa`
+slot, and the seed prompt builder); `node --check`; `py_compile`; in-process smoke
+confirmed empty DB → `needs_setup` (no auto-seed) and the `seed_catalog --dry-run`
+prompt builds. A live paid seed and a List-view screenshot pass are deliberately
+deferred (cost + no headed browser this run). Docs synced: README, AGENTS,
+ARCHITECTURE, DEVELOPMENT, SKILL.
 
-**Next:** implement Track F + A as the low-risk early PR, then the wizard PR
-(A→B→C→D→E, sequential on `web/app.js`).
+---
+
+## Entry 119 — 2026-06-13
+
+**Agent:** Claude Opus 4.8 (Vesper, planning via shxdowflow + nano-agents)
+**Cycle:** Planning only — setup wizard seeding, reset overhaul, table redesign
+
+---
+
+Scoped the work (implemented in Entry 120) and wrote the reviewed plan at
+`docs/plans/2026-06-13-setup-wizard-seeding-table-redesign.md` — six tracks (A
+reset semantics, B no-default-DB bootstrap, C single-nav wizard, D catalog presets
++ seed backend, E seed progress, F list view) with a §8b addendum folding in 13
+pro-review findings (the top catch: the seed path must run `schema.sql` first since
+only `init_db.py` does). User resolved two decisions: AA has a Data API
+(`/api/v2/language/models/free`, `x-api-key`) → API-driven preset + new `aa`
+credential slot; and build the List view as the default Models surface. Plan is
+gitignored under `docs/plans/*`; this entry + Entry 120 carry the durable summary.
 
 ---
 

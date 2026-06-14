@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 import queue
 import re
 import shlex
@@ -22,6 +23,7 @@ APP_NAME = "llm-dash"
 PROVIDER_SECRET_NAME = "llmdash.provider.api_key"
 EXA_SECRET_NAME = "llmdash.exa.api_key"
 LLMSTATS_SECRET_NAME = "llmdash.llmstats.api_key"
+AA_SECRET_NAME = "llmdash.aa.api_key"
 # Request the longest broker grant lifetime Voidware currently accepts.
 MAX_GRANT_TTL = "120d"
 DEFAULT_BROKER_TIMEOUT = 20
@@ -1539,7 +1541,7 @@ def clear_llmdash_grants(*, dry_run: bool = False, secret_names: tuple[str, ...]
             error_code = str(list_payload.get("errorCode") or "")
             message = _redact(str(list_payload.get("error") or "grant list failed"))
             if error_code == "broker_unavailable":
-                warnings.append(f"grant cleanup preview skipped: broker unavailable ({message})")
+                print(f"[voidware_auth] grant cleanup skipped (broker unavailable): {message}", file=sys.stderr)
             else:
                 warnings.append(f"grant cleanup preview skipped: {message}")
         else:
@@ -1563,7 +1565,7 @@ def clear_llmdash_grants(*, dry_run: bool = False, secret_names: tuple[str, ...]
         error_code = str(list_payload.get("errorCode") or "")
         message = _redact(str(list_payload.get("error") or "grant list failed"))
         if error_code == "broker_unavailable":
-            warnings.append(f"grant cleanup skipped: broker unavailable ({message})")
+            print(f"[voidware_auth] grant cleanup skipped (broker unavailable): {message}", file=sys.stderr)
         else:
             warnings.append(f"grant cleanup skipped: {message}")
     else:

@@ -109,9 +109,9 @@ run.bat --reset               # Windows
 ```
 
 Clears local provider/schedule settings, deletes generated dashboard data and
-run logs, revokes LLM-Dash's own Voidware broker grants/access tokens, restarts
-from the bootstrap seed, clears saved UI preferences, and opens guided setup
-mode (`?setup=1`).
+run logs, revokes LLM-Dash's own Voidware broker grants/access tokens, clears
+saved UI preferences, and opens the guided setup wizard (`?setup=1`) to seed the
+catalog from scratch (no auto-reseed).
 Historical `changelogs/*.md`, Voidware credentials, legacy
 `~/.shxdow/auth.json`, and keyring/keystore secrets are never deleted.
 
@@ -190,7 +190,8 @@ LLM-Dash/
 │   ├── config.py                 # Provider config + credential pipeline (env → Voidware provider/broker → keyring)
 │   ├── voidware_auth.py          # Voidware discovery + broker bridge controller
 │   ├── voidware_app_broker.mjs   # Node app-owned approval worker
-│   ├── init_db.py                # First-run DB seeder
+│   ├── init_db.py                # Offline CLI preseed escape hatch (34-model bootstrap)
+│   ├── seed_catalog.py           # Wizard-driven catalog seeder via the research agent (POST /api/seed)
 │   ├── migrate_score_checks.py   # 0–10 score CHECK constraint migration (schema_version 2)
 │   ├── run_update.py             # Agents SDK update executor
 │   ├── export_metrics_csv.py
@@ -219,7 +220,8 @@ LLM-Dash/
 | Port 8787 already in use | `LLM_DASH_PORT=9000 ./run.sh` |
 | LAN access not working | Start with `LLM_DASH_HOST=0.0.0.0` and allow the port through your firewall |
 | Browser didn't open | Copy the URL from terminal output and open manually |
-| First-run spinner hangs | Check `logs/server.log` and `scripts/init_db.py` output |
+| First launch shows the setup wizard | Expected — there is no default catalog; seed it from the **Catalog** step (or run `python scripts/init_db.py` to preseed offline) |
+| Seed run fails | Check the seed job log under `logs/`; retry from the wizard or run `python scripts/seed_catalog.py --preset exa --count 10` |
 | Provider connection fails | Verify your API key and base URL; check the Settings "Test connection" result |
 
 ## Documentation

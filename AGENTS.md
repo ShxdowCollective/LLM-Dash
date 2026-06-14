@@ -67,9 +67,13 @@ need to reinstall them.
  It is the only long-running service. Start it in a background/tmux session — it
  stays in the foreground. There is no separate frontend or database process:
  the frontend is zero-build static files and the SQLite DB runs in-browser via
- sql.js. `data/dash.sqlite` is gitignored and auto-seeds (34 models) on first
- launch, so the dashboard is fully usable offline with no API keys.
-- **Tests:** `.venv/bin/python -m pytest tests/` runs the full suite (57 tests).
+ sql.js. `data/dash.sqlite` is gitignored and **no longer auto-seeds** on first
+ launch: an empty install returns bootstrap state `needs_setup` and the frontend
+ boots into the setup wizard, which seeds the catalog from a chosen source via
+ the research agent (`scripts/seed_catalog.py` → `POST /api/seed`).
+ `scripts/init_db.py` remains the offline CLI escape hatch to preseed the 34-model
+ bootstrap set (`python scripts/init_db.py`).
+- **Tests:** `.venv/bin/python -m pytest tests/` runs the full suite (75 tests).
  `tests/test_m13.py` requires `pytest` (installed by the update script, not in
  `requirements.txt`); plain `python -m unittest discover` skips/errors on it.
 - **Lint/syntax (no linter configured):** `.venv/bin/python -m py_compile server.py scripts/*.py tests/*.py`

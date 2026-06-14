@@ -811,7 +811,10 @@ console.log(JSON.stringify({ auth, raw }))
         self.assertEqual(calls, [["auth", "grants", "list", "--shxdowdir", self.tmp.name, "--json"]])
         self.assertTrue(any("would revoke" in item for item in summary["warnings"]))
 
-    def test_clear_llmdash_grants_treats_broker_unavailable_as_warning(self) -> None:
+    def test_clear_llmdash_grants_silences_broker_unavailable(self) -> None:
+        # A broker-unavailable grant list is benign on a fresh/local machine: the
+        # durable purge is index-driven and does not need the broker. It must NOT
+        # surface a user-facing warning (it goes to stderr instead).
         with patch.object(
             voidware_auth,
             "_run",
@@ -820,7 +823,7 @@ console.log(JSON.stringify({ auth, raw }))
             summary = voidware_auth.clear_llmdash_grants()
 
         self.assertEqual(summary["revoked"], [])
-        self.assertTrue(any("broker unavailable" in item for item in summary["warnings"]))
+        self.assertFalse(any("broker unavailable" in item for item in summary["warnings"]))
 
     def test_legacy_grant_purge_covers_index_accounts_across_fingerprints(self) -> None:
         voidware_auth._LEGACY_GRANT_ACCOUNTS.clear()

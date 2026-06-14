@@ -236,7 +236,10 @@ Three explicit mounts maintain the frontend's fetch contract:
 | Route | Method | Purpose |
 |---|---|---|
 | `/api/prompt` | GET | Returns agent-neutral update prompt with repo path and date |
-| `/api/bootstrap-status` | GET | First-run DB seeding state for the UI spinner |
+| `/api/bootstrap-status` | GET | Bootstrap state: `ready`, `needs_setup` (empty catalog → wizard), or `error` |
+| `/api/seed` | POST | Spawn `seed_catalog.py` to seed the catalog from a chosen preset; reuses the job machinery + `_any_update_job_running()` lock |
+| `/api/aa` | POST/DELETE | Save/remove the Artificial Analysis (AA Data API) credential slot |
+| `/api/aa/test-connection` | GET | Probe the AA Data API with the configured key |
 | `/api/open-terminal` | POST | Opens a platform-native terminal at the repo root |
 | `/api/provider` | GET/POST | Read/write Agent Provider configuration |
 | `/api/provider-presets` | GET | Static catalog of provider presets retained for compatibility |
@@ -262,11 +265,28 @@ Three explicit mounts maintain the frontend's fetch contract:
 | `/api/credentials/slots/{slot}/credential` | DELETE | Delete the selected Voidware credential and clear the selection; same external-mutation dual-flag rule as update |
 | `/api/voidware/broker/approval/deny` | POST | Deny the pending broker approval (used by modal close/deny) |
 
-### 3. First-Run Bootstrap
+### 3. First-Run Bootstrap & Catalog Seeding
 
-On startup, if `data/dash.sqlite` doesn't exist, the server spawns
-`scripts/init_db.py` in a background thread. The frontend polls
-`/api/bootstrap-status` and shows a blocking spinner until the DB is ready.
+There is **no default DB and no auto-seed**. On startup, if the catalog is empty
+(no `meta.last_updated`), `/api/bootstrap-status` returns `needs_setup` and the
+frontend boots into the setup wizard (single-nav stepper: Connection → Research →
+Catalog → Seed → Finish) instead of fetching a missing `dash.sqlite`.
+
+The **Catalog** step picks a seed strategy (gated by configured keys): Artificial
+Analysis (AA Data API, `aa` credential slot, ranked by Intelligence/Coding/Agentic
+index), LLM Stats top N, Exa top N, OpenRouter top N, a custom prompt, or a custom
+OpenAI-compatible endpoint. `POST /api/seed` spawns `scripts/seed_catalog.py`,
+which `ensure_schema()`s the DB, prefetches a candidate list, batches scoring
+through the same research harness (`run_agent_once` → `validate_update` →
+`apply_update`), and writes one changelog + `run_metrics` row + `meta.last_updated`
+like a normal run. The **Seed** step polls the job (`/api/run-update/{id}`), shows
+live progress, then a completion animation + "Let's start!" → Dashboard. The seed
+job and `/api/run-update` share the `_any_update_job_running()` lock.
+
+`scripts/init_db.py` is retained as the offline CLI preseed escape hatch
+(`python scripts/init_db.py`), not an auto-bootstrap. A **full reset** drops the
+DB and returns to `needs_setup`; a **models reset** clears the catalog + drops
+`last_updated` and routes back into the wizard.
 
 ---
 

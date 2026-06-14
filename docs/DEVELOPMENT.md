@@ -41,8 +41,11 @@ npm ci
 ./run.sh                     # or run.bat on Windows
 ```
 
-The launcher creates the venv automatically if it doesn't exist. First launch
-also seeds `data/dash.sqlite` via `scripts/init_db.py`.
+The launcher creates the venv automatically if it doesn't exist. There is **no
+auto-seed**: an empty install boots into the setup wizard (`needs_setup`) and you
+seed the catalog from the **Catalog** step via the research agent
+(`scripts/seed_catalog.py`). To preseed offline without the wizard, run
+`python scripts/init_db.py` (the 34-model bootstrap escape hatch).
 
 To return a local install to first-run state, use `./run.sh --reset` or
 `run.bat --reset`. Use `--reset --dry-run` to preview what would be removed.
@@ -94,7 +97,8 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 | `scripts/voidware_app_broker.mjs` | Node worker that imports Voidware 1.1.0 package/CLI service APIs (cli resolved from `node_modules`) and hosts LLM-Dash-owned approval prompts |
 | `scripts/vendor_voidware_css.mjs` | Copies `@shxdowcollective/voidware` CSS into `web/vendor/voidware/` and refreshes provenance |
 | `scripts/voidware_package_smoke.mjs` | Verifies package CSS sources and runtime exports (`auth`, `auth-templates`, `logging`) |
-| `scripts/init_db.py` | First-run DB creation from `schema.sql` + 34-model seed |
+| `scripts/init_db.py` | Offline CLI preseed escape hatch (34-model bootstrap) + shared `ensure_schema()`; not auto-run on launch |
+| `scripts/seed_catalog.py` | Wizard-driven catalog seeder: prefetch candidates (AA/LLM Stats/OpenRouter/custom) → batch-score via the research harness → single `apply_update` (`POST /api/seed`) |
 | `scripts/run_update.py` | Agent Provider update executor (OpenAI Agents SDK) |
 | `scripts/export_metrics_csv.py` | Regenerates `data/run_metrics.csv` from SQLite |
 | `scripts/schedule_job.py` | OS-level scheduled job installer/remover |
@@ -366,7 +370,9 @@ node --check web/app.js
 
 ```bash
 rm data/dash.sqlite
-./run.sh   # auto-seeds on next launch
+./run.sh   # boots into the setup wizard (no auto-seed); seed from the Catalog step
+# or preseed offline without the wizard:
+python scripts/init_db.py
 ```
 
 ### Regenerate the metrics CSV

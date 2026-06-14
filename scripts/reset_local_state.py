@@ -185,52 +185,31 @@ def reset_changelog() -> dict:
 
 
 def reset_models() -> dict:
-    """Clear models + scores, then re-seed the bootstrap model set so the
-    dashboard's first screen is never broken. Changelogs and stats are left
-    alone. last_updated is reset to the reseed date."""
+    """Clear the model catalog and scores, and drop last_updated so freshness
+    reads as never. Changelogs and stats are left alone. The dashboard routes
+    to the setup wizard to re-seed the catalog (no bootstrap reseed)."""
     if not DB_PATH.exists():
         raise FileNotFoundError("dash.sqlite not found")
-    # Imported lazily so the CLI path doesn't pull seed data unless needed.
-    from scripts.init_db import MODELS, SOURCE_NOTE, VENDOR_CARD_URL, canonical_capabilities, SEED_DATE
     con = sqlite3.connect(DB_PATH)
     try:
         con.execute("PRAGMA foreign_keys = ON")
         con.execute("BEGIN")
         con.execute("DELETE FROM model_scores")
         con.execute("DELETE FROM models")
-        today = SEED_DATE
-        for m in MODELS:
-            con.execute(
-                """INSERT INTO models (name, vendor, color, released, params, pricing,
-                       notes, card_url, input_capabilities, deprecated_on, first_seen, last_seen, status)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (m["name"], m["vendor"], m["color"], m["released"], m["params"], m["pricing"],
-                 m["notes"], m.get("card_url") or VENDOR_CARD_URL.get(m["vendor"]),
-                 canonical_capabilities(m.get("input_capabilities")), m.get("deprecated_on"),
-                 today, today, m.get("status", "active")),
-            )
-            con.execute(
-                """INSERT INTO model_scores (model_id, as_of, intelligence, coding, agents, speed, cost, source_notes)
-                   SELECT id, ?, ?, ?, ?, ?, ?, ? FROM models WHERE name = ?""",
-                (today, m["intelligence"], m["coding"], m["agents"], m["speed"], m["cost"], SOURCE_NOTE, m["name"]),
-            )
-        con.execute(
-            "INSERT INTO meta (key, value) VALUES ('last_updated', ?) "
-            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-            (f"{today}T00:00:00Z",),
-        )
+        con.execute("DELETE FROM meta WHERE key = 'last_updated'")
         con.execute("COMMIT")
     except Exception:
         con.execute("ROLLBACK")
         raise
     finally:
         con.close()
-    return {"scope": "models", "cleared": ["models", "model_scores"], "reseeded": len(MODELS)}
+    return {"scope": "models", "cleared": ["models", "model_scores"], "reseeded": 0}
 
 
 def reset_full() -> dict:
     """Full local reset: delete the DB + sidecars + CSV + logs + app config +
-    schedule, clear LLM-Dash broker grants, then re-seed on next launch.
+    schedule, clear LLM-Dash broker grants. The next launch returns bootstrap
+    state `needs_setup` and routes into the setup wizard (no auto-reseed).
     Voidware credentials and keyring secrets are NOT deleted."""
     removed, warnings = reset_local_state(dry_run=False)
     return {"scope": "full", "removed_files": removed, "warnings": warnings}

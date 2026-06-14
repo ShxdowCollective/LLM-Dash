@@ -211,6 +211,23 @@ def ensure_dirs() -> None:
     CHANGELOGS_DIR.mkdir(exist_ok=True)
 
 
+def ensure_schema(db_path: Path) -> None:
+    """Create parent dir and apply schema.sql when the models table is absent."""
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(db_path)
+    try:
+        row = con.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='models'"
+        ).fetchone()
+        if row:
+            return
+        con.execute("PRAGMA foreign_keys = ON;")
+        con.executescript(SCHEMA_PATH.read_text())
+        con.execute("PRAGMA foreign_keys = ON;")
+    finally:
+        con.close()
+
+
 def seed(force: bool) -> None:
     ensure_dirs()
 
