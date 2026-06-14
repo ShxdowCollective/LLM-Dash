@@ -34,6 +34,7 @@ try:
         local_date,
         parse_json_output,
         run_agent_once,
+        safe_rel_path,
         usage_metrics,
         utc_now,
         validate_update,
@@ -61,6 +62,7 @@ except ModuleNotFoundError:
         local_date,
         parse_json_output,
         run_agent_once,
+        safe_rel_path,
         usage_metrics,
         utc_now,
         validate_update,
@@ -531,7 +533,7 @@ def main() -> int:
             "agent_runtime": AGENT_RUNTIME,
             "exa_searches": 0,
             "exa_fetches": 0,
-            "notes": f"Seed run preset={args.preset}. Log: {log_path.relative_to(ROOT).as_posix()}",
+            "notes": f"Seed run preset={args.preset}. Log: {safe_rel_path(log_path)}",
             **result["usage"],
         }
         apply_update(
