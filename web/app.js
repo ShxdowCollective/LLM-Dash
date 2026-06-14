@@ -5,6 +5,21 @@
 
   const METRIC_KEYS = ["intelligence", "coding", "agents", "speed", "cost"];
   const CHART_METRIC_KEYS = ["cost", "overall", "value", "intelligence", "coding", "agents", "speed"];
+
+  // Single source of truth for per-metric label + signature color. Every view
+  // (list bars, detail bars, table header dots, radar) reads from here so a
+  // metric is always the same hue. Field key is `agents` (plural); label "Agent".
+  // Color map is canonical — score-spark hues and BAR_COLOR were unified onto it.
+  const METRIC_META = {
+    intelligence: { label: "Intelligence", short: "Intel",   colorVar: "var(--vw-iridescent-7)" },
+    coding:       { label: "Coding",       short: "Coding",  colorVar: "var(--vw-iridescent-3)" },
+    agents:       { label: "Agent",        short: "Agent",   colorVar: "var(--vw-iridescent-4)" },
+    speed:        { label: "Speed",        short: "Speed",   colorVar: "var(--vw-iridescent-2)" },
+    overall:      { label: "Overall",      short: "Overall", colorVar: "var(--vw-iridescent-6)" },
+    cost:         { label: "Cost",         short: "Cost",    colorVar: "var(--vw-iridescent-1)" },
+    value:        { label: "Value",        short: "Value",   colorVar: "var(--vw-iridescent-5)" },
+  };
+  const metricColor = (key) => (METRIC_META[key] && METRIC_META[key].colorVar) || "var(--model-color)";
   const MODEL_SORTS = [
     ["overall", "Overall"],
     ["value", "Value"],
@@ -109,6 +124,7 @@
     chartX: "cost",
     chartY: "overall",
     compare: [],
+    compareOpen: false,
     inspect: "",
     statsAgent: "",
     statsRange: "all",
@@ -238,6 +254,7 @@
       toggle: byId("sidebar-toggle"),
       close: byId("sidebar-close"),
       content: byId("content"),
+      rail: byId("detail-rail"),
       overlay: byId("overlay-root"),
       toast: byId("toast-root"),
       freshness: byId("freshness"),
@@ -517,6 +534,7 @@
     renderOverlay();
     if (state.error) {
       mount(emptyState("Dashboard could not start", state.error, "Retry", () => location.reload(), "error"));
+      renderDetailRail();
       return;
     }
     if (!state.ready) return;
@@ -524,6 +542,7 @@
     else if (state.area === "changelog") mount(renderChangelog());
     else if (state.area === "stats") mount(renderStats());
     else mount(renderSettings());
+    renderDetailRail();
   }
 
   function renderBoot(text) {
@@ -574,6 +593,7 @@
     return h("section", { class: "models-workbench" }, [
       renderModelToolbar(),
       view === "chart" ? renderChart() : view === "table" ? renderTable() : renderList(),
+      renderCompareTray(),
     ]);
   }
 
@@ -599,20 +619,31 @@
           h("select", { value: state.ui.sortKey, onchange: (e) => setSort(e.target.value) },
             MOBILE_SORTS.map(([key, label]) => h("option", { value: key }, label))),
         ]) : null,
-        h("button", {
-          class: "vw-btn vw-btn-secondary toolbar-filter-btn",
-          type: "button",
-          "aria-expanded": String(state.ui.filtersOpen),
-          onclick: () => { state.ui.filtersOpen = !state.ui.filtersOpen; savePrefs(); render(); },
-        }, count ? `Filters (${count})` : "Filters"),
+        h("div", { class: "filter-anchor" }, [
+          h("button", {
+            class: "vw-btn vw-btn-secondary toolbar-filter-btn" + (count ? " has-active" : ""),
+            type: "button",
+            "aria-expanded": String(state.ui.filtersOpen),
+            "aria-haspopup": "dialog",
+            onclick: () => { state.ui.filtersOpen = !state.ui.filtersOpen; savePrefs(); render(); },
+          }, count ? `Filters (${count})` : "Filters"),
+          state.ui.filtersOpen ? h("div", { class: "filter-pop-backdrop", "aria-hidden": "true", onclick: closeFilters }) : null,
+          state.ui.filtersOpen ? h("div", { class: "filter-pop", role: "dialog", "aria-label": "Filters" }, renderFilters()) : null,
+        ]),
       ]),
       h("div", { class: "toolbar-actions" }, [
         isTable ? zoomControl() : null,
         h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: exportModels }, "Export CSV"),
         count && state.filteredModels.length ? h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: resetFilters }, "Reset view") : null,
       ]),
-      state.ui.filtersOpen ? renderFilters() : null,
     ]);
+  }
+
+  function closeFilters() {
+    if (!state.ui.filtersOpen) return;
+    state.ui.filtersOpen = false;
+    savePrefs();
+    render();
   }
 
   function zoomControl() {
@@ -755,7 +786,6 @@
         ]),
       ]),
       h("div", { class: "models-mobile-list" }, state.filteredModels.map((model, index) => modelCard(model, index))),
-      renderCompareArea(),
     ]);
   }
 
@@ -772,12 +802,14 @@
       ]),
       h("div", { class: "model-list vw-scroll-shadow" },
         state.filteredModels.map((model, index) => listRow(model, index))),
-      renderCompareArea(),
     ]);
   }
 
+  const LIST_BAR_METRICS = ["intelligence", "coding", "agents", "speed"];
+
   function listRow(model, index) {
     const color = safeColor(model.color);
+    const g = tier(overall(model));
     return h("div", {
       class: rowClasses(model.id) + " model-list-row",
       tabindex: "0",
@@ -786,55 +818,56 @@
       onclick: () => setInspect(model.id),
       onkeydown: (e) => rowKey(e, index, model.id),
     }, [
-      h("span", { class: "list-rank" }, index + 1),
+      h("span", { class: "list-rank" + (index < 3 ? " top r" + (index + 1) : "") }, index + 1),
       compareCheckbox(model),
-      providerLogo(model, 24),
+      providerLogo(model, 30),
       listIdentity(model),
-      listOverallChip(overall(model), color),
-      listValueChip(valueScore(model)),
-      h("span", { class: "list-cost" }, fmtScore(model.cost)),
-      scoreSpark(model),
+      h("div", { class: "list-overall" }, [
+        h("span", { class: "list-overall-num " + g.cls }, fmtScore(overall(model))),
+        h("span", { class: "list-overall-grade" }, "Grade " + g.label),
+      ]),
+      listBars(model),
+      h("span", { class: "list-go", "aria-hidden": "true" }, [
+        h("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round" }, [h("path", { d: "M9 6l6 6-6 6" })]),
+      ]),
     ]);
+  }
+
+  // Compact open-weight chip, derived from the type/params string (no DB flag).
+  function openChip(model) {
+    return /open[- ]?weight/i.test(model.params || "") ? h("span", { class: "list-chip open", title: "Open-weight" }, "open") : null;
+  }
+
+  // Bare inline modality glyphs (no chip boxes) per the Voidware rail spec.
+  function modalityRow(model, size) {
+    const px = size || 13;
+    return h("span", { class: "list-modality", "aria-hidden": "true" }, modelCapabilities(model).map((c) => h("svg", {
+      viewBox: "0 0 20 20", width: px, height: px, fill: "none", stroke: "currentColor", "stroke-width": "1.7", "stroke-linecap": "round", "stroke-linejoin": "round", title: CAPABILITY[c].label,
+    }, [h("path", { d: CAPABILITY[c].glyph })])));
   }
 
   function listIdentity(model) {
     return h("div", { class: "list-model-identity" }, [
-      h("strong", { class: "list-model-name" }, highlight(model.name || "Unknown model")),
-      h("span", { class: "list-model-vendor" }, model.vendor || "Unknown"),
+      h("div", { class: "list-name-row" }, [
+        h("strong", { class: "list-model-name" }, highlight(model.name || "Unknown model")),
+        openChip(model),
+        model.status === "deprecated" ? h("span", { class: "list-chip dep", title: depTitle(model) }, "deprecated") : null,
+      ]),
+      h("div", { class: "list-sub-row" }, [
+        h("span", { class: "list-model-vendor" }, model.vendor || "Unknown"),
+        h("span", { class: "list-sub-sep" }, "·"),
+        modalityRow(model),
+      ]),
     ]);
   }
 
-  function listOverallChip(score, modelColor) {
-    const t = tier(score);
-    return h("span", {
-      class: "list-grade-chip list-overall-chip " + t.cls,
-      style: { "--model-color": modelColor },
-      title: "Overall " + fmtScore(score) + " · " + t.label + " tier",
-    }, t.label);
-  }
-
-  function listValueChip(score) {
-    const t = tier(score);
-    return h("span", {
-      class: "list-grade-chip list-value-chip " + t.cls,
-      title: "Value " + fmtScore(score) + " · " + t.label + " tier",
-    }, t.label);
-  }
-
-  function scoreSpark(model) {
-    const bars = [
-      ["intelligence", "Intelligence", "var(--spark-intel)"],
-      ["coding", "Coding", "var(--spark-coding)"],
-      ["agents", "Agent", "var(--spark-agents)"],
-      ["speed", "Speed", "var(--spark-speed)"],
-    ];
-    return h("div", { class: "score-spark", "aria-hidden": "true" }, bars.map(([key, label, hue]) => {
-      const val = clamp(Number(model[key]) || 0, 0, 10);
-      return h("span", {
-        class: "score-spark-bar",
-        style: { "--spark-fill": (val / 10 * 100) + "%", "--spark-hue": hue },
-        title: label + " " + fmtScore(model[key]),
-      });
+  function listBars(model) {
+    return h("div", { class: "list-bars" }, LIST_BAR_METRICS.map((k) => {
+      const val = clamp(Number(model[k]) || 0, 0, 10);
+      return h("div", { class: "list-bar-cell" }, [
+        h("div", { class: "list-bar-k" }, [h("span", null, METRIC_META[k].short), h("b", null, fmtScore(model[k]))]),
+        h("div", { class: "list-bar-track" }, h("i", { style: { width: (val * 10) + "%", "--bar-color": metricColor(k) } })),
+      ]);
     }));
   }
 
@@ -845,12 +878,13 @@
     const inner = [];
     if (col.key === "compare") inner.push(h("span", { class: "sr-only" }, "Compare"));
     else if (col.sort) {
+      const dot = col.score && METRIC_META[col.key] ? h("span", { class: "th-dot", "aria-hidden": "true", style: { background: metricColor(col.key) } }) : null;
       inner.push(h("button", {
-        class: "th-sort" + (active ? " is-active" : ""),
+        class: "th-sort" + (active ? " is-active" : "") + (col.score ? " th-metric" : ""),
         type: "button",
         onclick: () => setSort(col.sort),
         title: "Sort by " + col.label,
-      }, [col.label, h("span", { class: "sort-caret", "aria-hidden": "true" }, active ? (state.ui.sortDir === "asc" ? "▲" : "▼") : "")]));
+      }, [dot, col.label, h("span", { class: "sort-caret", "aria-hidden": "true" }, active ? (state.ui.sortDir === "asc" ? "▲" : "▼") : "")]));
     } else inner.push(h("span", { class: "th-label", "aria-label": col.key === "rank" ? "Rank in current sort order" : null }, col.label));
     // Resize handle (not on the last column).
     if (col.key !== "compare") inner.push(resizeHandle(col));
@@ -1014,7 +1048,6 @@
       ]),
       h("div", { class: "chart-analysis" }, [
         h("div", { class: "chart-canvas-panel" }, state.ui.chartMode === "radar" ? renderRadar(focusList) : renderScatter()),
-        h("div", { class: "chart-side" }, renderCompareArea()),
       ]),
     ]);
   }
@@ -1055,16 +1088,39 @@
           "aria-label": `${model.name}: ${labelFor(xKey)} ${fmtScore(metricValue(model, xKey))}, ${labelFor(yKey)} ${fmtScore(metricValue(model, yKey))}`,
           onclick: () => setInspect(model.id),
           ondblclick: () => toggleCompare(model.id),
+          onmouseenter: (e) => showChartTip(e, `${model.name} · ${METRIC_META[xKey] ? METRIC_META[xKey].short : labelFor(xKey)} ${fmtScore(metricValue(model, xKey))} · ${METRIC_META[yKey] ? METRIC_META[yKey].short : labelFor(yKey)} ${fmtScore(metricValue(model, yKey))}`),
+          onmousemove: moveChartTip,
+          onmouseleave: hideChartTip,
           onkeydown: (e) => pointKey(e, model.id),
         });
       }),
     ]);
-    return h("div", { class: "svg-shell" }, [svg, renderLegend()]);
+    return h("div", { class: "svg-shell" }, [svg, h("div", { class: "chart-tip", id: "chart-tip", hidden: true }), renderLegend()]);
+  }
+
+  // Direct-DOM tooltip so hovering a point doesn't trigger a full re-render.
+  function showChartTip(e, text) {
+    const tip = document.getElementById("chart-tip");
+    if (!tip) return;
+    tip.textContent = text;
+    tip.hidden = false;
+    moveChartTip(e);
+  }
+  function moveChartTip(e) {
+    const tip = document.getElementById("chart-tip");
+    if (!tip || tip.hidden) return;
+    const shell = tip.parentElement.getBoundingClientRect();
+    tip.style.left = (e.clientX - shell.left) + "px";
+    tip.style.top = (e.clientY - shell.top) + "px";
+  }
+  function hideChartTip() {
+    const tip = document.getElementById("chart-tip");
+    if (tip) tip.hidden = true;
   }
 
   function renderRadar(models) {
     const chosen = models.length ? models : [state.filteredModels[0]];
-    const metrics = ["intelligence", "coding", "agents", "speed", "cost"];
+    const metrics = METRIC_KEYS;
     const size = 460, cx = size / 2, cy = size / 2, radius = 150, labelRadius = radius + 20;
     const angleAt = (i) => -Math.PI / 2 + (Math.PI * 2 * i) / metrics.length;
     const axis = (i, value) => {
@@ -1088,7 +1144,7 @@
           const dy = Math.sin(angle) > 0.3 ? 12 : Math.sin(angle) < -0.3 ? -6 : 4;
           return h("g", null, [
             h("line", { x1: cx, y1: cy, x2: p[0], y2: p[1], class: "chart-grid-line" }),
-            h("text", { x: lx, y: ly + dy, "text-anchor": anchor, class: "radar-label" }, labelFor(metric)),
+            h("text", { x: lx, y: ly + dy, "text-anchor": anchor, class: "radar-label", style: { fill: metricColor(metric) } }, METRIC_META[metric] ? METRIC_META[metric].short : labelFor(metric)),
           ]);
         }),
         ...chosen.map((model) => h("polygon", {
@@ -1101,61 +1157,130 @@
     ]);
   }
 
-  // Unified comparison surface shared by the table and chart subpages.
-  // compare set drives it; falls back to the inspected model so it's never blank.
-  // 1 model -> labeled bars, 2+ -> grade boxes.
-  function renderCompareArea() {
-    const compare = compareModels();
-    const showModels = compare.length ? compare : [inspectModel()].filter(Boolean);
-    const heading = h("div", { class: "compare-area-head" }, [
-      h("h2", { class: "compare-area-title" }, compare.length ? `Comparing ${compare.length} ${compare.length === 1 ? "model" : "models"}` : "Model detail"),
-    ]);
-    if (!showModels.length) {
-      return h("section", { class: "compare-area", "aria-label": "Model comparison" }, [heading, emptyState("No models to show", "Adjust filters to bring models back.")]);
-    }
-    const mode = showModels.length === 1 ? "bars" : "grade";
-    return h("section", { class: "compare-area mode-" + mode, "aria-label": "Model comparison" }, [
-      heading,
-      h("div", { class: "compare-grid mode-" + mode }, showModels.map((model) => modelStatCard(model, mode))),
-    ]);
+  // ── Docked detail rail (persistent 3rd shell column) ──────────────────────
+  // Binds to the inspected model only. Compare is orthogonal and lives in the
+  // overlay, so toggling compare checkboxes never changes rail content.
+  const RAIL_METRICS = ["overall", "value", "intelligence", "coding", "agents", "speed", "cost"];
+
+  function railValue(model, key) {
+    if (key === "overall") return overall(model);
+    if (key === "value") return valueScore(model);
+    return Number(model[key]);
   }
 
-  function modelStatCard(model, mode) {
-    const inCompare = state.ui.compare.includes(model.id);
+  function renderDetailRail() {
+    if (!els.rail) return;
+    if (state.area !== "models" || state.setupMode || !state.ready) {
+      els.rail.replaceChildren();
+      return;
+    }
+    const model = inspectModel();
+    if (!model) {
+      els.rail.replaceChildren(h("div", { class: "detail-rail-empty" }, [
+        h("p", null, "Select a model to see its full scorecard."),
+      ]));
+      return;
+    }
     const card = modelCardUrl(model);
-    const head = h("header", { class: "stat-card-head" }, [
-      providerLogo(model, 42),
-      h("div", { class: "stat-card-titles" }, [
-        h("strong", { class: "stat-card-name" }, model.name || "Unknown model"),
-        h("span", { class: "stat-card-vendor" }, model.vendor || "Unknown vendor"),
+    const t = tier(overall(model));
+    const head = h("header", { class: "detail-rail-head", style: { "--model-color": safeColor(model.color) } }, [
+      h("div", { class: "detail-rail-id" }, [
+        providerLogo(model, 42),
+        h("div", { class: "detail-rail-titles" }, [
+          h("strong", { class: "detail-rail-name" }, model.name || "Unknown model"),
+          h("span", { class: "detail-rail-vendor" }, model.vendor || "Unknown vendor"),
+        ]),
+        h("span", { class: "detail-rail-grade " + t.cls, title: "Overall " + fmtScore(overall(model)) }, t.label),
       ]),
-      h("span", { class: "stat-card-tier " + tier(overall(model)).cls, title: "Overall tier" }, tier(overall(model)).label),
     ]);
-    const meta = h("dl", { class: "stat-card-meta" }, [
-      metaItem("Cost", model.pricing || (Number.isFinite(Number(model.cost)) ? "Cost score " + fmtScore(model.cost) : "Not listed")),
+    const meta = h("dl", { class: "detail-rail-meta" }, [
+      metaItem("Price", model.pricing || (Number.isFinite(Number(model.cost)) ? "Cost score " + fmtScore(model.cost) : "Not listed")),
       metaItem("Released", model.released || "Unknown"),
       metaItem("Tracked since", fmtDate(model.first_seen) || "Unknown"),
       metaItem("Type", model.params || "Unknown"),
-      h("div", { class: "meta-item meta-item-caps" }, [h("dt", null, "Inputs"), h("dd", null, capabilityChips(model, 16))]),
       model.status && model.status !== "active" ? metaItem("Status", titleCaseSlug(model.status)) : null,
       model.deprecated_on ? metaItem("Deprecated", fmtDate(model.deprecated_on)) : null,
+      h("div", { class: "meta-item meta-item-caps", style: { "grid-column": "1 / -1" } }, [h("dt", null, "Inputs"), h("dd", null, capabilityChips(model, 18))]),
     ]);
-    const notes = model.notes ? h("p", { class: "model-notes" }, model.notes) : null;
-    const link = card.url ? h("a", { class: "stat-card-link", href: card.url, target: "_blank", rel: "noopener noreferrer" }, [card.official ? "Model card" : "Find model card", h("span", { "aria-hidden": "true" }, " ↗")]) : null;
-    const remove = inCompare ? h("button", { class: "compare-remove", type: "button", onclick: () => toggleCompare(model.id), "aria-label": "Remove " + model.name }, "×") : null;
+    const note = model.notes ? h("p", { class: "detail-rail-note" }, model.notes) : null;
+    const link = card.url ? h("a", { class: "detail-rail-link", href: card.url, target: "_blank", rel: "noopener noreferrer" }, [card.official ? "Model card" : "Find model card", h("span", { "aria-hidden": "true" }, " ↗")]) : null;
+    els.rail.replaceChildren(h("div", { class: "detail-rail-inner vw-scroll-shadow" }, [
+      head,
+      h("div", { class: "detail-rail-body" }, [
+        meta,
+        note,
+        link,
+        h("div", { class: "detail-rail-bars" }, statBars(model)),
+        railFooter(model),
+      ]),
+    ]));
+  }
 
-    if (mode === "bars") {
-      // Two columns on wide screens: identity/meta on the left, bars on the
-      // right, so a single model doesn't stretch into one awkward full-bleed row.
-      return h("article", { class: "stat-model-card mode-bars", style: { "--model-color": safeColor(model.color) } }, [
-        remove,
-        h("div", { class: "stat-card-summary" }, [head, meta, notes, link]),
-        h("div", { class: "stat-card-bars-col" }, statBars(model)),
-      ]);
-    }
-    return h("article", { class: "stat-model-card mode-grade", style: { "--model-color": safeColor(model.color) } }, [
-      remove, head, meta, gradeGrid(model), notes, link,
+  // Board rank + strongest/weakest, filling the rail's bottom per the design.
+  function railFooter(model) {
+    const all = state.models.slice().sort((a, b) => overall(b) - overall(a));
+    const rank = all.findIndex((m) => m.id === model.id) + 1;
+    const cmp = ["intelligence", "coding", "agents", "speed", "value", "cost"]
+      .map((k) => ({ k, label: METRIC_META[k].short, color: metricColor(k), v: railValue(model, k) }))
+      .filter((x) => Number.isFinite(x.v));
+    const strong = cmp.reduce((a, b) => (b.v > a.v ? b : a), cmp[0]);
+    const weak = cmp.reduce((a, b) => (b.v < a.v ? b : a), cmp[0]);
+    return h("div", { class: "detail-rail-foot" }, [
+      h("div", { class: "drf-rank" }, [
+        h("span", { class: "drf-k" }, "Board rank"),
+        h("span", { class: "drf-v" }, [rank > 0 ? "#" + rank : "—", h("small", null, " / " + all.length)]),
+      ]),
+      strong && weak ? h("div", { class: "drf-chips" }, [
+        h("span", { class: "drf-chip", style: { "--c": strong.color } }, [h("em", null, "▲"), strong.label, " ", fmtScore(strong.v)]),
+        h("span", { class: "drf-chip", style: { "--c": weak.color } }, [h("em", null, "▼"), weak.label, " ", fmtScore(weak.v)]),
+      ]) : null,
     ]);
+  }
+
+  // ── Compare tray + overlay ────────────────────────────────────────────────
+  function renderCompareTray() {
+    const models = compareModels();
+    if (!models.length) return null;
+    return h("div", { class: "compare-tray", role: "region", "aria-label": "Compare selection" }, [
+      h("span", { class: "compare-tray-count" }, [h("b", null, String(models.length)), " selected"]),
+      h("div", { class: "compare-tray-chips" }, models.map((m) => h("span", { class: "compare-tray-chip" }, [
+        providerLogo(m, 18),
+        h("span", { class: "compare-tray-chip-name" }, m.name || "Unknown"),
+        h("button", { class: "compare-tray-remove", type: "button", "aria-label": "Remove " + (m.name || "model"), onclick: () => toggleCompare(m.id) }, "×"),
+      ]))),
+      h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: clearCompare }, "Clear"),
+      h("button", { class: "vw-btn vw-btn-primary", type: "button", disabled: models.length < 2, onclick: () => { state.compareOpen = true; render(); } }, "Compare"),
+    ]);
+  }
+
+  function compareOverlay() {
+    const models = compareModels();
+    if (models.length < 2) return null;
+    const best = {};
+    RAIL_METRICS.forEach((k) => { best[k] = Math.max(...models.map((m) => railValue(m, k)).filter(Number.isFinite)); });
+    const close = () => { state.compareOpen = false; render(); };
+    const headRow = h("tr", null, [h("th", null, "Metric"), ...models.map((m) => h("th", null, h("div", { class: "cmp-th" }, [providerLogo(m, 20), h("span", null, m.name || "Unknown")])))]);
+    const metricRows = RAIL_METRICS.map((k) => h("tr", null, [
+      h("td", { class: "cmp-metric" }, [h("span", { class: "cmp-dot", style: { background: metricColor(k) } }), METRIC_META[k].label]),
+      ...models.map((m) => {
+        const v = railValue(m, k);
+        const isBest = models.length > 1 && Number.isFinite(v) && v === best[k];
+        return h("td", { class: "cmp-score" + (isBest ? " is-best" : "") + " " + tier(v).cls }, fmtScore(v));
+      }),
+    ]));
+    const inputsRow = h("tr", { class: "cmp-inputs-row" }, [
+      h("td", { class: "cmp-metric" }, "Inputs"),
+      ...models.map((m) => h("td", { class: "cmp-inputs-cell" }, capabilityChips(m, 16))),
+    ]);
+    return modal("Compare " + models.length + " models", [
+      h("div", { class: "cmp-body" }, [
+        h("div", { class: "cmp-radar" }, renderRadar(models)),
+        h("table", { class: "cmp-table" }, [
+          h("thead", null, headRow),
+          h("tbody", null, [...metricRows, inputsRow]),
+        ]),
+      ]),
+    ], close);
   }
 
   function metaItem(label, value) {
@@ -1173,41 +1298,16 @@
     ["cost", "Cost"],
   ];
 
-  // Distinct iridescent hue per metric so the bars read individually instead of
-  // one undifferentiated teal-purple wash.
-  const BAR_COLOR = {
-    overall: "var(--vw-iridescent-6)",
-    value: "var(--vw-iridescent-5)",
-    intelligence: "var(--vw-iridescent-7)",
-    coding: "var(--vw-iridescent-3)",
-    agents: "var(--vw-iridescent-4)",
-    speed: "var(--vw-iridescent-2)",
-    cost: "var(--vw-iridescent-1)",
-  };
-
   function statBars(model) {
     const rowsOut = [["overall", "Overall", overall(model)], ["value", "Value", valueScore(model)]]
       .concat(BAR_METRICS.map(([k, label]) => [k, label, Number(model[k])]));
     return h("div", { class: "stat-bars" }, rowsOut.map(([key, label, value]) => {
       const v = Number(value);
       const pct = Number.isFinite(v) ? clamp(v, 0, 10) * 10 : 0;
-      return h("div", { class: "stat-bar" + (key === "overall" || key === "value" ? " is-headline" : ""), style: { "--bar-color": BAR_COLOR[key] || "var(--model-color)" } }, [
+      return h("div", { class: "stat-bar" + (key === "overall" || key === "value" ? " is-headline" : ""), style: { "--bar-color": metricColor(key) } }, [
         h("span", { class: "stat-bar-label" }, label),
         h("div", { class: "stat-bar-track" }, h("div", { class: "stat-bar-fill", style: { width: pct + "%" } })),
         h("span", { class: "stat-bar-val" }, fmtScore(value)),
-      ]);
-    }));
-  }
-
-  function gradeGrid(model) {
-    const cells = [["overall", "Overall", overall(model)], ["value", "Value", valueScore(model)]]
-      .concat(BAR_METRICS.map(([k, label]) => [k, label, Number(model[k])]));
-    return h("div", { class: "grade-grid" }, cells.map(([key, label, value]) => {
-      const t = tier(value);
-      return h("div", { class: "grade-box " + t.cls, title: `${label}: ${fmtScore(value)}` }, [
-        h("span", { class: "grade-label" }, label),
-        h("span", { class: "grade-letter" }, t.label),
-        h("span", { class: "grade-score" }, fmtScore(value)),
       ]);
     }));
   }
@@ -2470,6 +2570,11 @@
         ]),
       ], closeApproval));
     }
+    if (state.compareOpen) {
+      const co = compareOverlay();
+      if (co) nodes.push(co);
+      else state.compareOpen = false;
+    }
     els.overlay.replaceChildren(...nodes);
     document.body.classList.toggle("has-overlay", nodes.length > 0 || state.drawerOpen);
   }
@@ -2502,6 +2607,14 @@
     els.backdrop.dataset.vwOpen = state.drawerOpen ? "true" : "false";
     els.toggle.setAttribute("aria-expanded", String(state.drawerOpen));
     els.content.toggleAttribute("inert", state.drawerOpen);
+    // The docked detail rail only exists on the Models area; mirror the content
+    // inert state so it can't trap focus behind the mobile nav drawer.
+    const railOn = state.area === "models" && !state.setupMode && state.ready;
+    els.app.classList.toggle("has-rail", railOn);
+    if (els.rail) {
+      els.rail.hidden = !railOn;
+      els.rail.toggleAttribute("inert", state.drawerOpen);
+    }
   }
 
   function updateFreshness() {
@@ -2536,6 +2649,8 @@
 
   function keydown(event) {
     if (event.key === "Escape") {
+      if (state.ui.filtersOpen) { closeFilters(); return; }
+      if (state.compareOpen) { state.compareOpen = false; render(); return; }
       if (state.helpOpen || state.manualOpen || state.approval.open) {
         if (state.approval.open) { closeApproval(); return; }
         state.helpOpen = false; state.manualOpen = false; render(); return;
@@ -2543,7 +2658,10 @@
       if (state.drawerOpen) { closeDrawer(); return; }
       if (state.run.open && state.run.state !== "running") { state.run.open = false; render(); return; }
     }
-    if (state.drawerOpen || state.helpOpen || state.manualOpen || state.approval.open) return;
+    if (state.drawerOpen || state.helpOpen || state.manualOpen || state.approval.open || state.compareOpen) return;
+    // Don't fire single-key shortcuts while the user is typing in a field.
+    const tag = (event.target && event.target.tagName) || "";
+    if (/^(INPUT|SELECT|TEXTAREA)$/.test(tag) || (event.target && event.target.isContentEditable)) return;
     if (event.key === "/" && state.area === "models") {
       event.preventDefault();
       document.getElementById("model-search")?.focus();
