@@ -3,6 +3,68 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 121 — 2026-06-14
+
+**Agent:** Claude Opus 4.8 (1M) (handle: Iris)
+**Cycle:** Models page redesign from the Claude Design handoff
+**Branch:** `feat/models-redesign`
+**Task:** Port the design improvements onto the live vanilla-JS app, plan reviewed by a Cursor-pro nano-agent first
+
+---
+
+Fetched the Claude Design handoff bundle (`api.anthropic.com/v1/design/h/-kjEukTsQgjxpBta5sKatA`),
+read its README + chat transcript, wrote [`docs/plans/MODELS_REDESIGN_PLAN.md`](docs/plans/MODELS_REDESIGN_PLAN.md),
+ran it through a read-only Cursor-pro nano-agent review, fixed the findings, then implemented.
+
+**Plan-review corrections that mattered (verified against source before applying):**
+the app had **no compare overlay** (the old surface was inline `renderCompareArea`);
+grade colors are the existing `--llm-tier-*` tokens (F=`#d36a6a`), not the prototype
+hexes; `open`/`free` chips have no DB field, so `open` is derived from `model.params`
+and `free` was dropped (no data); Track 0 had to unify *all* metric-color sources.
+
+**What shipped (Tracks 0/A/B/C/D/E/F):**
+
+- **0 — `METRIC_META`** single source of truth for per-metric label/short/color.
+  Unified `scoreSpark` hues + `BAR_COLOR` + radar array onto it; deleted the
+  conflicting `--spark-*` tokens (list bar colors intentionally shifted to match).
+- **A — 3-column shell.** New persistent `#detail-rail` `<aside>` lifted out of the
+  per-view `.compare-area`; `renderDetailRail()` binds to `state.ui.inspect` only.
+  Fixed right rail on desktop (`#app.has-rail` reserves `--llm-rail-w`), collapses
+  to in-flow below 1200px with the shell switched to natural page scroll (the base
+  shell locks html/body to the viewport).
+- **B — list rows** rebuilt: top-3 rainbow rank chips, real provider logos, bare
+  inline modality glyphs, grade-colored overall + "Grade X", 4 labeled per-metric
+  mini-bars, `open` chip from params.
+- **C — table** is now a grade matrix: per-metric colored header dots + grade-tinted
+  cells with mono grade-colored numerals (coexists with zoom-to-grade).
+- **D — chart** spans the full column (dropped `.chart-side`); DOM hover tooltip
+  (no render churn), metric-colored radar labels.
+- **E — detail rail content** (accent-glow header + grade badge, meta grid, modality
+  row, note, 7 gradient bars, board-rank pill + strongest/weakest footer) and a **new
+  compare overlay** (radar + best-in-class table + the requested **multimodal-inputs
+  row**) opened from a bottom compare tray.
+- **F — filters popover** anchored to the Filters button (backdrop + Esc close),
+  every existing filter preserved. Also: keyboard-shortcut typing guard, and the
+  missing **List** subnav tab added to the bootstrap markup.
+
+**Constraints honored:** real provider SVG logos kept everywhere (not the prototype's
+monograms); zero filters/features lost (presentation only); reused `tier()`; no
+invented model fields; held to the voidware no-AI-slop bar (gradients only on
+signal/active/CTA/brand).
+
+**Verified** with headed `dev-browser` screenshots: list/table/chart wide, compare
+tray + overlay, filters popover, narrow (rail collapses + page scrolls), rail hidden
+on stats/changelog/settings. No app/JS console errors (only external font-CDN CORS).
+Asset version bumped to `redesign-20260614c`.
+
+**Follow-up (not done):** the old inline-detail CSS (`.compare-area`, `.stat-model-card`,
+`.stat-card-*`, `.grade-grid/box`, `.compare-strip`, `.compare-remove`) is now dead but
+**interleaved** with live rules (`.meta-item`, `.stat-bars`, `.shortcut-note`) the new
+rail still uses — left for a dedicated cleanup pass rather than risk a regression. Not
+yet committed; branch `feat/models-redesign` is uncommitted pending review.
+
+---
+
 ## Entry 120 — 2026-06-13
 
 **Agent:** Claude Opus 4.8 (handle: Lyric, orchestrating via shxdowflow + nano-agents)
