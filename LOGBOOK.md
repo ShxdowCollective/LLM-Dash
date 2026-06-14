@@ -64,10 +64,18 @@ C→D→E on `app.js`). TODO "Now" updated with the six tracks and a suggested P
 split (F + A early, then A→B→C→D→E). The plan is gitignored under `docs/plans/*`
 so it lives on disk only; this entry + TODO carry the durable summary.
 
-**Next:** implement Track F + A as the low-risk early PR, then the wizard PR.
-Two open decisions for the user/impl: AA/LLM Stats "top N" ranking is
-research-driven (no public AA API) — confirm acceptable; and List view vs just a
-tightened table (decision lever in Track F).
+**Update (same day):** user resolved both open decisions. (1) AA *does* have a
+Data API — `GET /api/v2/language/models/free`, `x-api-key`, free tier 100/day —
+so the AA preset is API-driven with a user-selectable ranking index
+(`artificial_analysis_intelligence_index` / `_coding_index` / `_agentic_index`).
+This adds a new `aa` credential slot mirroring the `llmstats` slot, and the
+server pre-fetches AA's catalog (name/creator/pricing/throughput + indices) as
+priors for the agent's 0–10 scoring. Plan Track D + §8 updated. (2) Build the
+List view (not just a tightened table) — making List the default Models view,
+Table one click away. Plan Track F updated.
+
+**Next:** implement Track F + A as the low-risk early PR, then the wizard PR
+(A→B→C→D→E, sequential on `web/app.js`).
 
 ---
 

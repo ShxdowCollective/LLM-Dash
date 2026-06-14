@@ -25,9 +25,11 @@ Use `[ ]` only for still-open work.
   step → "Agent model" to free up "Catalog".
 - [ ] **D — Catalog presets + seed backend.** New `seed_catalog()` prompt builder
   + `/api/seed` endpoint reusing the agent harness; presets gated by configured
-  keys (AA / LLM Stats top N, Exa top N, OpenRouter top X, custom prompt, custom
-  OpenAI-compatible endpoint via Voidware creds). Schema bootstrap before first
-  apply; batch 50–100 models; extend the job lock to seed + run-update.
+  keys: AA top 10/50/100 (AA Data API, user-picks Intelligence/Coding/Agentic
+  index — adds a new `aa` credential slot), LLM Stats top N, Exa top N, OpenRouter
+  top X, custom prompt, custom OpenAI-compatible endpoint via Voidware creds.
+  Schema bootstrap before first apply; batch 50–100 models; extend the job lock to
+  seed + run-update.
 - [ ] **E — Seed progress + completion.** Live progress in the wizard, snazzy
   completion animation (reduced-motion safe), "Let's start!" → Dashboard, plus a
   CLI/skill seed escape hatch on failure.
