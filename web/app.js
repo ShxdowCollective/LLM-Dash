@@ -2526,7 +2526,7 @@
       shortcut("r", "Run refresh"),
       shortcut("?", "Open this panel"),
       shortcut("Esc", "Close drawer or dialogs"),
-      h("p", { class: "shortcut-note" }, "Tip: check the Compare box on a row (or double-click a chart point) to stack models. One model shows bars, several show grade boxes. Click a provider in the chart legend to filter."),
+      h("p", { class: "shortcut-note" }, "Tip: check the Compare box on a row (or double-click a chart point) to stack models, then open the comparison table. Click a provider in the chart legend to filter."),
     ], () => { state.helpOpen = false; render(); }));
     if (state.manualOpen) nodes.push(modal("Manual update prompt", [
       h("p", null, "The prompt is copied when possible. Use it with Claude, Codex, Gemini, or another agent in this repo."),

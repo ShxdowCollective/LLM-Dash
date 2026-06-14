@@ -31,6 +31,14 @@ runs):
 
 ## Recent Completed
 
+**Inline detail CSS cleanup — DONE (2026-06-14).** Removed the dead pre-rail
+inline detail CSS from `web/style.css`: `.compare-area`, `.stat-model-card`,
+`.stat-card-*`, `.grade-grid`/`.grade-box`, `.compare-strip`,
+`.compare-remove`, adjacent orphaned compare/grade helpers, and dead chart-side
+selection/sidebar rules. Kept the live rail/help rules (`.meta-item`,
+`.stat-bars`, `.shortcut-note`) verified against `web/app.js`; refreshed the
+shortcut tip + redesign plan note. `node --check web/app.js` is clean.
+
 **Setup wizard seeding + reset overhaul + table redesign — DONE
 (2026-06-13).** Implemented all six tracks from
 [`docs/plans/2026-06-13-setup-wizard-seeding-table-redesign.md`](docs/plans/2026-06-13-setup-wizard-seeding-table-redesign.md)

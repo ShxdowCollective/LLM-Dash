@@ -3,6 +3,31 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 122 — 2026-06-14
+
+**Agent:** Codex GPT-5 (Noor, coding agent)
+**Cycle:** Follow-up cleanup from Entry 121
+**Branch:** `feat/models-redesign`
+**Task:** Remove dead inline-detail CSS while preserving live detail rail rules
+
+---
+
+Ran the dedicated CSS cleanup pass requested after Entry 121. Removed the old
+inline-detail selector families from `web/style.css`: `.compare-area`,
+`.stat-model-card`, `.stat-card-*`, `.grade-grid`/`.grade-box`,
+`.compare-strip`, `.compare-remove`, plus adjacent CSS-only compare/grade helper
+rules and the dead chart-side selection/sidebar rules from the same retired
+surface.
+
+Verified the selectors are gone repo-wide and kept the live shared rail/help
+rules: `.meta-item` is still emitted by `renderDetailRail()` / `metaItem()`,
+`.stat-bars` by `statBars()`, and `.shortcut-note` by the keyboard-shortcut
+modal. `node --check web/app.js` is clean. A read-only nano-agent audit matched
+the selector findings. Also refreshed the redesign plan status and the shortcut
+tip copy so neither still references the removed grade-box/inline-detail surface.
+
+---
+
 ## Entry 121 — 2026-06-14
 
 **Agent:** Claude Opus 4.8 (1M) (handle: Iris)
