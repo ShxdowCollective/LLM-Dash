@@ -222,7 +222,11 @@ mark {
   text-align: left;
 }
 
-.app-sidebar .vw-sidebar-link:hover,
+.app-sidebar .vw-sidebar-link:hover {
+  background: var(--vw-surface-2);
+  color: var(--vw-text);
+}
+
 .app-sidebar .vw-sidebar-link.active,
 .app-sidebar .vw-sidebar-link[aria-current="page"] {
   background: color-mix(in srgb, var(--vw-accent) 12%, var(--vw-surface-2));
@@ -233,10 +237,9 @@ mark {
 .app-sidebar .vw-sidebar-icon {
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--vw-radius-sm);
-  background: var(--vw-surface-3);
+  width: 22px;
+  height: 22px;
+  color: var(--vw-text-faint);
 }
 
 .app-sidebar .vw-sidebar-icon svg {
@@ -1190,7 +1193,6 @@ body.is-col-resizing .model-row { pointer-events: none; }
   height: 8px;
   border-radius: 999px;
   background: var(--vw-success, #4caf7d);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--vw-success, #4caf7d) 60%, transparent);
   flex: 0 0 auto;
 }
 /* The reset tab carries four wide action rows, so it gets more room than the
@@ -1308,44 +1310,92 @@ body.is-col-resizing .model-row { pointer-events: none; }
   font-size: 18px;
 }
 
-.catalog-grid {
+.catalog-panel { max-width: none; }
+
+.catalog-workbench {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 14px;
-  margin-top: 12px;
+  grid-template-columns: minmax(190px, 240px) 1fr;
+  gap: 18px;
+  margin-top: 4px;
+  align-items: start;
 }
 
-.catalog-card {
+.catalog-sources {
+  display: grid;
+  gap: 6px;
+}
+
+.catalog-source {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--vw-radius-sm);
+  background: transparent;
+  color: var(--vw-text-soft);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--lift-fast), color var(--lift-fast);
+}
+
+.catalog-source:hover {
+  background: var(--vw-surface-2);
+  color: var(--vw-text);
+}
+
+.catalog-source.is-active {
+  background: color-mix(in srgb, var(--vw-accent) 12%, var(--vw-surface-2));
+  color: var(--vw-text);
+  box-shadow: inset 3px 0 0 var(--vw-accent);
+}
+
+.catalog-source-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.catalog-source-sub {
+  font-size: 12px;
+  color: var(--vw-text-muted);
+}
+
+.catalog-source.is-locked .catalog-source-sub {
+  color: var(--vw-text-faint);
+}
+
+.catalog-detail {
   display: grid;
   gap: 12px;
   align-content: start;
   padding: 16px 18px;
+  border-radius: var(--vw-radius-md);
+  background: var(--vw-surface-2);
 }
 
-.catalog-card.is-disabled {
-  opacity: 0.72;
-}
-
-.catalog-card.is-disabled .catalog-card-fields {
-  pointer-events: none;
-}
-
-.catalog-card-title {
+.catalog-detail-title {
   margin: 0;
-  font-size: 15px;
+  font-size: 16px;
   color: var(--vw-text);
 }
 
-.catalog-card-copy {
+.catalog-detail-copy {
   margin: 0;
   color: var(--vw-text-muted);
   font-size: 13px;
   line-height: 1.45;
 }
 
-.catalog-card-fields {
+.catalog-detail-fields {
   display: grid;
-  gap: 10px;
+  gap: 12px;
+}
+
+.catalog-detail-cta {
+  margin-top: 2px;
+}
+
+.catalog-detail-cta .vw-btn {
+  width: fit-content;
 }
 
 .catalog-card-hint {
@@ -2061,10 +2111,8 @@ body.is-col-resizing .model-row { pointer-events: none; }
   display: grid;
   gap: 8px;
   border-radius: var(--vw-radius-lg);
-  background:
-    linear-gradient(140deg, color-mix(in srgb, var(--vw-iridescent-6) 10%, transparent), transparent 120px),
-    color-mix(in srgb, var(--vw-surface-2) 78%, var(--vw-surface-1));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--vw-iridescent-5) 10%, var(--vw-border)), var(--vw-shadow-sm);
+  background: color-mix(in srgb, var(--vw-surface-2) 78%, var(--vw-surface-1));
+  box-shadow: 0 0 0 1px var(--vw-border), var(--vw-shadow-sm);
 }
 
 .stat-card span {
@@ -2158,13 +2206,12 @@ body.is-col-resizing .model-row { pointer-events: none; }
 
 .settings-workbench {
   display: grid;
-  justify-items: center;
   align-content: start;
   padding: 12px 0 56px;
 }
 
 .settings-detail {
-  width: min(100%, 980px);
+  width: 100%;
   min-width: 0;
 }
 
@@ -2173,10 +2220,13 @@ body.is-col-resizing .model-row { pointer-events: none; }
   gap: 18px;
   max-width: 760px;
   padding: 24px;
-  background:
-    linear-gradient(145deg, color-mix(in srgb, var(--vw-iridescent-6) 13%, transparent), transparent 220px),
-    linear-gradient(180deg, color-mix(in srgb, var(--vw-accent) 8%, transparent), transparent 140px),
-    color-mix(in srgb, var(--vw-surface-1) 94%, var(--vw-bg));
+}
+
+.settings-panel-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: var(--vw-weight-semibold);
+  color: var(--vw-text);
 }
 
 .settings-summary {
@@ -2409,25 +2459,6 @@ kbd {
   box-shadow: inset 0 0 0 1px var(--vw-border-focus);
 }
 
-.app-sidebar .vw-sidebar-link.active,
-.app-sidebar .vw-sidebar-link[aria-current="page"] {
-  background: linear-gradient(120deg, color-mix(in srgb, var(--vw-iridescent-6) 22%, var(--vw-surface-2)), color-mix(in srgb, var(--vw-iridescent-5) 12%, var(--vw-surface-2)));
-  box-shadow: inset 3px 0 0 0 transparent;
-  border-image: var(--grad-iridescent) 1;
-}
-
-.app-sidebar .vw-sidebar-link.active::before,
-.app-sidebar .vw-sidebar-link[aria-current="page"]::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 8px;
-  bottom: 8px;
-  width: 3px;
-  border-radius: 999px;
-  background: var(--grad-iridescent);
-}
-
 .app-sidebar .vw-sidebar-link {
   position: relative;
   transition: background var(--lift-fast), color var(--lift-fast);
@@ -2435,9 +2466,7 @@ kbd {
 
 .app-sidebar .vw-sidebar-link.active .vw-sidebar-icon,
 .app-sidebar .vw-sidebar-link[aria-current="page"] .vw-sidebar-icon {
-  background: var(--grad-accent);
-  color: #fff;
-  box-shadow: 0 0 18px color-mix(in srgb, var(--vw-iridescent-5) 28%, transparent);
+  color: var(--vw-accent);
 }
 
 .sidebar-brand h1 {
@@ -2614,6 +2643,16 @@ kbd {
   .stat-model-card.mode-bars {
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
+  }
+
+  .catalog-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .catalog-sources {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(140px, 1fr);
+    overflow-x: auto;
   }
 }
 

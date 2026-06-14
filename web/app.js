@@ -188,6 +188,7 @@
       aa: DEFAULT_SLOT_FORM(),
     },
     catalog: {
+      selected: "exa",
       aaCount: 50,
       aaIndex: "intelligence",
       llmstatsCount: 25,
@@ -1453,102 +1454,127 @@
     ]);
   }
 
-  function renderCatalogCard(card) {
-    const disabled = !card.enabled;
-    return h("article", {
-      class: "catalog-card panel-card" + (disabled ? " is-disabled" : ""),
-      "aria-label": card.title,
-    }, [
-      h("h3", { class: "catalog-card-title" }, card.title),
-      h("p", { class: "catalog-card-copy" }, card.description),
-      h("div", { class: "catalog-card-fields" }, card.inputs),
-      disabled && card.gateHint ? h("p", { class: "catalog-card-hint" }, card.gateHint) : null,
-      h("button", {
-        class: "vw-btn vw-btn-primary",
-        type: "button",
-        disabled,
-        onclick: card.onSeed,
-      }, "Seed catalog"),
-    ]);
+  function catalogSources(c) {
+    return [
+      {
+        id: "aa",
+        title: "Artificial Analysis",
+        sub: "AA Data API",
+        description: "Top models from the AA Data API, ranked by your chosen index.",
+        enabled: Boolean(state.provider.aa_configured),
+        gateHint: "Add an Artificial Analysis key in the Research step to enable.",
+        inputs: [catalogCountSelect(c, "aaCount", [10, 50, 100]), catalogIndexRadios(c)],
+        onSeed: () => startSeed({ preset: "aa", count: c.aaCount, index: c.aaIndex }),
+      },
+      {
+        id: "llmstats",
+        title: "LLM Stats",
+        sub: "LLM Stats API",
+        description: "Top models from the LLM Stats catalog API.",
+        enabled: Boolean(state.provider.llmstats_configured),
+        gateHint: "Add an LLM Stats key in the Research step to enable.",
+        inputs: [catalogCountSelect(c, "llmstatsCount", [10, 25, 50])],
+        onSeed: () => startSeed({ preset: "llmstats", count: c.llmstatsCount }),
+      },
+      {
+        id: "exa",
+        title: "Exa search",
+        sub: "Web research",
+        description: "Discover models via Exa MCP web research (free tier works).",
+        enabled: true,
+        inputs: [catalogCountSelect(c, "exaCount", [10, 25, 50])],
+        onSeed: () => startSeed({ preset: "exa", count: c.exaCount }),
+      },
+      {
+        id: "openrouter",
+        title: "OpenRouter",
+        sub: "Public catalog",
+        description: "Models from the public OpenRouter catalog (largest-context first).",
+        enabled: true,
+        inputs: [catalogCountSelect(c, "openrouterCount", [10, 25, 50])],
+        onSeed: () => startSeed({ preset: "openrouter", count: c.openrouterCount }),
+      },
+      {
+        id: "custom-prompt",
+        title: "Custom prompt",
+        sub: "Your brief",
+        description: "Describe what to discover; the agent builds the catalog from your brief.",
+        enabled: true,
+        inputs: [
+          h("label", { class: "field catalog-field" }, [
+            h("span", null, "Discovery brief"),
+            h("textarea", {
+              class: "catalog-prompt",
+              rows: 4,
+              value: c.customPrompt,
+              placeholder: "e.g. Top coding models released in 2026 with public benchmarks…",
+              oninput: (e) => { c.customPrompt = e.target.value; },
+            }),
+          ]),
+          catalogCountSelect(c, "customCount", [10, 25, 50]),
+        ],
+        onSeed: () => startSeed({ preset: "custom-prompt", count: c.customCount, prompt: c.customPrompt.trim() }),
+      },
+      {
+        id: "custom-endpoint",
+        title: "Custom endpoint",
+        sub: "OpenAI-compatible",
+        description: "Fetch models from an OpenAI-compatible /models endpoint.",
+        enabled: Boolean(state.provider.has_provider),
+        gateHint: "Add a provider connection in the Connection step to enable.",
+        inputs: [
+          h("label", { class: "field catalog-field" }, [
+            h("span", null, "Endpoint URL"),
+            input(c, "customEndpoint", "https://api.example.com/v1/models"),
+          ]),
+          h("label", { class: "field catalog-field" }, [
+            h("span", null, "Credential name (optional)"),
+            input(c, "customCredential", "Leave blank to use the connection key"),
+          ]),
+          catalogCountSelect(c, "customCount", [10, 25, 50]),
+        ],
+        onSeed: () => {
+          const payload = { preset: "custom-endpoint", count: c.customCount, endpoint: c.customEndpoint.trim() };
+          if (c.customCredential.trim()) payload.credential = c.customCredential.trim();
+          startSeed(payload);
+        },
+      },
+    ];
   }
 
   function settingsCatalog() {
     const c = state.catalog;
-    return h("section", { class: "settings-panel panel-card", "aria-label": "Catalog" }, [
+    const sources = catalogSources(c);
+    if (!sources.some((s) => s.id === c.selected)) c.selected = sources[0].id;
+    const active = sources.find((s) => s.id === c.selected) || sources[0];
+    return h("section", { class: "settings-panel panel-card catalog-panel", "aria-label": "Catalog" }, [
       h("h2", { class: "settings-panel-title" }, "Catalog"),
-      h("p", { class: "settings-summary" }, "Pick a seed strategy to populate your model catalog. Each card runs the research agent against a different source."),
-      h("div", { class: "catalog-grid" }, [
-        renderCatalogCard({
-          title: "Artificial Analysis",
-          description: "Top models from the AA Data API, ranked by your chosen index.",
-          enabled: Boolean(state.provider.aa_configured),
-          gateHint: "Add an Artificial Analysis key in the Research step to enable.",
-          inputs: [catalogCountSelect(c, "aaCount", [10, 50, 100]), catalogIndexRadios(c)],
-          onSeed: () => startSeed({ preset: "aa", count: c.aaCount, index: c.aaIndex }),
-        }),
-        renderCatalogCard({
-          title: "LLM Stats",
-          description: "Top models from the LLM Stats catalog API.",
-          enabled: Boolean(state.provider.llmstats_configured),
-          gateHint: "Add an LLM Stats key in the Research step to enable.",
-          inputs: [catalogCountSelect(c, "llmstatsCount", [10, 25, 50])],
-          onSeed: () => startSeed({ preset: "llmstats", count: c.llmstatsCount }),
-        }),
-        renderCatalogCard({
-          title: "Exa search",
-          description: "Discover models via Exa MCP web research (free tier works).",
-          enabled: true,
-          inputs: [catalogCountSelect(c, "exaCount", [10, 25, 50])],
-          onSeed: () => startSeed({ preset: "exa", count: c.exaCount }),
-        }),
-        renderCatalogCard({
-          title: "OpenRouter",
-          description: "Models from the public OpenRouter catalog (largest-context first).",
-          enabled: true,
-          inputs: [catalogCountSelect(c, "openrouterCount", [10, 25, 50])],
-          onSeed: () => startSeed({ preset: "openrouter", count: c.openrouterCount }),
-        }),
-        renderCatalogCard({
-          title: "Custom prompt",
-          description: "Describe what to discover; the agent builds the catalog from your brief.",
-          enabled: true,
-          inputs: [
-            h("label", { class: "field catalog-field" }, [
-              h("span", null, "Discovery brief"),
-              h("textarea", {
-                class: "catalog-prompt",
-                rows: 4,
-                value: c.customPrompt,
-                placeholder: "e.g. Top coding models released in 2026 with public benchmarks…",
-                oninput: (e) => { c.customPrompt = e.target.value; },
-              }),
-            ]),
-            catalogCountSelect(c, "customCount", [10, 25, 50]),
-          ],
-          onSeed: () => startSeed({ preset: "custom-prompt", count: c.customCount, prompt: c.customPrompt.trim() }),
-        }),
-        renderCatalogCard({
-          title: "Custom endpoint",
-          description: "Fetch models from an OpenAI-compatible /models endpoint.",
-          enabled: Boolean(state.provider.has_provider),
-          gateHint: "Add a provider connection in the Connection step to enable.",
-          inputs: [
-            h("label", { class: "field catalog-field" }, [
-              h("span", null, "Endpoint URL"),
-              input(c, "customEndpoint", "https://api.example.com/v1/models"),
-            ]),
-            h("label", { class: "field catalog-field" }, [
-              h("span", null, "Credential name (optional)"),
-              input(c, "customCredential", "Leave blank to use the connection key"),
-            ]),
-            catalogCountSelect(c, "customCount", [10, 25, 50]),
-          ],
-          onSeed: () => {
-            const payload = { preset: "custom-endpoint", count: c.customCount, endpoint: c.customEndpoint.trim() };
-            if (c.customCredential.trim()) payload.credential = c.customCredential.trim();
-            startSeed(payload);
-          },
-        }),
+      h("p", { class: "settings-summary" }, "Pick a source, tune its options, then seed. Each source runs the research agent against a different place."),
+      h("div", { class: "catalog-workbench" }, [
+        h("div", { class: "catalog-sources", role: "tablist", "aria-label": "Seed sources" }, sources.map((s) => h("button", {
+          class: "catalog-source" + (s.id === active.id ? " is-active" : "") + (s.enabled ? "" : " is-locked"),
+          type: "button",
+          role: "tab",
+          "aria-selected": s.id === active.id ? "true" : "false",
+          onclick: () => { c.selected = s.id; render(); },
+        }, [
+          h("span", { class: "catalog-source-name" }, s.title),
+          h("span", { class: "catalog-source-sub" }, s.enabled ? s.sub : "Locked"),
+        ]))),
+        h("div", { class: "catalog-detail", role: "tabpanel" }, [
+          h("h3", { class: "catalog-detail-title" }, active.title),
+          h("p", { class: "catalog-detail-copy" }, active.description),
+          h("div", { class: "catalog-detail-fields" }, active.inputs),
+          !active.enabled && active.gateHint ? h("p", { class: "catalog-card-hint" }, active.gateHint) : null,
+          h("div", { class: "catalog-detail-cta" }, [
+            h("button", {
+              class: "vw-btn vw-btn-primary",
+              type: "button",
+              disabled: !active.enabled,
+              onclick: active.onSeed,
+            }, "Seed catalog"),
+          ]),
+        ]),
       ]),
       h("div", { class: "action-row" }, [
         h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: () => navigate("settings", "research") }, "Back"),
@@ -1684,6 +1710,7 @@
 
   function settingsReset() {
     return h("section", { class: "settings-panel panel-card reset-panel", "aria-label": "Reset" }, [
+      h("h2", { class: "settings-panel-title" }, "Reset"),
       h("p", { class: "settings-summary" }, "Destructive, local-only actions. Each needs its typed confirmation."),
       h("p", { class: "reset-safe-note" }, [
         h("span", { class: "reset-safe-dot", "aria-hidden": "true" }),
@@ -2183,6 +2210,7 @@
 
   function panel(title, summary, children) {
     return h("section", { class: "settings-panel panel-card", "aria-label": title }, [
+      title ? h("h2", { class: "settings-panel-title" }, title) : null,
       summary ? h("p", { class: "settings-summary" }, summary) : null,
       h("div", { class: "settings-fields" }, children),
     ]);
@@ -2966,7 +2994,7 @@
   }
 
   function statusPill(label, stateName) {
-    return h("span", { class: "vw-status-chip freshness-chip", "data-state": stateName || "unknown" }, label);
+    return h("span", { class: "vw-status-chip", "data-state": stateName || "unknown" }, label);
   }
 
   function providerStatusCopy() {
