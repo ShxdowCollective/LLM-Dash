@@ -75,13 +75,21 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 |---|---|---|
 | `LLM_DASH_HOST` | `127.0.0.1` | Server bind address |
 | `LLM_DASH_PORT` | `8787` | Server port |
-| `LLM_DASH_BASE_URL` | — | OpenAI-compatible provider base URL |
-| `LLM_DASH_API_KEY` | — | Provider API key; takes precedence over broker/legacy stores |
-| `LLM_DASH_DEFAULT_MODEL` | — | Default model for Agent Provider updates |
+| `LLM_DASH_BASE_URL` | — | OpenAI-compatible provider base URL (also accepts `BASE_URL`). Must not end in `/v1` unless `LLM_DASH_ENDPOINT_MODE=root` |
+| `LLM_DASH_API_KEY` | — | Provider API key; takes precedence over broker/legacy stores (also accepts `LLM_DASH_PROVIDER_API_KEY`/`API_KEY`) |
+| `LLM_DASH_DEFAULT_MODEL` | — | Default model the agent uses for seeding + updates (also accepts `DEFAULT_MODEL`) |
+| `LLM_DASH_BACKUP_MODEL` | — | Optional fallback model (also accepts `BACKUP_MODEL`) |
+| `LLM_DASH_ENDPOINT_MODE` | `append_v1` | `append_v1` (append `/v1`) or `root` (use base URL as-is, e.g. when it already ends in `/v1`) |
 | `LLM_DASH_SHXDOW_ROOT` | `~/.shxdow` | Isolated config/auth root for tests |
-| `EXA_API_KEY` | — | Exa search API key (alternative to Settings config) |
-| `LLM_STATS_API_KEY` | — | Optional LLM Stats enrichment key |
+| `EXA_API_KEY` | — | Exa search API key (Exa seed preset + update enrichment) |
+| `ARTIFICIAL_ANALYSIS_API_KEY` | — | Artificial Analysis Data API key (AA seed preset; also accepts `AA_API_KEY`) |
+| `LLM_STATS_API_KEY` | — | LLM Stats API key (LLM Stats seed preset + update enrichment) |
 | `LLM_DASH_LLMSTATS_API_KEY` | — | Alternate LLM-Dash-specific LLM Stats key |
+
+Provider env vars are read-only overrides that take precedence over wizard/broker
+config. Names above match what `scripts/config.py` reads; the canonical
+`LLM_DASH_*` forms are preferred but the bare aliases (`BASE_URL`,
+`DEFAULT_MODEL`, `AA_API_KEY`, …) also work.
 
 ---
 
