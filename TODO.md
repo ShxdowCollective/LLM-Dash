@@ -13,8 +13,12 @@ No active development task. Next data refresh runs via
 Possible follow-ups (not started):
 - Visual nano-agent pass on the List view + tightened Table at 2560/1440/390
   (readability/contrast/truncation) — code is in, screenshots not yet captured.
-- A live end-to-end seed against a real BYOK provider (costs money) to exercise
-  the AA/LLM Stats/OpenRouter/Exa presets and the batching path beyond unit tests.
+
+Validated 2026-06-13: a live AA-preset seed (top 8, real BYOK provider via
+`.env`) ran end to end — 8 real models scored 0–10 with cited card_urls,
+changelog + run_metrics written. It surfaced and fixed an out-of-root log-path
+crash in `seed_catalog`. LLM Stats / OpenRouter / Exa / custom presets and the
+multi-batch (>25) path are still only unit-tested, not live-exercised.
 
 Standing maintenance notes (not tasks — handled as they come up during update
 runs):
