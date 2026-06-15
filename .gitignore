@@ -26,3 +26,11 @@ data/run_metrics.csv
 artifacts/
 e2e/screenshots/
 references/
+
+# E2E harness — keep config/specs/baselines, ignore runtime output
+e2e/.tmp/
+e2e/reports/
+e2e/audit/output/
+test-results/
+playwright-report/
+E2E_AUDIT_REPORT.md

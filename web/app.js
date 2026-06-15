@@ -779,6 +779,8 @@
           h("tbody", null, state.filteredModels.map((model, index) => h("tr", {
             class: rowClasses(model.id),
             tabindex: "0",
+            "data-testid": "model-row",
+            "data-model": model.name || "",
             onclick: () => setInspect(model.id),
             onkeydown: (e) => rowKey(e, index, model.id),
             style: { "--model-color": safeColor(model.color) },
@@ -811,9 +813,13 @@
     const color = safeColor(model.color);
     const g = tier(overall(model));
     return h("div", {
+      // Focusable container, not role=button: a button must not nest the compare
+      // checkbox (axe nested-interactive). Keyboard nav still works via tabindex.
       class: rowClasses(model.id) + " model-list-row",
       tabindex: "0",
-      role: "button",
+      "aria-label": (model.name || "Unknown model") + " — Enter to inspect, c to compare",
+      "data-testid": "model-row",
+      "data-model": model.name || "",
       style: { "--model-color": color },
       onclick: () => setInspect(model.id),
       onkeydown: (e) => rowKey(e, index, model.id),
@@ -999,9 +1005,13 @@
     return h("article", {
       class: "mobile-model-card" + (state.ui.inspect === model.id ? " is-inspect" : "") + (inCompare ? " is-compare" : ""),
       style: { "--model-color": safeColor(model.color) },
+      // Focusable container, not role=button: avoids nesting the compare checkbox
+      // inside an interactive role (axe nested-interactive). aria-pressed dropped
+      // with the role (only valid on a button); is-inspect class carries state.
       tabindex: "0",
-      role: "button",
-      "aria-pressed": String(state.ui.inspect === model.id),
+      "aria-label": (model.name || "Unknown model") + " — Enter to inspect, c to compare",
+      "data-testid": "model-card",
+      "data-model": model.name || "",
       onclick: () => setInspect(model.id),
       onkeydown: (e) => {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setInspect(model.id); }
@@ -2841,7 +2851,7 @@
     const modalOpen = state.helpOpen || state.manualOpen || state.approval.open || state.run.open;
     if (modalOpen && tone !== "error") return;
     const id = ++state.toastId;
-    const node = h("div", { class: "vw-toast toast", "data-tone": tone || "info", role: tone === "error" ? "alert" : "status" }, [
+    const node = h("div", { class: "vw-toast toast", "data-testid": "toast", "data-tone": tone || "info", role: tone === "error" ? "alert" : "status" }, [
       h("span", null, text),
       actionLabel ? h("button", { type: "button", onclick: action }, actionLabel) : null,
       h("button", { type: "button", "aria-label": "Dismiss", onclick: () => node.remove() }, "×"),

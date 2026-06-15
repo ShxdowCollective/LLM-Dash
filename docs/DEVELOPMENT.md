@@ -81,6 +81,8 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 | `LLM_DASH_BACKUP_MODEL` | — | Optional fallback model (also accepts `BACKUP_MODEL`) |
 | `LLM_DASH_ENDPOINT_MODE` | `append_v1` | `append_v1` (append `/v1`) or `root` (use base URL as-is, e.g. when it already ends in `/v1`) |
 | `LLM_DASH_SHXDOW_ROOT` | `~/.shxdow` | Isolated config/auth root for tests |
+| `LLM_DASH_DATA_DIR` | `./data` | Override the data dir (DB + metrics CSV); used by the e2e harness for an isolated, throwaway database |
+| `LLM_DASH_CHANGELOGS_DIR` | `./changelogs` | Override the changelogs dir; used by the e2e harness so tests never write real, append-only history |
 | `EXA_API_KEY` | — | Exa search API key (Exa seed preset + update enrichment) |
 | `ARTIFICIAL_ANALYSIS_API_KEY` | — | Artificial Analysis Data API key (AA seed preset; also accepts `AA_API_KEY`) |
 | `LLM_STATS_API_KEY` | — | LLM Stats API key (LLM Stats seed preset + update enrichment) |
@@ -369,6 +371,30 @@ For syntax-level validation across the no-build frontend/backend split:
 python3 -m py_compile server.py scripts/*.py tests/*.py
 node --check web/app.js
 ```
+
+### End-to-end (browser) tests
+
+A headed, screenshot-driven Playwright harness covers every dashboard surface
+(functional + visual regression + accessibility) against a hermetic,
+`init_db`-seeded server that never touches real `data/` or `changelogs/`. See
+[../e2e/README.md](../e2e/README.md) for the full guide.
+
+```bash
+set -a; . ./.env; set +a   # GH token for scoped npm deps
+npm ci
+npx playwright install chromium
+
+npm run e2e            # full suite (functional + a11y + visual)
+npm run e2e:update     # regenerate committed visual baselines
+npm run audit          # autonomous loop — detect + classify + report (safe default)
+npm run audit:fix      # full autonomous: self-heal (Claude CLI) + commit on green
+```
+
+The deterministic suite runs in CI on push/PR via
+[`.github/workflows/e2e.yml`](../.github/workflows/e2e.yml); the token-spending
+audit loop stays local/triggered. Two env overrides added for isolation —
+`LLM_DASH_DATA_DIR` and `LLM_DASH_CHANGELOGS_DIR` — point the server and
+`init_db.py` at a throwaway directory.
 
 ---
 

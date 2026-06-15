@@ -1113,7 +1113,8 @@ body.is-col-resizing .model-row { pointer-events: none; }
   align-items: center;
   gap: 6px;
   font-size: 11.5px;
-  color: var(--vw-text-faint);
+  /* muted (not faint): small body text must clear WCAG AA 4.5:1 on dark surfaces */
+  color: var(--vw-text-muted);
   min-width: 0;
 }
 .list-model-vendor { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1157,7 +1158,7 @@ body.is-col-resizing .model-row { pointer-events: none; }
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--vw-text-faint);
+  color: var(--vw-text-muted);
 }
 
 .list-bars {
@@ -1172,7 +1173,7 @@ body.is-col-resizing .model-row { pointer-events: none; }
   font-size: 9.5px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--vw-text-faint);
+  color: var(--vw-text-muted);
 }
 .list-bar-k b { color: var(--vw-text-muted); font-weight: 600; font-family: var(--vw-font-mono); }
 .list-bar-track {
@@ -1967,7 +1968,7 @@ body.is-col-resizing .model-row { pointer-events: none; }
 }
 
 .changelog-date {
-  color: var(--vw-text-faint);
+  color: var(--vw-text-muted);
   font-family: var(--vw-font-mono);
   font-size: 10px;
 }
@@ -2748,6 +2749,20 @@ kbd {
   .app-sidebar.vw-sidebar.open,
   .app-sidebar.vw-sidebar[data-vw-open="true"] {
     transform: translateX(0);
+  }
+
+  /* The drawer is a full overlay, not the icon-only rail voidware applies in the
+     768–1024 band. Restore labeled, full-width nav links so buttons keep their
+     accessible names (axe button-name) and the drawer reads as labeled nav. */
+  .app-sidebar .vw-sidebar-section { width: 100%; padding: 0; align-items: stretch; }
+  .app-sidebar .vw-sidebar-nav { align-items: stretch; }
+  .app-sidebar .vw-sidebar-label { display: block; }
+  .app-sidebar .vw-sidebar-link {
+    justify-content: flex-start;
+    width: 100%;
+    height: auto;
+    min-height: 52px;
+    padding: 11px 12px;
   }
 
   .sidebar-close-btn {

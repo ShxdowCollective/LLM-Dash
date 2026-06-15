@@ -1,0 +1,54 @@
+name: e2e
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Runs the deterministic Playwright suite (functional + a11y + visual) against a
+# hermetic, init_db-seeded server. The autonomous audit loop (which spends model
+# tokens and writes code) is intentionally NOT run in CI.
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Python venv + deps
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r requirements.txt
+
+      - name: Node deps
+        env:
+          GH_PACKAGES_KEY: ${{ secrets.GH_PACKAGES_KEY }}
+        run: |
+          printf '@shxdowcollective:registry=https://npm.pkg.github.com/\n//npm.pkg.github.com/:_authToken=${GH_PACKAGES_KEY}\n' > .npmrc
+          npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E suite
+        env:
+          CI: "1" # forces headless so visual diffs match the committed Linux baselines
+        run: npm run e2e
+
+      - name: Upload report + traces
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: |
+            e2e/reports/html
+            e2e/reports/results.json
+          retention-days: 14

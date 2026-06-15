@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import os
 import platform
 import re
 import shlex
@@ -57,8 +58,12 @@ from scripts.schedule_job import ScheduleError, apply_schedule, remove_schedule,
 
 ROOT = Path(__file__).resolve().parent
 WEB_DIR = ROOT / "web"
-DATA_DIR = ROOT / "data"
-CHANGELOGS_DIR = ROOT / "changelogs"
+# Data and changelog roots are env-overridable so an isolated harness (e2e tests)
+# can run against a throwaway dir without touching the real, append-only state.
+DATA_DIR = Path(os.environ.get("LLM_DASH_DATA_DIR") or (ROOT / "data")).resolve()
+CHANGELOGS_DIR = Path(
+    os.environ.get("LLM_DASH_CHANGELOGS_DIR") or (ROOT / "changelogs")
+).resolve()
 DB_PATH = DATA_DIR / "dash.sqlite"
 INIT_DB_PATH = ROOT / "scripts" / "init_db.py"
 RUN_UPDATE_PATH = ROOT / "scripts" / "run_update.py"

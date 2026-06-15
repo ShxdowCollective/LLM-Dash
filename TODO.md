@@ -7,8 +7,17 @@ Use `[ ]` only for still-open work.
 
 ## Now
 
-No active development task. Next data refresh runs via
-[`skill/SKILL.md`](skill/SKILL.md).
+E2E testing system landed on `feat/e2e-autotest` (Entry 123) — 72 Playwright
+tests green (functional + visual across 4 breakpoints + a11y) + an autonomous
+audit loop. PR open against main; awaiting review/merge.
+
+The a11y findings from the build are fixed (contrast via `--vw-text-muted`,
+nested-interactive rows, tablet-drawer label bug) and the visual matrix now
+covers 2560/1440/768/390. Remaining optional follow-up:
+- [ ] First real `npm run audit:fix` run once `claude` CLI auth is confirmed in
+  the target shell (it self-heals + auto-commits on `qa/e2e-auto`).
+
+Next data refresh runs via [`skill/SKILL.md`](skill/SKILL.md).
 
 Possible follow-ups (not started):
 - Visual nano-agent pass on the List view + tightened Table at 2560/1440/390

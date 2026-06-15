@@ -404,6 +404,27 @@ auth/config/logging helpers but not the CLI broker host.
 
 ---
 
+## Testing Architecture
+
+Two suites, decoupled like writer/reader:
+
+- **Python unit tests** (`tests/`, `python3 -m unittest`) cover the credential
+  pipeline, seeding, and DB seams.
+- **Browser E2E** (`e2e/`, Playwright) covers every dashboard surface with three
+  layers — functional, visual regression (`toHaveScreenshot`), and accessibility
+  (axe-core) — plus an autonomous **audit loop** (`e2e/audit/`) that runs →
+  classifies failures (App-Bug / Test-Bug / Visual / Flaky) → optionally
+  self-heals via the Claude CLI → commits on green.
+
+The E2E suite is **hermetic and deterministic**: `global-setup.ts` seeds a
+throwaway DB via `init_db.py` into `e2e/.tmp/` (using the `LLM_DASH_DATA_DIR` /
+`LLM_DASH_CHANGELOGS_DIR` overrides), `playwright.config.ts` neutralizes provider
+env vars so no real secrets render into screenshots, and `fixtures.ts` pins the
+clock and mocks external/mutating `/api/*` routes. The deterministic suite runs
+in CI (`.github/workflows/e2e.yml`); the token-spending audit loop is local only.
+See [DEVELOPMENT.md](DEVELOPMENT.md#end-to-end-browser-tests) and
+[../e2e/README.md](../e2e/README.md).
+
 ## Scheduling
 
 Three OS-native mechanisms, selected automatically by `scripts/schedule_job.py`:

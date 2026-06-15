@@ -12,15 +12,22 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import sqlite3
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DB_PATH = ROOT / "data" / "dash.sqlite"
+# Data and changelog roots are env-overridable so an isolated harness (e2e tests)
+# can seed a throwaway dir without touching the real, append-only state. Matches
+# the same overrides honored by server.py.
+DATA_DIR = Path(os.environ.get("LLM_DASH_DATA_DIR") or (ROOT / "data")).resolve()
+DB_PATH = DATA_DIR / "dash.sqlite"
 SCHEMA_PATH = ROOT / "scripts" / "schema.sql"
-CSV_PATH = ROOT / "data" / "run_metrics.csv"
-CHANGELOGS_DIR = ROOT / "changelogs"
+CSV_PATH = DATA_DIR / "run_metrics.csv"
+CHANGELOGS_DIR = Path(
+    os.environ.get("LLM_DASH_CHANGELOGS_DIR") or (ROOT / "changelogs")
+).resolve()
 
 SEED_DATE = "2026-04-20"
 SEED_TITLE = "April 20, 2026"
@@ -207,8 +214,8 @@ def render_changelog_md(body: str, metrics: dict) -> str:
 
 
 def ensure_dirs() -> None:
-    (ROOT / "data").mkdir(exist_ok=True)
-    CHANGELOGS_DIR.mkdir(exist_ok=True)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    CHANGELOGS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def ensure_schema(db_path: Path) -> None:
@@ -234,7 +241,7 @@ def seed(force: bool) -> None:
     if DB_PATH.exists():
         if not force:
             print(
-                f"refusing to overwrite existing {DB_PATH.relative_to(ROOT)} "
+                f"refusing to overwrite existing {_rel(DB_PATH)} "
                 "(pass --force to reseed)",
                 file=sys.stderr,
             )

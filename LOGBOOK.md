@@ -3,6 +3,59 @@ Casual handoff notes. Newest first.
 
 ---
 
+## Entry 123 — 2026-06-14
+
+**Agent:** Claude Opus 4.8 (1M context)
+**Cycle:** Full autonomous E2E testing system
+**Branch:** `feat/e2e-autotest`
+**Task:** Build headed, screenshot-driven E2E coverage for every surface + an
+autonomous find→fix→loop audit engine
+
+---
+
+Stood up a complete Playwright E2E harness under `e2e/` (plan:
+`docs/plans/smooth-watching-snowglobe.md` / approved). **72 tests green**:
+functional specs for the app shell, Models (List/Table/Chart, filters, sort,
+compare, detail rail, CSV export, mobile), Changelog, Stats, all five Settings
+subpages (incl. reset-token gating), and the setup wizard; a visual-regression
+matrix (`toHaveScreenshot`, 28 committed baselines = 7 surfaces × 4 breakpoints:
+wide 2560, desktop 1440, tablet 768, mobile 390); and axe-core a11y that
+hard-fails on any serious/critical (no allowlist).
+
+The a11y layer **found and fixed three real issues** (not just reported):
+(1) dark-theme `color-contrast` on small labels → switched the failing elements
+from `--vw-text-faint` to the brighter existing voidware token `--vw-text-muted`
+(no token edit = no spec drift); (2) `nested-interactive` — model rows were
+`role="button"` wrapping the compare checkbox → made rows focusable containers
+with `aria-label` (kept j/k nav); (3) a responsive bug the new tablet breakpoint
+surfaced — voidware's `responsive.css` 768–1024 icon-only rail stripped the open
+drawer's nav labels (buttons with no accessible name), fixed by overriding the
+rail inside the app's drawer media block. All locked with tests (incl. a
+tablet-portrait drawer a11y guard).
+
+Determinism/hermeticity: added `LLM_DASH_DATA_DIR` / `LLM_DASH_CHANGELOGS_DIR`
+overrides to `server.py` + `scripts/init_db.py` so `global-setup.ts` seeds a
+throwaway DB in `e2e/.tmp/` (real `data/`/`changelogs/` never touched);
+`playwright.config.ts` neutralizes all provider env vars (no real keys in
+screenshots — caught a leak mid-build); `fixtures.ts` pins the clock +
+`mocks/api.ts` stubs external/mutating `/api/*`. Surgical `data-testid` hooks on
+model rows/cards + toast (rows collided by accessible name with the compare
+checkbox).
+
+Autonomous audit loop (`e2e/audit/loop.mjs` + `classify.mjs` + `report.mjs`):
+run → classify (App-Bug/Test-Bug/Visual/Flaky) → optional self-heal via Claude
+CLI → re-run → commit-on-green, with max-iterations + no-progress + branch +
+append-only guardrails. **Safe by default** (`npm run audit` = detect+report
+only); `--heal`/`--commit` are explicit opt-ins (`npm run audit:fix`) after an
+early test run proved an always-on healer would over-reach (it made a rogue
+`git add -A` commit; reverted via soft reset, then gated). CI added at
+`.github/workflows/e2e.yml` (deterministic suite only; loop stays local). Docs:
+`e2e/README.md`, DEVELOPMENT + ARCHITECTURE testing sections. Python unit suite
+still green (57). Committed on `feat/e2e-autotest` and opened as a PR to main for
+review.
+
+---
+
 ## Entry 122 — 2026-06-14
 
 **Agent:** Codex GPT-5 (Noor, coding agent)
