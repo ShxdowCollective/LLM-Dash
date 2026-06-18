@@ -1,0 +1,110 @@
+/* ── Voidware Design Tokens ──────────────────────────────────
+   Source of truth for all visual values.
+   Every token is vw-prefixed to avoid collisions.
+   ──────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── Surfaces ──────────────────────────────────────────── */
+  --vw-bg: #0a0a0a;
+  --vw-bg-soft: #111111;
+  --vw-surface-1: #171717;
+  --vw-surface-2: #1e1e1e;
+  --vw-surface-3: #272727;
+  --vw-surface-4: #313131;
+  --vw-surface-inverse: #f1f1ec;
+  --vw-surface-inverse-soft: #ddddda;
+
+  /* ── Text ──────────────────────────────────────────────── */
+  --vw-text: #f3f3ee;
+  --vw-text-soft: #d7d7d1;
+  --vw-text-muted: #a2a29a;
+  --vw-text-faint: #72726b;
+
+  /* ── Accent ────────────────────────────────────────────── */
+  --vw-accent: #7c5cc4;
+  --vw-accent-dim: rgba(124, 92, 196, 0.35);
+  --vw-active-outline: var(--vw-accent);
+
+  /* ── Iridescent Palette ────────────────────────────────── */
+  /* 7 logo colors in spectrum order (orange → pink) */
+  --vw-iridescent-1: #f2ad5b;
+  --vw-iridescent-2: #f1d47b;
+  --vw-iridescent-3: #a6f17b;
+  --vw-iridescent-4: #72f0d7;
+  --vw-iridescent-5: #86a8ff;
+  --vw-iridescent-6: #7c5cc4;
+  --vw-iridescent-7: #f17bb5;
+
+  /* ── Module Accent Defaults ────────────────────────────── */
+  --vw-module-accent-1: var(--vw-iridescent-1);
+  --vw-module-accent-2: var(--vw-iridescent-2);
+  --vw-module-accent-3: var(--vw-iridescent-3);
+  --vw-module-accent-4: var(--vw-iridescent-4);
+  --vw-module-accent-5: var(--vw-iridescent-5);
+  --vw-module-accent-6: var(--vw-iridescent-6);
+  --vw-module-accent-7: var(--vw-iridescent-7);
+
+  /* ── Borders ───────────────────────────────────────────── */
+  --vw-border: rgba(255, 255, 255, 0.08);
+  --vw-border-mid: rgba(255, 255, 255, 0.12);
+  --vw-border-focus: rgba(255, 255, 255, 0.24);
+
+  /* ── Semantic ──────────────────────────────────────────── */
+  --vw-error: #ff6b6b;
+  --vw-error-bg: rgba(255, 80, 80, 0.08);
+  --vw-error-border: rgba(255, 80, 80, 0.25);
+  --vw-warning: #f1d47b;
+  --vw-warning-bg: rgba(241, 212, 123, 0.08);
+  --vw-warning-border: rgba(241, 212, 123, 0.25);
+  --vw-success: #a6f17b;
+  --vw-success-bg: rgba(166, 241, 123, 0.08);
+  --vw-success-border: rgba(166, 241, 123, 0.25);
+
+  /* ── Typography ────────────────────────────────────────── */
+  --vw-font-mono: "JetBrains Mono", "Cascadia Code", "Fira Code", monospace;
+  --vw-font-body: "Inter", "SUSE", system-ui, sans-serif;
+  --vw-font-display: "Inter", "SUSE", system-ui, sans-serif;
+  --vw-weight-thin: 100;
+  --vw-weight-extralight: 200;
+  --vw-weight-light: 300;
+  --vw-weight-regular: 400;
+  --vw-weight-medium: 500;
+  --vw-weight-semibold: 600;
+  --vw-weight-bold: 700;
+
+  /* ── Radii ─────────────────────────────────────────────── */
+  --vw-radius-sm: 8px;
+  --vw-radius-md: 12px;
+  --vw-radius-lg: 16px;
+  --vw-radius-xl: 20px;
+
+  /* ── Shadows — 6-level depth system ────────────────────── */
+  /* Shadow-ring: the 0 0 0 1px pattern replaces traditional borders    */
+  /* on container elements (cards, panels). Doesn't take layout space.  */
+  --vw-shadow-sm:   0 1px 2px rgba(0, 0, 0, 0.4);
+  --vw-shadow-md:   0 2px 8px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --vw-shadow-lg:   0 8px 24px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --vw-shadow-xl:   0 16px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --vw-shadow-pop:  0 24px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --vw-shadow-card: var(--vw-shadow-md);
+
+  /* ── Layout ────────────────────────────────────────────── */
+  --vw-section-gap: 96px;
+  --vw-section-gap-sm: 64px;
+  --vw-content-max: 1200px;
+  --vw-content-narrow: 800px;
+  --vw-content-tight: 520px;
+  --vw-hero-min-height: 70vh;
+  --vw-header-height: 56px;
+  --vw-rail-width: 52px;
+  --vw-sidebar-width: 240px;
+  --vw-settings-panel-width: 340px;
+  --vw-setup-max-width: 460px;
+  --vw-chat-max-width: 800px;
+
+  /* ── Transitions ───────────────────────────────────────── */
+  --vw-transition-fast: 140ms ease;
+  --vw-transition: 220ms ease;
+
+  color-scheme: dark;
+}

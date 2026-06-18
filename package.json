@@ -1,0 +1,28 @@
+{
+  "name": "llm-dash",
+  "private": true,
+  "description": "Local LLM benchmark dashboard with AI-driven daily changelog updates.",
+  "scripts": {
+    "vendor:voidware": "node scripts/vendor_voidware_css.mjs",
+    "smoke:voidware": "node scripts/voidware_package_smoke.mjs",
+    "verify:voidware": "npm run vendor:voidware && npm run smoke:voidware",
+    "e2e": "playwright test -c e2e/playwright.config.ts",
+    "e2e:headed": "playwright test -c e2e/playwright.config.ts --headed",
+    "e2e:ui": "playwright test -c e2e/playwright.config.ts --ui",
+    "e2e:update": "HEADLESS=1 playwright test -c e2e/playwright.config.ts --update-snapshots",
+    "e2e:visual": "playwright test -c e2e/playwright.config.ts visual.spec.ts",
+    "e2e:report": "playwright show-report e2e/reports/html",
+    "audit": "node e2e/audit/loop.mjs",
+    "audit:fix": "node e2e/audit/loop.mjs --heal --commit",
+    "audit:dry": "node e2e/audit/loop.mjs --heal --commit --dry-run"
+  },
+  "dependencies": {
+    "@shxdowcollective/voidware": "1.1.0",
+    "@shxdowcollective/voidware-cli": "1.1.0"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.11.3",
+    "@playwright/mcp": "^0.0.76",
+    "@playwright/test": "^1.60.0"
+  }
+}

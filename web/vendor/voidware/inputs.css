@@ -1,0 +1,108 @@
+/* ── Inputs & Fields ─────────────────────────────────────── */
+
+.vw-input {
+  display: block;
+  width: 100%;
+  background: var(--vw-surface-2);
+  border: 1px solid var(--vw-border);
+  border-radius: var(--vw-radius-sm);
+  padding: 10px 12px;
+  font-family: var(--vw-font-body);
+  font-size: 13px;
+  color: var(--vw-text);
+  transition: border-color var(--vw-transition-fast);
+
+  &::placeholder {
+    color: var(--vw-text-faint);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--vw-border-focus);
+  }
+
+  &:focus-visible {
+    outline: none;
+    border-color: var(--vw-border-focus);
+  }
+}
+
+/* Textarea */
+.vw-textarea {
+  display: block;
+  width: 100%;
+  background: var(--vw-surface-2);
+  border: 1px solid var(--vw-border);
+  border-radius: var(--vw-radius-sm);
+  padding: 10px 12px;
+  font-family: var(--vw-font-body);
+  font-size: 13px;
+  color: var(--vw-text);
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color var(--vw-transition-fast);
+
+  &::placeholder {
+    color: var(--vw-text-faint);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--vw-border-focus);
+  }
+}
+
+/* Prominent textarea — opening prompt, system prompt */
+.vw-textarea-prominent {
+  background: var(--vw-surface-1);
+  border-color: var(--vw-border-mid);
+  border-radius: var(--vw-radius-md);
+}
+
+/* Select with custom chevron */
+.vw-select {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--vw-surface-2);
+  border: 1px solid var(--vw-border);
+  border-radius: var(--vw-radius-sm);
+  padding: 10px 32px 10px 12px;
+  font-family: var(--vw-font-body);
+  font-size: 13px;
+  line-height: 1.25;
+  color: var(--vw-text);
+  appearance: none;
+  cursor: pointer;
+  transition: border-color var(--vw-transition-fast);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%23a2a29a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 5l3 3 3-3'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+
+  &:focus {
+    outline: none;
+    border-color: var(--vw-border-focus);
+  }
+}
+
+/* Label */
+.vw-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--vw-text-muted);
+  margin-bottom: 4px;
+}
+
+/* Hint text */
+.vw-hint {
+  font-size: 11px;
+  color: var(--vw-text-faint);
+  margin-top: 3px;
+}
+
+/* Field wrapper — label + input + hint */
+.vw-field {
+  display: flex;
+  flex-direction: column;
+}

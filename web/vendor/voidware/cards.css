@@ -1,0 +1,220 @@
+/* ── Cards ────────────────────────────────────────────────── */
+/* Shadow-as-border: uses box-shadow 0 0 0 1px instead of    */
+/* border: 1px solid. Doesn't take layout space, creates     */
+/* thinner visual lines, composes cleanly with depth shadows. */
+
+.vw-card {
+  background: var(--vw-surface-1);
+  border: none;
+  box-shadow: var(--vw-card-edge-shadow, inset 0 0 0 0 transparent), 0 0 0 1px var(--vw-border);
+  border-radius: var(--vw-radius-md);
+  padding: 16px 18px;
+  transition:
+    box-shadow var(--vw-transition-fast),
+    transform var(--vw-transition-fast);
+
+  &:hover {
+    box-shadow:
+      var(--vw-card-edge-shadow, inset 0 0 0 0 transparent),
+      0 0 0 1px var(--vw-border-mid),
+      var(--vw-shadow-sm);
+    transform: translateY(-1px);
+  }
+
+  &.active,
+  &.expanded {
+    box-shadow: var(--vw-card-edge-shadow, inset 0 0 0 0 transparent), 0 0 0 1px var(--vw-border-focus);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--vw-border-focus);
+    outline-offset: 2px;
+  }
+}
+
+/* Prominent card — primary setup elements and larger task surfaces */
+.vw-card-prominent {
+  background: var(--vw-surface-1);
+  border: none;
+  box-shadow: var(--vw-card-edge-shadow, inset 0 0 0 0 transparent), 0 0 0 1px var(--vw-border-mid);
+  border-radius: var(--vw-radius-md);
+  padding: 18px 20px;
+  transition:
+    box-shadow var(--vw-transition-fast),
+    transform var(--vw-transition-fast);
+
+  &:hover {
+    box-shadow:
+      var(--vw-card-edge-shadow, inset 0 0 0 0 transparent),
+      0 0 0 1px var(--vw-border-focus),
+      var(--vw-shadow-sm);
+    transform: translateY(-1px);
+  }
+
+  &.active,
+  &.expanded {
+    background: color-mix(in srgb, var(--vw-surface-1) 90%, var(--vw-accent) 10%);
+    box-shadow:
+      var(--vw-card-edge-shadow, inset 0 0 0 0 transparent),
+      0 0 0 1px color-mix(in srgb, var(--vw-accent) 70%, white 30%),
+      var(--vw-shadow-sm);
+  }
+}
+
+.vw-card-feature {
+  background: var(--vw-surface-1);
+  border: none;
+  box-shadow: var(--vw-card-edge-shadow, inset 0 0 0 0 transparent), 0 0 0 1px var(--vw-border);
+  border-radius: var(--vw-radius-lg);
+  padding: 24px 28px;
+  transition:
+    box-shadow var(--vw-transition-fast),
+    transform var(--vw-transition-fast);
+
+  &:hover {
+    box-shadow:
+      var(--vw-card-edge-shadow, inset 0 0 0 0 transparent),
+      0 0 0 1px var(--vw-border-mid),
+      var(--vw-shadow-md);
+    transform: translateY(-2px);
+  }
+
+  &.active,
+  &.expanded {
+    box-shadow:
+      var(--vw-card-edge-shadow, inset 0 0 0 0 transparent),
+      0 0 0 1px var(--vw-border-focus),
+      var(--vw-shadow-sm);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--vw-border-focus);
+    outline-offset: 2px;
+  }
+}
+
+.vw-card-compact {
+  background: var(--vw-surface-1);
+  border: none;
+  box-shadow: var(--vw-card-edge-shadow, inset 0 0 0 0 transparent), 0 0 0 1px var(--vw-border);
+  border-radius: var(--vw-radius-sm);
+  padding: 10px 12px;
+  transition:
+    box-shadow var(--vw-transition-fast),
+    transform var(--vw-transition-fast);
+
+  &:hover {
+    box-shadow:
+      var(--vw-card-edge-shadow, inset 0 0 0 0 transparent),
+      0 0 0 1px var(--vw-border-mid),
+      var(--vw-shadow-sm);
+    transform: translateY(-1px);
+  }
+
+  &.active,
+  &.expanded {
+    box-shadow: var(--vw-card-edge-shadow, inset 0 0 0 0 transparent), 0 0 0 1px var(--vw-border-focus);
+  }
+}
+
+.vw-card-animated {
+  position: relative;
+  isolation: isolate;
+}
+
+.vw-accent-edge {
+  --vw-card-edge-shadow: inset 3px 0 0 0 var(--vw-accent);
+}
+
+.vw-page-accent-panel.vw-accent-edge {
+  --vw-card-edge-shadow: inset 3px 0 0 0 var(--vw-page-accent, var(--vw-accent));
+}
+
+.vw-page-accent-panel {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--vw-surface-1) 94%, var(--vw-page-accent, var(--vw-accent)) 6%) 0%,
+      var(--vw-surface-1) 76%
+    );
+  box-shadow:
+    var(--vw-card-edge-shadow, inset 0 0 0 0 transparent),
+    0 0 0 1px color-mix(in srgb, var(--vw-border) 72%, var(--vw-page-accent, var(--vw-accent)) 28%),
+    var(--vw-shadow-sm);
+}
+
+.vw-page-accent-panel:hover {
+  box-shadow:
+    var(--vw-card-edge-shadow, inset 0 0 0 0 transparent),
+    0 0 0 1px color-mix(in srgb, var(--vw-border-mid) 64%, var(--vw-page-accent, var(--vw-accent)) 36%),
+    var(--vw-shadow-md);
+}
+
+/* Empty-state card — dashed border (keeps real border for dash pattern) */
+.vw-card-empty {
+  background: transparent;
+  border: 1px dashed var(--vw-border-mid);
+  border-radius: var(--vw-radius-md);
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--vw-text-faint);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    border-color var(--vw-transition-fast),
+    transform var(--vw-transition-fast);
+
+  &:hover {
+    border-color: var(--vw-border-focus);
+    transform: translateY(-1px);
+  }
+}
+
+.vw-feature-empty-state {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  gap: 12px;
+  padding: 28px;
+  text-align: center;
+  background:
+    radial-gradient(
+      420px 220px at 50% 0%,
+      color-mix(in srgb, var(--vw-page-accent, var(--vw-accent)) 12%, transparent),
+      transparent 70%
+    ),
+    var(--vw-surface-1);
+  border-radius: var(--vw-radius-lg);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--vw-border) 74%, var(--vw-page-accent, var(--vw-accent)) 26%),
+    var(--vw-shadow-sm);
+}
+
+.vw-feature-empty-state-icon {
+  width: 40px;
+  height: 40px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--vw-page-accent, var(--vw-accent));
+  background: color-mix(in srgb, var(--vw-page-accent, var(--vw-accent)) 14%, transparent);
+}
+
+.vw-feature-empty-state-title {
+  margin: 0;
+  color: var(--vw-text);
+  font-family: var(--vw-font-display);
+  font-size: 22px;
+  font-weight: var(--vw-weight-light);
+  line-height: 1.18;
+}
+
+.vw-feature-empty-state-copy {
+  max-width: 46ch;
+  margin: 0;
+  color: var(--vw-text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}

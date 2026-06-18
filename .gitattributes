@@ -1,0 +1,19 @@
+# Normalize line endings on checkin; check out LF everywhere by default.
+* text=auto eol=lf
+
+# Windows-native scripts must stay CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets — never normalize or diff as text.
+*.png binary
+*.ico binary
+*.jpg binary
+*.sqlite binary
+*.wasm binary
+
+# Keep vendored libraries and generated lockfiles out of GitHub language stats.
+web/vendor/** linguist-vendored
+assets/brand/** linguist-vendored
+package-lock.json linguist-generated

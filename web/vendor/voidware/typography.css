@@ -1,0 +1,170 @@
+/* ── Web Fonts ────────────────────────────────────────────── */
+
+/* Inter ships from its official CDN: the variable font there carries the
+   cv01/ss03 alternates that the Voidware type signature depends on (Google
+   Fonts' static Inter subsets strip those lookups). */
+@import url("https://rsms.me/inter/inter.css");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=SUSE:wght@400;500;600;700&display=swap");
+
+/* ── Type Scale ──────────────────────────────────────────── */
+
+.vw-text-hero {
+  font-family: var(--vw-font-display);
+  font-size: clamp(3rem, 7vw, 4.5rem);
+  font-weight: var(--vw-weight-thin);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+}
+
+.vw-text-display {
+  font-family: var(--vw-font-display);
+  font-size: clamp(2.25rem, 5vw, 3rem);
+  font-weight: var(--vw-weight-light);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.vw-text-2xl {
+  font-family: var(--vw-font-display);
+  font-size: 24px;
+  font-weight: var(--vw-weight-light);
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+}
+
+.vw-text-xl {
+  font-family: var(--vw-font-display);
+  font-size: 22px;
+  font-weight: var(--vw-weight-light);
+  line-height: 1.16;
+  letter-spacing: -0.02em;
+}
+
+.vw-text-lg {
+  font-size: 16px;
+  font-weight: var(--vw-weight-regular);
+  line-height: 1.4;
+}
+
+.vw-text-md {
+  font-size: 15px;
+  font-weight: var(--vw-weight-medium);
+  line-height: 1.4;
+}
+
+.vw-text-base {
+  font-size: 14px;
+  font-weight: var(--vw-weight-regular);
+  line-height: 1.55;
+}
+
+.vw-text-sm {
+  font-size: 13px;
+  font-weight: var(--vw-weight-regular);
+  line-height: 1.5;
+}
+
+.vw-text-xs {
+  font-size: 12px;
+  font-weight: var(--vw-weight-regular);
+  line-height: 1.5;
+}
+
+.vw-text-2xs {
+  font-size: 11px;
+  font-weight: var(--vw-weight-regular);
+  line-height: 1.45;
+}
+
+.vw-text-3xs {
+  font-size: 10px;
+  font-weight: var(--vw-weight-regular);
+  line-height: 1.4;
+}
+
+/* ── Section Labels ──────────────────────────────────────── */
+
+.vw-section-label {
+  font-size: 11px;
+  font-weight: var(--vw-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--vw-text-muted);
+}
+
+/* ── Markdown Content ────────────────────────────────────── */
+
+.vw-markdown {
+  & h3 {
+    font-family: var(--vw-font-body);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--vw-text);
+    margin: 16px 0 8px;
+  }
+
+  & h4 {
+    font-family: var(--vw-font-body);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--vw-text);
+    margin: 12px 0 6px;
+  }
+
+  & code {
+    font-family: var(--vw-font-mono);
+    font-size: 12px;
+    background: var(--vw-surface-3);
+    color: var(--vw-accent);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  & pre {
+    font-family: var(--vw-font-mono);
+    font-size: 12px;
+    background: var(--vw-surface-2);
+    border: 1px solid var(--vw-border);
+    border-radius: var(--vw-radius-sm);
+    padding: 12px 14px;
+    overflow-x: auto;
+
+    & code {
+      background: none;
+      padding: 0;
+      border-radius: 0;
+      color: inherit;
+    }
+  }
+
+  & blockquote {
+    border-left: 3px solid var(--vw-border-focus);
+    padding-left: 14px;
+    color: var(--vw-text-muted);
+    font-style: italic;
+    margin: 12px 0;
+  }
+
+  & a {
+    color: var(--vw-accent);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(124, 92, 196, 0.3);
+    transition: border-color var(--vw-transition-fast);
+
+    &:hover {
+      border-bottom-color: var(--vw-accent);
+    }
+  }
+
+  & ul {
+    padding-left: 20px;
+  }
+
+  & ol {
+    padding-left: 24px;
+  }
+
+  & p {
+    margin: 8px 0;
+  }
+}

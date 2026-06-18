@@ -1,0 +1,171 @@
+{
+  "version": 1,
+  "updated": "2026-04-27",
+  "endpoint_modes": {
+    "append_v1": {
+      "label": "OpenAI /v1",
+      "chat_path": "/v1/chat/completions",
+      "models_path": "/v1/models",
+      "description": "Use when the provider host expects the standard OpenAI /v1 prefix."
+    },
+    "root": {
+      "label": "Provider root",
+      "chat_path": "/chat/completions",
+      "models_path": "/models",
+      "description": "Use when the provider's documented OpenAI-compatible base URL already includes the API root/version path."
+    }
+  },
+  "providers": [
+    {
+      "id": "openai",
+      "label": "OpenAI",
+      "type": "hosted",
+      "api_format": "openai-compatible",
+      "default_base_url": "https://api.openai.com",
+      "endpoint_mode": "append_v1",
+      "api_key_label": "OpenAI API key",
+      "api_key_env": "OPENAI_API_KEY",
+      "models_override_url": "",
+      "supports_models_endpoint": true,
+      "model_examples": ["gpt-5.5", "gpt-5.4"],
+      "docs_url": "https://platform.openai.com/docs/api-reference/chat/create",
+      "notes": "Official OpenAI API. LLM-Dash appends /v1 to this base URL."
+    },
+    {
+      "id": "anthropic-openai-compatible",
+      "label": "Anthropic (OpenAI Compatible)",
+      "type": "hosted",
+      "api_format": "openai-compatible",
+      "default_base_url": "https://api.anthropic.com",
+      "endpoint_mode": "append_v1",
+      "api_key_label": "Anthropic API key",
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "models_override_url": "",
+      "supports_models_endpoint": false,
+      "model_examples": ["claude-opus-4-7", "claude-sonnet-4-6"],
+      "docs_url": "https://platform.claude.com/docs/en/api/openai-sdk",
+      "notes": "Compatibility layer for evaluating Claude through OpenAI-style chat completions; model selection may need manual entry."
+    },
+    {
+      "id": "google-ai-studio",
+      "label": "Google AI Studio",
+      "type": "hosted",
+      "api_format": "openai-compatible",
+      "default_base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "endpoint_mode": "root",
+      "api_key_label": "Gemini API key",
+      "api_key_env": "GEMINI_API_KEY",
+      "models_override_url": "",
+      "supports_models_endpoint": true,
+      "model_examples": ["gemini-3-flash-preview", "gemini-3-pro-preview"],
+      "docs_url": "https://ai.google.dev/gemini-api/docs/openai",
+      "notes": "Google's OpenAI-compatible root already includes /v1beta/openai, so LLM-Dash does not append another /v1."
+    },
+    {
+      "id": "openrouter",
+      "label": "OpenRouter",
+      "type": "gateway",
+      "api_format": "openai-compatible",
+      "default_base_url": "https://openrouter.ai/api",
+      "endpoint_mode": "append_v1",
+      "api_key_label": "OpenRouter API key",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "models_override_url": "",
+      "supports_models_endpoint": true,
+      "model_examples": ["openai/gpt-5.2", "anthropic/claude-sonnet-4.6"],
+      "optional_headers": [
+        {
+          "name": "HTTP-Referer",
+          "description": "Optional site URL for OpenRouter rankings."
+        },
+        {
+          "name": "X-OpenRouter-Title",
+          "description": "Optional app title for OpenRouter rankings."
+        }
+      ],
+      "docs_url": "https://openrouter.ai/docs/api/reference/overview",
+      "notes": "LLM-Dash appends /v1, producing https://openrouter.ai/api/v1."
+    },
+    {
+      "id": "kilo-gateway",
+      "label": "Kilo Gateway",
+      "type": "gateway",
+      "api_format": "openai-compatible",
+      "default_base_url": "https://api.kilo.ai/api/gateway",
+      "endpoint_mode": "root",
+      "api_key_label": "Kilo API key",
+      "api_key_env": "KILO_API_KEY",
+      "models_override_url": "",
+      "supports_models_endpoint": true,
+      "model_examples": ["anthropic/claude-sonnet-4.5", "openai/gpt-5.2"],
+      "docs_url": "https://kilo.ai/docs/gateway/api-reference",
+      "notes": "Kilo documents /chat/completions directly under the gateway base URL, so this preset uses provider-root mode."
+    },
+    {
+      "id": "nanogpt",
+      "label": "NanoGPT",
+      "type": "gateway",
+      "api_format": "openai-compatible",
+      "default_base_url": "https://nano-gpt.com/api",
+      "endpoint_mode": "append_v1",
+      "api_key_label": "NanoGPT API key",
+      "api_key_env": "NANOGPT_API_KEY",
+      "models_override_url": "",
+      "supports_models_endpoint": true,
+      "model_examples": ["openai/gpt-5.2", "openai/deepseek/deepseek-chat"],
+      "alternate_model_catalogs": [
+        {
+          "label": "Subscription models",
+          "models_override_url": "https://nano-gpt.com/api/subscription"
+        },
+        {
+          "label": "Paid models",
+          "models_override_url": "https://nano-gpt.com/api/paid"
+        }
+      ],
+      "docs_url": "https://docs.nano-gpt.com/api-reference/endpoint/models",
+      "notes": "LLM-Dash appends /v1, producing https://nano-gpt.com/api/v1."
+    },
+    {
+      "id": "custom-openai-compatible",
+      "label": "Custom (OpenAI Compatible)",
+      "type": "custom",
+      "api_format": "openai-compatible",
+      "default_base_url": "",
+      "endpoint_mode": "append_v1",
+      "api_key_label": "API key",
+      "api_key_env": "",
+      "models_override_url": "",
+      "supports_models_endpoint": true,
+      "model_examples": [],
+      "examples": [
+        {
+          "label": "Ollama",
+          "base_url": "http://localhost:11434",
+          "endpoint_mode": "append_v1",
+          "api_key_hint": "ollama",
+          "model_examples": ["gpt-oss:20b", "qwen3:8b"],
+          "docs_url": "https://docs.ollama.com/api/openai-compatibility"
+        },
+        {
+          "label": "llama.cpp server",
+          "base_url": "http://localhost:8080",
+          "endpoint_mode": "append_v1",
+          "api_key_hint": "sk-no-key-required",
+          "model_examples": ["gpt-3.5-turbo"],
+          "docs_url": "https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md"
+        },
+        {
+          "label": "LM Studio",
+          "base_url": "http://localhost:1234",
+          "endpoint_mode": "append_v1",
+          "api_key_hint": "lm-studio",
+          "model_examples": ["local-model"],
+          "docs_url": "https://lmstudio.ai/docs/developer/openai-compat/"
+        }
+      ],
+      "docs_url": "",
+      "notes": "Use this for local or self-hosted OpenAI-compatible servers. Most local servers require any non-empty API key but ignore its value."
+    }
+  ]
+}

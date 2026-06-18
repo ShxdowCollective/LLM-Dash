@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=70", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-dash"
+version = "1.0.0"
+description = "Local LLM benchmark dashboard with AI-driven daily changelog updates."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "ShxdowCollective" }]
+dependencies = [
+  "fastapi>=0.111",
+  "httpx>=0.27",
+  "keyring>=25.0",
+  "openai-agents==0.14.6",
+  "psutil>=5.9",
+  "uvicorn[standard]>=0.30",
+]
+
+[project.scripts]
+llm-dash = "llm_dash.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["llm_dash*"]

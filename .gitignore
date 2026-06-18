@@ -1,0 +1,35 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+node_modules/
+logs/
+.shxdow/
+.llm-dash/
+.kilo/
+.env
+.npmrc
+/.codex
+dist/
+
+# Local-only docs (kept on disk, not in repo)
+LOGBOOK.md
+docs/plans/
+docs/logbooks/
+
+# Generated data (recreated on first launch)
+data/dash.sqlite
+data/run_metrics.csv
+
+# Dev artifacts
+artifacts/
+e2e/screenshots/
+references/
+
+# E2E harness — keep config/specs/baselines, ignore runtime output
+e2e/.tmp/
+e2e/reports/
+e2e/audit/output/
+test-results/
+playwright-report/
+E2E_AUDIT_REPORT.md

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LLM-Dash</title>
+  <meta name="theme-color" content="#0a0a12" />
+  <link rel="icon" href="/assets/brand/app-icon.ico" sizes="any" />
+  <link rel="icon" type="image/png" href="/assets/brand/app-icon.png" />
+  <link rel="apple-touch-icon" href="/assets/brand/app-icon.png" />
+  <link rel="stylesheet" href="vendor/uPlot.min.css" />
+  <link rel="stylesheet" href="vendor/voidware/index.css" />
+  <link rel="stylesheet" href="style.css?v=brand-20260616b" />
+  <script src="vendor/sql-wasm.js"></script>
+  <script src="vendor/marked.min.js"></script>
+  <script src="vendor/uPlot.iife.min.js"></script>
+</head>
+<body>
+  <a class="vw-skip-link" href="#content">Skip to dashboard</a>
+  <div class="vw-page-bg" aria-hidden="true"></div>
+  <div class="vw-page-noise" aria-hidden="true"></div>
+
+  <main id="app" class="llm-app vw-page-shell" data-booting="true">
+    <header id="mobile-header" class="mobile-shell-header" aria-label="Mobile navigation">
+      <button id="sidebar-toggle" class="vw-btn vw-btn-icon" type="button" aria-controls="sidebar" aria-expanded="false">
+        <span class="mobile-menu-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M4 7h16" />
+            <path d="M4 12h16" />
+            <path d="M4 17h16" />
+          </svg>
+        </span>
+        <span class="sr-only">Open navigation</span>
+      </button>
+      <div>
+        <p class="shell-mobile-title">Models</p>
+      </div>
+    </header>
+
+    <button id="sidebar-backdrop" class="vw-sidebar-backdrop" type="button" aria-label="Close navigation"></button>
+
+    <aside id="sidebar" class="vw-sidebar app-sidebar" aria-label="Primary navigation">
+      <button id="sidebar-close" class="vw-btn vw-btn-icon sidebar-close-btn" type="button" aria-label="Close navigation">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M6 6l12 12" />
+          <path d="M18 6L6 18" />
+        </svg>
+      </button>
+      <div class="sidebar-brand">
+        <h1 class="sidebar-brand-title">
+          <span class="brand-banner">
+            <img src="/assets/brand/app-banner.png" alt="LLM-Dash" decoding="async" />
+          </span>
+        </h1>
+      </div>
+
+      <div class="vw-sidebar-section">
+        <nav class="vw-sidebar-nav" aria-label="Dashboard areas">
+          <button class="vw-sidebar-link view-btn" type="button" data-area="models" data-view="table" aria-current="page">
+            <span class="vw-sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 3v18h18" />
+                <path d="M7 14l4-4 3 3 5-6" />
+              </svg>
+            </span>
+            <span class="vw-sidebar-label">Models</span>
+          </button>
+          <button class="vw-sidebar-link view-btn" type="button" data-area="changelog" data-view="changelog">
+            <span class="vw-sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M8 6h13" />
+                <path d="M8 12h13" />
+                <path d="M8 18h13" />
+                <path d="M3 6h.01" />
+                <path d="M3 12h.01" />
+                <path d="M3 18h.01" />
+              </svg>
+            </span>
+            <span class="vw-sidebar-label">Changelog</span>
+          </button>
+          <button class="vw-sidebar-link view-btn" type="button" data-area="stats" data-view="stats">
+            <span class="vw-sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 3v18h18" />
+                <rect x="7" y="10" width="3" height="7" rx="1" />
+                <rect x="12" y="6" width="3" height="11" rx="1" />
+                <rect x="17" y="13" width="3" height="4" rx="1" />
+              </svg>
+            </span>
+            <span class="vw-sidebar-label">Stats</span>
+          </button>
+          <button class="vw-sidebar-link view-btn" type="button" data-area="settings" data-view="data">
+            <span class="vw-sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 01-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 01-4 0v-.2a1.7 1.7 0 00-1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 01-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 010-4h.2a1.7 1.7 0 001.5-1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 012.8-2.8l.1.1a1.7 1.7 0 001.8.3h.1a1.7 1.7 0 001-1.5V3a2 2 0 014 0v.2a1.7 1.7 0 001 1.5h.1a1.7 1.7 0 001.8-.3l.1-.1a2 2 0 012.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8v.1a1.7 1.7 0 001.5 1h.2a2 2 0 010 4h-.2a1.7 1.7 0 00-1.5 1z" />
+              </svg>
+            </span>
+            <span class="vw-sidebar-label">Settings</span>
+          </button>
+        </nav>
+      </div>
+
+      <div class="sidebar-footer">
+        <button id="refresh-trigger" class="vw-btn vw-btn-primary refresh-btn" type="button">
+          Refresh
+        </button>
+        <button id="help-trigger" class="vw-btn vw-btn-secondary help-btn" type="button" title="Keyboard shortcuts" aria-label="Keyboard shortcuts">
+          ?
+        </button>
+        <span id="freshness" class="freshness-chip" title="No update recorded yet">
+          Last update: …
+        </span>
+      </div>
+    </aside>
+
+    <section id="content" class="vw-page-content app-content" tabindex="-1">
+      <header id="page-header" class="app-page-header"></header>
+      <nav id="subpage-nav" class="vw-subpage-nav" aria-label="Sub-pages">
+        <button class="vw-subpage-nav-link view-btn" type="button" data-area="models" data-view="list" aria-current="page">List</button>
+        <button class="vw-subpage-nav-link view-btn" type="button" data-area="models" data-view="table">Table</button>
+        <button class="vw-subpage-nav-link view-btn" type="button" data-area="models" data-view="chart">Chart</button>
+      </nav>
+
+      <section id="content-body" class="content-slot" aria-live="polite">
+        <div class="status-msg loading-state" role="status" aria-label="Loading dashboard">
+          <span class="bootstrap-spinner" aria-hidden="true"></span>
+          <span class="sr-only">Loading dashboard…</span>
+        </div>
+      </section>
+    </section>
+
+    <aside id="detail-rail" class="app-detail-rail" aria-label="Model detail" hidden></aside>
+  </main>
+  <div id="overlay-root" aria-live="polite"></div>
+  <div id="toast-root" aria-live="polite"></div>
+  <script type="module" src="app.js?v=redesign-20260615d"></script>
+</body>
+</html>

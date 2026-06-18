@@ -1,0 +1,56 @@
+/* ── Popovers & Dropdowns ────────────────────────────────── */
+
+.vw-popover {
+  background: var(--vw-surface-2);
+  border: none;
+  box-shadow: 0 0 0 1px var(--vw-border-mid), var(--vw-shadow-lg);
+  border-radius: var(--vw-radius-sm);
+  animation: vw-fade-in 120ms ease;
+  padding: 4px;
+}
+
+/* Menu item */
+.vw-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--vw-text-soft);
+  font-family: var(--vw-font-body);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition:
+    background-color var(--vw-transition-fast),
+    color var(--vw-transition-fast);
+
+  &:hover {
+    background: var(--vw-surface-3);
+    color: var(--vw-text);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--vw-border-focus);
+    outline-offset: 2px;
+  }
+}
+
+/* Danger menu item */
+.vw-menu-item-danger {
+  &:hover {
+    color: #ff6b6b;
+    background: rgba(255, 80, 80, 0.08);
+  }
+}
+
+/* Menu divider */
+.vw-menu-divider {
+  height: 1px;
+  background: var(--vw-border);
+  margin: 4px 8px;
+}

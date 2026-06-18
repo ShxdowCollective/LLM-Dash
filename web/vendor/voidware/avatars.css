@@ -1,0 +1,74 @@
+/* ── Avatars ──────────────────────────────────────────────── */
+
+.vw-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.25em;
+  padding-inline: 0.42em;
+  border-radius: 9999px;
+  font-family: var(--vw-font-body);
+  font-weight: 700;
+  color: #000;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+
+/* Size variants */
+.vw-avatar-lg {
+  min-width: 36px;
+  height: 32px;
+  font-size: 13px;
+}
+
+.vw-avatar-md {
+  min-width: 32px;
+  height: 28px;
+  font-size: 11px;
+}
+
+.vw-avatar-sm {
+  min-width: 28px;
+  height: 24px;
+  font-size: 10px;
+}
+
+.vw-avatar-mini {
+  min-width: 24px;
+  height: 20px;
+  font-size: 9px;
+  border: 2px solid var(--vw-bg);
+}
+
+/* Entity colors via data attribute */
+.vw-avatar[data-entity-color="1"] { background-color: #7c5cc4; }
+.vw-avatar[data-entity-color="2"] { background-color: #f27bb5; }
+.vw-avatar[data-entity-color="3"] { background-color: #a6f17b; }
+.vw-avatar[data-entity-color="4"] { background-color: #72f0d7; }
+.vw-avatar[data-entity-color="5"] { background-color: #86a8ff; }
+
+/* Empty/placeholder avatar */
+.vw-avatar-empty {
+  background-color: var(--vw-surface-3);
+  color: var(--vw-text-muted);
+}
+
+/* Avatar stack — overlapping */
+.vw-avatar-stack {
+  display: flex;
+  flex-direction: row-reverse;
+
+  & .vw-avatar {
+    margin-left: -6px;
+    transition: transform var(--vw-transition-fast);
+
+    &:hover {
+      transform: scale(1.15);
+      z-index: 1;
+    }
+
+    &:last-child {
+      margin-left: 0;
+    }
+  }
+}

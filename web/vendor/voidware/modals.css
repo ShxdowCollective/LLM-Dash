@@ -1,0 +1,49 @@
+/* ── Modals ───────────────────────────────────────────────── */
+
+.vw-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  animation: vw-fade-in 140ms ease;
+}
+
+.vw-modal {
+  background: var(--vw-surface-1);
+  border: none;
+  box-shadow: 0 0 0 1px var(--vw-border-mid), var(--vw-shadow-xl);
+  border-radius: var(--vw-radius-md);
+  width: 100%;
+  max-width: 480px;
+  animation: vw-modal-in 180ms ease;
+}
+
+.vw-modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--vw-border);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--vw-text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.vw-modal-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.vw-modal-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--vw-border);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}

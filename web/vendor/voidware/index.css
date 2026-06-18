@@ -1,0 +1,25 @@
+/* ── Voidware Design System ───────────────────────────────
+   Master import chain — order matters.
+   Variables must come first, components after tokens.
+   ──────────────────────────────────────────────────────── */
+
+/* Tokens & foundations */
+@import url("variables.css");
+@import url("base.css");
+@import url("typography.css");
+@import url("background.css");
+@import url("animations.css");
+
+/* Components */
+@import url("buttons.css");
+@import url("inputs.css");
+@import url("cards.css");
+@import url("toggles.css");
+@import url("popovers.css");
+@import url("modals.css");
+@import url("toasts.css");
+@import url("wizard.css");
+@import url("avatars.css");
+@import url("status-chips.css");
+@import url("layout.css");
+@import url("responsive.css");

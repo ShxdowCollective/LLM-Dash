@@ -1,0 +1,62 @@
+/* ── Resets & Defaults ────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background-color: var(--vw-bg);
+  color: var(--vw-text-soft);
+  font-family: var(--vw-font-body);
+  font-size: 14px;
+  font-weight: var(--vw-weight-regular);
+  line-height: 1.55;
+  letter-spacing: -0.012em;
+  /* cv01 (single-story a) + ss03 (geometric alternates) are the Voidware
+     typographic signature on Inter; they must stay paired with the thin
+     display weights and negative tracking. */
+  font-feature-settings: "liga" 1, "calt" 1, "cv01" 1, "ss03" 1;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+/* ── Selection ───────────────────────────────────────────── */
+
+::selection {
+  background: var(--vw-accent-dim);
+  color: var(--vw-text);
+}
