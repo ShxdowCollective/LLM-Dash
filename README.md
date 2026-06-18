@@ -5,7 +5,7 @@
 
 # LLM-Dash
 
-**Local LLM benchmark dashboard with AI-driven daily changelog updates.**
+### Local LLM benchmark dashboard with AI-driven daily changelog updates
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab?logo=python&logoColor=white)](https://www.python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
@@ -17,13 +17,7 @@
 
 ---
 
-<p align="center"><code>track · compare · update — entirely local</code></p>
-
----
-
-> A no-build, click-to-launch dashboard for tracking LLM benchmarks and daily
-> model changelogs. Voidware-powered dark UI. SQLite source of truth. AI agents
-> write the updates — you just watch.
+**A no-build, click-to-launch dashboard for tracking LLM benchmarks and daily model changelogs. Voidware-powered dark UI. SQLite source of truth. AI agents write the updates — you just watch.**
 
 ## Features
 
