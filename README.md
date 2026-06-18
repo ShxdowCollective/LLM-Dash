@@ -17,24 +17,24 @@
 
 ---
 
-**A no-build, click-to-launch dashboard for tracking LLM benchmarks and daily model changelogs. Voidware-powered dark UI. SQLite source of truth. AI agents write the updates — you just watch.**
+**A no-build, click-to-launch dashboard for tracking LLM benchmarks and daily model changelogs. Voidware-powered dark UI. SQLite source of truth. AI agents write the updates - you just watch.**
 
 ## Features
 
-- **Models leaderboard** — sortable table with five benchmark dimensions
+- **Models leaderboard** - sortable table with five benchmark dimensions
   (intelligence, coding, agent capability, speed, cost), tier grades S–F, and
   per-vendor color coding.
-- **Interactive charts** — scatter and radar comparisons with selectable model
+- **Interactive charts** - scatter and radar comparisons with selectable model
   profiles.
-- **Changelog timeline** — append-only daily entries rendered from Markdown.
-- **Stats & analytics** — token usage, cost tracking, duration metrics, and
+- **Changelog timeline** - append-only daily entries rendered from Markdown.
+- **Stats & analytics** - token usage, cost tracking, duration metrics, and
   per-agent breakdowns across every update run.
-- **Settings-first setup** — local subpages configure your BYOK provider,
+- **Settings-first setup** - local subpages configure your BYOK provider,
   models, Exa API key, optional LLM Stats enrichment, and OS-level scheduling.
-- **Agent-agnostic updates** — any AI agent (Claude, Codex, Gemini, etc.)
+- **Agent-agnostic updates** - any AI agent (Claude, Codex, Gemini, etc.)
   follows `skill/SKILL.md` to research, score, and commit new data.
-- **Zero build runtime** — vanilla HTML/CSS/JS served by a tiny FastAPI server.
-- **Works offline** — once launched, the dashboard runs entirely from local
+- **Zero build runtime** - vanilla HTML/CSS/JS served by a tiny FastAPI server.
+- **Works offline** - once launched, the dashboard runs entirely from local
   SQLite + WASM. Internet is only needed for update runs.
 
 ## Quick Start
@@ -56,7 +56,7 @@ The installer creates a local `.venv`, installs dependencies, and registers a
 managed `llm-dash` command. `llm-dash start` serves the dashboard on
 `127.0.0.1:8787` and opens it in your browser.
 
-First launch shows a setup wizard — there's no default catalog, so seed it from
+First launch shows a setup wizard - there's no default catalog, so seed it from
 the **Catalog** step (or run `python scripts/init_db.py` to preseed offline).
 
 > Background mode, release-archive install, reset, desktop shortcuts, and the
@@ -67,11 +67,11 @@ the **Catalog** step (or run `python scripts/init_db.py` to preseed offline).
 LLM-Dash separates **reading** (the dashboard) from **writing** (AI agents).
 Three ways to trigger an update:
 
-- **Automated** — configure a BYOK provider, then click **Refresh**; the app
+- **Automated** - configure a BYOK provider, then click **Refresh**; the app
   runs `skill/SKILL.md` via the OpenAI Agents SDK.
-- **Manual** — with no provider configured, **Refresh** copies an agent-neutral
+- **Manual** - with no provider configured, **Refresh** copies an agent-neutral
   prompt for `claude`/`codex` to run in a terminal.
-- **Scheduled** — install an OS-level job (systemd / launchd / Task Scheduler)
+- **Scheduled** - install an OS-level job (systemd / launchd / Task Scheduler)
   for daily, weekly, or monthly runs.
 
 See [docs/USAGE.md](docs/USAGE.md#how-updates-work) for the full workflow.
@@ -80,7 +80,7 @@ See [docs/USAGE.md](docs/USAGE.md#how-updates-work) for the full workflow.
 
 ```text
 LLM-Dash/
-├── server.py              # FastAPI app — API routes + static mounts
+├── server.py              # FastAPI app - API routes + static mounts
 ├── install.sh / .ps1 / .bat   # Idempotent installers
 ├── llm-dash / llm-dash.cmd    # Local command shims
 ├── requirements.txt           # Python deps
@@ -101,7 +101,7 @@ LLM-Dash/
 | `python -m venv` fails on Debian/Ubuntu | Install `python3-venv` and rerun `./install.sh` |
 | `llm-dash` not found after install | Open a new terminal, or run `./llm-dash start` from the repo |
 | Port 8787 already in use | `llm-dash start --port 9000` |
-| First launch shows the setup wizard | Expected — seed from the **Catalog** step |
+| First launch shows the setup wizard | Expected - seed from the **Catalog** step |
 | Provider connection fails | Verify API key + base URL via Settings "Test connection" |
 
 Full troubleshooting table: **[docs/USAGE.md](docs/USAGE.md#troubleshooting)**.
