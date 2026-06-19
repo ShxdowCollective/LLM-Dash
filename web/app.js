@@ -845,6 +845,10 @@
   }
 
   const LIST_BAR_METRICS = ["intelligence", "coding", "agents", "speed"];
+  // Compact codes for the dense list-row bars; full labels still appear in the
+  // table headers and the detail rail. Keeps label+value from colliding in the
+  // narrow per-metric cells (~53px when the detail rail is open).
+  const LIST_BAR_CODE = { intelligence: "Int", coding: "Cod", agents: "Agt", speed: "Spd" };
 
   function listRow(model, index) {
     const color = safeColor(model.color);
@@ -908,7 +912,7 @@
     return h("div", { class: "list-bars" }, LIST_BAR_METRICS.map((k) => {
       const val = clamp(Number(model[k]) || 0, 0, 10);
       return h("div", { class: "list-bar-cell" }, [
-        h("div", { class: "list-bar-k" }, [h("span", null, METRIC_META[k].short), h("b", null, fmtScore(model[k]))]),
+        h("div", { class: "list-bar-k" }, [h("span", null, LIST_BAR_CODE[k] || METRIC_META[k].short), h("b", null, fmtScore(model[k]))]),
         h("div", { class: "list-bar-track" }, h("i", { style: { width: (val * 10) + "%", "--bar-color": metricColor(k) } })),
       ]);
     }));

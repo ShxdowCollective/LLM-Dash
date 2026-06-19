@@ -1055,7 +1055,7 @@ body.is-col-resizing .model-row { pointer-events: none; }
 
 .model-list-row {
   display: grid;
-  grid-template-columns: 34px 24px 30px minmax(160px, 1.3fr) 78px minmax(220px, 1.7fr) 26px;
+  grid-template-columns: 34px 24px 30px minmax(160px, 1.3fr) 78px minmax(248px, 1.7fr) 26px;
   align-items: center;
   gap: 14px;
   min-height: 58px;
@@ -1191,12 +1191,15 @@ body.is-col-resizing .model-row { pointer-events: none; }
 .list-bar-k {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
   font-size: 9.5px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--vw-text-muted);
 }
-.list-bar-k b { color: var(--vw-text-muted); font-weight: 600; font-family: var(--vw-font-mono); }
+.list-bar-k > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-bar-k b { color: var(--vw-text-soft); font-weight: 600; font-family: var(--vw-font-mono); flex: 0 0 auto; }
 .list-bar-track {
   position: relative;
   height: 6px;

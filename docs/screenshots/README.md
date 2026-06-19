@@ -3,7 +3,7 @@
 Captured from a live LLM-Dash instance seeded with **real data from the top 20
 [Artificial Analysis](https://artificialanalysis.ai/) intelligence-ranked
 models** (`scripts/seed_catalog.py --preset aa --index intelligence --count 20`).
-Dark theme, 1440-wide viewport at 2× for crispness.
+Dark theme, 1920×1080 viewport at 2× (3840×2160) for crispness.
 
 > Provider credentials are intentionally left unconfigured in these captures, so
 > the Settings/Connection surface shows the clean first-run state — no keys are
