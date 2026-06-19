@@ -19,6 +19,14 @@
 
 **A no-build, click-to-launch dashboard for tracking LLM benchmarks and daily model changelogs. Voidware-powered dark UI. SQLite source of truth. AI agents write the updates - you just watch.**
 
+<p align="center">
+  <a href="docs/screenshots/">
+    <img alt="LLM-Dash models leaderboard with per-model scorecard" src="docs/screenshots/dashboard.png" width="100%">
+  </a>
+  <br>
+  <em>Models leaderboard with live scorecard — seeded from the top 20 Artificial Analysis intelligence models. <a href="docs/screenshots/">More screenshots →</a></em>
+</p>
+
 ## Features
 
 - **Models leaderboard** - sortable table with five benchmark dimensions
