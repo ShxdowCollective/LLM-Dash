@@ -123,6 +123,7 @@ config. Names above match what `scripts/config.py` reads; the canonical
 | `scripts/schedule_job.py` | OS-level scheduled job installer/remover |
 | `scripts/launch_server.py` | Backward-compatible wrapper around `llm_dash.process.start_background()` |
 | `scripts/build_release.py` | Builds curated GitHub release zip/tar assets and checksums |
+| `scripts/publish_release.py` | Builds, tags, and publishes a GitHub release via `gh` (notes from CHANGELOG) |
 | `scripts/schema.sql` | DDL source of truth for `data/dash.sqlite` |
 | `scripts/migrate_score_checks.py` | Idempotent migration that adds 0–10 CHECK constraints to `model_scores` and bumps `meta.schema_version` to 2 |
 | `scripts/migrate_model_metadata_v4.py` | Idempotent migration that adds `models.input_capabilities` and `models.deprecated_on` and bumps `meta.schema_version` to 4 |
@@ -440,6 +441,27 @@ cat dist/SHA256SUMS.txt
 The builder creates curated `.zip` and `.tar.gz` assets under `dist/`, excludes
 local state (`.env`, `.venv`, `.llm-dash`, generated DBs, logs, internal plans),
 and includes the installers plus `llm-dash` command shims.
+
+### Publish a GitHub release
+
+`publish_release.py` wraps the last mile: it builds the assets (above), creates
+and pushes an annotated tag at `HEAD`, then runs `gh release create` with the
+assets and release notes lifted from the matching `## [X.Y.Z]` section of
+`CHANGELOG.md`. Requires the [`gh`](https://cli.github.com) CLI, authenticated
+(`gh auth login`). No GitHub Actions — this is a deliberate local command.
+
+```bash
+# Preview everything without touching git or GitHub:
+.venv/bin/python scripts/publish_release.py --version v1.0.0 --dry-run
+
+# Cut the release:
+.venv/bin/python scripts/publish_release.py --version v1.0.0
+```
+
+Useful flags: `--draft` (don't push the tag; create a draft to review first),
+`--prerelease` (auto-enabled for tags with a `-suffix` like `v1.1.0-rc1`),
+`--no-build` (reuse existing `dist/` assets), `--skip-tag` (tag already pushed),
+and `--allow-dirty`. The working tree must be clean unless `--allow-dirty`.
 
 ### Test the Agent Provider connection
 
