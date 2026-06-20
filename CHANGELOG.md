@@ -10,6 +10,27 @@ tracks changes to the **application** itself.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-20
+
+### Added
+
+- Cancel a running update from the dashboard: new
+  `POST /api/run-update/{job_id}/cancel` endpoint plus Refresh UI control, with
+  job state tracking (`canceled` / `succeeded` / `failed`).
+- `RunUpdatePayload` request model for `/api/run-update`, exposing per-run source
+  parameters (preset, count, index, prompt, custom endpoint/credential).
+- Additional model-source presets for refresh and catalog seeding: `openrouter`
+  and `custom-endpoint` (bring-your-own `/models` API), alongside the existing
+  `aa`, `llmstats`, `exa`, and `custom-prompt` sources.
+
+### Changed
+
+- Clearer setup and seeding experience in the wizard and Refresh flow, with
+  improved progress and status feedback.
+- More detailed seed and refresh logging for easier troubleshooting.
+- Refreshed README and screenshots with a models leaderboard view and updated
+  visuals.
+
 ## [1.0.0] - 2026-06-17
 
 ### Added
@@ -29,5 +50,6 @@ tracks changes to the **application** itself.
 - Cross-platform `llm-dash` CLI and installers (macOS/Linux/Windows) with
   foreground, silent/background, status, stop, and reset commands.
 
-[Unreleased]: https://github.com/phxntomkid/LLM-Dash/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/phxntomkid/LLM-Dash/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/phxntomkid/LLM-Dash/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/phxntomkid/LLM-Dash/releases/tag/v1.0.0
