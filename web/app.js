@@ -187,10 +187,13 @@
     resetMode: false,
     setupMode: false,
     setupStep: "provider",
+    setupResearchSource: "exa",
+    seedLogExpanded: false,
     focusIndex: 0,
     drawerOpen: false,
     helpOpen: false,
     manualOpen: false,
+    refreshOptionsOpen: false,
     resetTokens: {},
     resetBusy: "",
     resetOp: { busy: "", phase: "", result: null, error: "", postAction: "" },
@@ -223,7 +226,7 @@
     testStatus: {},
     presets: [],
     schedule: {},
-    run: { open: false, id: "", state: "idle", started: 0, tail: "", error: "" },
+    run: { open: false, id: "", state: "idle", started: 0, tail: "", error: "", source: "" },
     approval: EMPTY_APPROVAL(),
     ui: { ...DEFAULT_UI },
     forms: {
@@ -1602,6 +1605,7 @@
     const step = wizardStep();
     return h("div", { class: "wizard-shell", role: "dialog", "aria-modal": "true", "aria-label": "Set up LLM-Dash" }, [
       h("div", { class: "wizard-card" }, [
+        h("button", { class: "wizard-cancel", type: "button", onclick: cancelSetup }, "Cancel"),
         h("header", { class: "wizard-head" }, [
           h("p", { class: "wizard-brand" }, [
             h("span", { class: "brand-banner" }, [
@@ -1640,9 +1644,21 @@
 
   function wizardHeading(title, copy) {
     return h("div", { class: "wizard-step-head" }, [
-      h("h1", { class: "wizard-step-title" }, title),
-      copy ? h("p", { class: "wizard-step-copy" }, copy) : null,
+      h("div", { class: "wizard-title-row" }, [
+        h("h1", { class: "wizard-step-title" }, title),
+        copy ? infoTip(copy, title + " details") : null,
+      ]),
     ]);
+  }
+
+  function infoTip(copy, label) {
+    return h("span", {
+      class: "info-tip",
+      tabindex: "0",
+      role: "img",
+      "aria-label": label || copy,
+      title: copy,
+    }, "i");
   }
 
   function wizardFoot(children) {
@@ -1659,7 +1675,7 @@
   }
 
   function wizardProviderStep() {
-    const hasKey = Boolean(state.provider.has_provider) || Boolean(state.forms.provider.base_url.trim());
+    const canContinue = Boolean(state.provider.has_provider) && Boolean(state.forms.provider.base_url.trim());
     return [
       wizardHeading("Connect a provider", "Point LLM-Dash at any OpenAI-compatible provider and add an API key. Everything is stored securely on this machine."),
       h("div", { class: "wizard-fields" }, [...providerConnectionFields(), testResultNote("provider")]),
@@ -1670,8 +1686,8 @@
         h("button", {
           class: "vw-btn vw-btn-primary",
           type: "button",
-          disabled: !hasKey,
-          title: hasKey ? "" : "Add an API key and base URL to continue",
+          disabled: !canContinue,
+          title: canContinue ? "" : "Add an API key and base URL to continue",
           onclick: wizardSaveProviderAndNext,
         }, "Save & continue"),
       ]),
@@ -1715,7 +1731,7 @@
   function wizardResearchStep() {
     return [
       wizardHeading("Add research sources", "Optional. These keys let the agent discover and score models automatically. You can skip and add them later in Settings."),
-      h("div", { class: "wizard-fields research-fields" }, settingsResearchFields()),
+      h("div", { class: "wizard-fields research-fields" }, [wizardResearchSources()]),
       wizardFoot([
         h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: () => navigate("settings", "models") }, "Back"),
         h("span", { class: "wizard-foot-spacer" }),
@@ -1727,7 +1743,7 @@
   function wizardCatalogStep() {
     return [
       wizardHeading("Seed your catalog", "Pick a source and seed your first set of models. The research agent fetches and scores them."),
-      h("div", { class: "wizard-fields" }, [renderCatalogWorkbench()]),
+      h("div", { class: "wizard-fields" }, [wizardCatalogSources()]),
       wizardFoot([
         h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: () => navigate("settings", "research") }, "Back"),
       ]),
@@ -1735,6 +1751,14 @@
   }
 
   function wizardSeedStep() {
+    if (!state.seed.id) {
+      return [
+        wizardHeading("Ready to seed", "Choose a catalog source first, then LLM-Dash will track the seed run here."),
+        wizardFoot([
+          h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: () => navigate("settings", "catalog") }, "Back to Catalog"),
+        ]),
+      ];
+    }
     // settingsSeed already renders complete/failed/running states with their
     // own actions (including "Let's start" → finishSetup).
     return [settingsSeed()];
@@ -1766,6 +1790,12 @@
       toast("Seed your catalog before opening the dashboard.", "warning");
       return;
     }
+    state.setupMode = false;
+    state.setupStep = "provider";
+    navigate("models", "list");
+  }
+
+  function cancelSetup() {
     state.setupMode = false;
     state.setupStep = "provider";
     navigate("models", "list");
@@ -1812,7 +1842,9 @@
     ]);
   }
 
-  function catalogSources(c) {
+  function catalogSources(c, mode) {
+    const isRefresh = mode === "refresh";
+    const runAction = (payload) => isRefresh ? startRefreshRun(payload) : startSeed(payload);
     return [
       {
         id: "aa",
@@ -1822,7 +1854,7 @@
         enabled: Boolean(state.provider.aa_configured),
         gateHint: "Add an Artificial Analysis key in the Research step to enable.",
         inputs: [catalogCountSelect(c, "aaCount", [10, 50, 100]), catalogIndexRadios(c)],
-        onSeed: () => startSeed({ preset: "aa", count: c.aaCount, index: c.aaIndex }),
+        onAction: () => runAction({ preset: "aa", count: c.aaCount, index: c.aaIndex }),
       },
       {
         id: "llmstats",
@@ -1832,7 +1864,7 @@
         enabled: Boolean(state.provider.llmstats_configured),
         gateHint: "Add an LLM Stats key in the Research step to enable.",
         inputs: [catalogCountSelect(c, "llmstatsCount", [10, 25, 50])],
-        onSeed: () => startSeed({ preset: "llmstats", count: c.llmstatsCount }),
+        onAction: () => runAction({ preset: "llmstats", count: c.llmstatsCount }),
       },
       {
         id: "exa",
@@ -1841,7 +1873,7 @@
         description: "Discover models via Exa MCP web research (free tier works).",
         enabled: true,
         inputs: [catalogCountSelect(c, "exaCount", [10, 25, 50])],
-        onSeed: () => startSeed({ preset: "exa", count: c.exaCount }),
+        onAction: () => runAction({ preset: "exa", count: c.exaCount }),
       },
       {
         id: "openrouter",
@@ -1850,7 +1882,7 @@
         description: "Models from the public OpenRouter catalog (largest-context first).",
         enabled: true,
         inputs: [catalogCountSelect(c, "openrouterCount", [10, 25, 50])],
-        onSeed: () => startSeed({ preset: "openrouter", count: c.openrouterCount }),
+        onAction: () => runAction({ preset: "openrouter", count: c.openrouterCount }),
       },
       {
         id: "custom-prompt",
@@ -1871,7 +1903,7 @@
           ]),
           catalogCountSelect(c, "customCount", [10, 25, 50]),
         ],
-        onSeed: () => startSeed({ preset: "custom-prompt", count: c.customCount, prompt: c.customPrompt.trim() }),
+        onAction: () => runAction({ preset: "custom-prompt", count: c.customCount, prompt: c.customPrompt.trim() }),
       },
       {
         id: "custom-endpoint",
@@ -1891,10 +1923,10 @@
           ]),
           catalogCountSelect(c, "customCount", [10, 25, 50]),
         ],
-        onSeed: () => {
+        onAction: () => {
           const payload = { preset: "custom-endpoint", count: c.customCount, endpoint: c.customEndpoint.trim() };
           if (c.customCredential.trim()) payload.credential = c.customCredential.trim();
-          startSeed(payload);
+          runAction(payload);
         },
       },
     ];
@@ -1902,7 +1934,7 @@
 
   function renderCatalogWorkbench() {
     const c = state.catalog;
-    const sources = catalogSources(c);
+    const sources = catalogSources(c, "seed");
     if (!sources.some((s) => s.id === c.selected)) c.selected = sources[0].id;
     const active = sources.find((s) => s.id === c.selected) || sources[0];
     return h("div", { class: "catalog-workbench" }, [
@@ -1926,7 +1958,54 @@
             class: "vw-btn vw-btn-primary",
             type: "button",
             disabled: !active.enabled,
-            onclick: active.onSeed,
+            onclick: active.onAction,
+          }, "Seed catalog"),
+        ]),
+      ]),
+    ]);
+  }
+
+  function wizardCatalogSources() {
+    const c = state.catalog;
+    const sources = catalogSources(c, "seed");
+    if (!sources.some((s) => s.id === c.selected)) c.selected = sources[0].id;
+    const active = sources.find((s) => s.id === c.selected) || sources[0];
+    return h("section", { class: "wizard-catalog-panel", "aria-label": "Catalog source setup" }, [
+      h("div", { class: "wizard-catalog-tabs", role: "tablist", "aria-label": "Catalog sources" }, sources.map((source) => {
+        const selected = source.id === active.id;
+        const tabId = "wizard-catalog-tab-" + source.id;
+        const panelId = "wizard-catalog-panel-" + source.id;
+        return h("button", {
+          class: "wizard-catalog-tab" + (selected ? " is-active" : "") + (source.enabled ? "" : " is-locked"),
+          type: "button",
+          role: "tab",
+          id: tabId,
+          title: (source.enabled ? source.sub : "Locked") + ". " + (source.enabled ? source.description : source.gateHint || source.description),
+          "aria-controls": panelId,
+          "aria-selected": selected ? "true" : "false",
+          onclick: () => { c.selected = source.id; render(); },
+        }, [
+          h("span", { class: "wizard-catalog-tab-name" }, source.title),
+        ]);
+      })),
+      h("div", {
+        class: "wizard-catalog-detail",
+        role: "tabpanel",
+        id: "wizard-catalog-panel-" + active.id,
+        "aria-labelledby": "wizard-catalog-tab-" + active.id,
+      }, [
+        h("div", { class: "catalog-detail-head" }, [
+          h("h3", { class: "catalog-detail-title" }, active.title),
+          infoTip(active.description, active.title + " details"),
+        ]),
+        h("div", { class: "catalog-detail-fields" }, active.inputs),
+        !active.enabled && active.gateHint ? h("p", { class: "catalog-card-hint" }, active.gateHint) : null,
+        h("div", { class: "catalog-detail-cta" }, [
+          h("button", {
+            class: "vw-btn vw-btn-primary",
+            type: "button",
+            disabled: !active.enabled,
+            onclick: active.onAction,
           }, "Seed catalog"),
         ]),
       ]),
@@ -1941,8 +2020,55 @@
     ]);
   }
 
+  function renderRefreshOptions() {
+    const c = state.catalog;
+    const sources = catalogSources(c, "refresh");
+    if (!sources.some((s) => s.id === c.selected)) c.selected = sources[0].id;
+    const active = sources.find((s) => s.id === c.selected) || sources[0];
+    return h("div", { class: "refresh-options" }, [
+      h("p", { class: "settings-summary" }, "Choose the discovery source for this refresh. The agent keeps existing history append-only and uses the source as fresh context for new models, score changes, and status updates."),
+      h("div", { class: "catalog-workbench refresh-workbench" }, [
+        h("div", { class: "catalog-sources", role: "tablist", "aria-label": "Refresh sources" }, sources.map((s) => h("button", {
+          class: "catalog-source" + (s.id === active.id ? " is-active" : "") + (s.enabled ? "" : " is-locked"),
+          type: "button",
+          role: "tab",
+          "aria-selected": s.id === active.id ? "true" : "false",
+          disabled: !s.enabled,
+          title: s.enabled ? s.description : s.gateHint,
+          onclick: () => { c.selected = s.id; render(); },
+        }, [
+          h("strong", null, s.title),
+          h("span", null, s.sub),
+        ]))),
+        h("section", { class: "catalog-detail", "aria-label": active.title }, [
+          h("div", { class: "catalog-detail-head" }, [
+            h("h3", { class: "catalog-detail-title" }, active.title),
+            infoTip(active.description, active.title + " details"),
+          ]),
+          h("p", { class: "catalog-card-description" }, active.description),
+          h("div", { class: "catalog-detail-fields" }, active.inputs),
+          !active.enabled && active.gateHint ? h("p", { class: "catalog-card-hint" }, active.gateHint) : null,
+        ]),
+      ]),
+      h("div", { class: "action-row" }, [
+        h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: () => { state.refreshOptionsOpen = false; render(); } }, "Cancel"),
+        h("button", {
+          class: "vw-btn vw-btn-primary",
+          type: "button",
+          disabled: !active.enabled,
+          onclick: active.onAction,
+        }, "Start refresh"),
+      ]),
+    ]);
+  }
+
   function seedPhaseLabel(tail) {
     const text = String(tail || "");
+    const candidateMatches = [...text.matchAll(/seed_scoring_candidate\s+(\d+)\/(\d+)/g)];
+    if (candidateMatches.length) {
+      const last = candidateMatches[candidateMatches.length - 1];
+      return `Scoring candidates (${last[1]} of ${last[2]} submitted)…`;
+    }
     const batchMatch = text.match(/seed_batch\s+(\d+)\/(\d+)/);
     if (batchMatch) return `Scoring models (batch ${batchMatch[1]} of ${batchMatch[2]})…`;
     if (text.includes("seed_complete")) return "Finishing up…";
@@ -1974,6 +2100,116 @@
   function seedTailPreview(tail, maxLines) {
     const lines = String(tail || "").trim().split("\n").filter(Boolean);
     return lines.slice(-(maxLines || 8)).join("\n");
+  }
+
+  function parseSeedLogLine(raw) {
+    const line = String(raw || "").trim();
+    const match = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)\s+(.+)$/);
+    return {
+      time: match ? match[1].slice(11, 19) : "",
+      body: match ? match[2] : line,
+      raw: line,
+    };
+  }
+
+  function seedLogValue(value) {
+    const text = String(value || "").trim();
+    if (!text) return "";
+    try {
+      const parsed = JSON.parse(text);
+      return typeof parsed === "string" ? parsed : text;
+    } catch (_error) {
+      return text.replace(/^"|"$/g, "");
+    }
+  }
+
+  function seedLogSummaryRows(tail, maxRows) {
+    const rows = [];
+    String(tail || "").split("\n").forEach((rawLine) => {
+      const parsed = parseSeedLogLine(rawLine);
+      const body = parsed.body;
+      if (!body) return;
+      let text = "";
+      let tone = "";
+      let detail = "";
+      let match = null;
+
+      if (body === "seed_start") {
+        text = "Seed run started";
+      } else if ((match = body.match(/^seed_prepare\s+.*preset=([^\s]+).*count=(\d+)/))) {
+        text = `Preparing ${match[1]} seed`;
+        detail = `${match[2]} target models`;
+      } else if ((match = body.match(/^seed_candidates\s+resolved=(\d+)/))) {
+        text = `Resolved ${match[1]} candidate model${match[1] === "1" ? "" : "s"}`;
+      } else if ((match = body.match(/^seed_plan\s+batches=(\d+)/))) {
+        text = `Planned ${match[1]} scoring batch${match[1] === "1" ? "" : "es"}`;
+      } else if ((match = body.match(/^seed_batch\s+(\d+)\/(\d+)\s+scoring\s+(\d+)\s+models/))) {
+        text = `Scoring ${match[3]} models`;
+        detail = `batch ${match[1]} of ${match[2]}`;
+      } else if ((match = body.match(/^seed_scoring_candidate\s+(\d+)\/(\d+)\s+name=(.+)$/))) {
+        text = `Scoring candidate ${match[1]} of ${match[2]}`;
+        detail = seedLogValue(match[3]);
+      } else if ((match = body.match(/^seed_batch_complete\s+(\d+)\/(\d+)\s+models=(\d+)\s+total_models=(\d+)/))) {
+        text = `Batch ${match[1]} complete`;
+        detail = `${match[3]} scored, ${match[4]} total`;
+        tone = "ok";
+      } else if ((match = body.match(/^seed_agent_error\s+model=([^\s]+)/))) {
+        text = `Agent attempt failed on ${match[1]}`;
+        detail = "trying fallback";
+        tone = "warn";
+      } else if ((match = body.match(/^seed_apply\s+models=(\d+)/))) {
+        text = `Writing ${match[1]} models to the catalog`;
+      } else if (body.startsWith("seed_complete")) {
+        text = body.includes("dry_run=true") ? "Dry run complete" : "Catalog seed complete";
+        tone = "ok";
+      } else if (body.startsWith("seed_error") || body.startsWith("error:")) {
+        text = "Seed error";
+        detail = body.replace(/^seed_error\s*/, "").replace(/^error:\s*/, "");
+        tone = "fail";
+      } else if ((match = body.match(/^MCP tool ([^\s]+).*returned an error:\s*(.+)$/))) {
+        text = `${match[1]} returned an error`;
+        detail = match[2];
+        tone = "warn";
+      } else if ((match = body.match(/^Resolved candidate count:\s*(\d+)/))) {
+        text = `Resolved ${match[1]} candidate model${match[1] === "1" ? "" : "s"}`;
+      } else if ((match = body.match(/^Batch plan:\s*(.+)$/))) {
+        text = "Batch plan ready";
+        detail = match[1];
+      }
+
+      if (text) rows.push({ ...parsed, text, detail, tone });
+    });
+    return rows.slice(-(maxRows || 6));
+  }
+
+  function renderSeedConsole(tail) {
+    const raw = seedTailPreview(tail, 120);
+    const rows = seedLogSummaryRows(tail, 7);
+    const visibleRows = rows.slice(-3);
+    return h("div", { class: "seed-console" }, [
+      h("div", { class: "seed-console-rows", role: "log", "aria-live": "polite" }, visibleRows.length ? visibleRows.map((row) => (
+        h("div", { class: "seed-console-row" + (row.tone ? " is-" + row.tone : ""), title: row.raw }, [
+          h("span", { class: "seed-console-dot", "aria-hidden": "true" }),
+          h("span", { class: "seed-console-text" }, row.text),
+          row.detail ? h("span", { class: "seed-console-detail" }, row.detail) : null,
+          h("span", { class: "seed-console-time" }, row.time || "--:--:--"),
+        ])
+      )) : [
+        h("div", { class: "seed-console-row" }, [
+          h("span", { class: "seed-console-dot", "aria-hidden": "true" }),
+          h("span", { class: "seed-console-text" }, "Waiting for terminal output"),
+          h("span", { class: "seed-console-time" }, "--:--:--"),
+        ]),
+      ]),
+      raw ? h("details", {
+        class: "seed-console-details",
+        open: state.seedLogExpanded ? true : undefined,
+        ontoggle: (event) => { state.seedLogExpanded = Boolean(event.currentTarget.open); },
+      }, [
+        h("summary", null, "Terminal output"),
+        h("pre", { class: "seed-log" }, raw),
+      ]) : null,
+    ]);
   }
 
   function settingsSeed() {
@@ -2013,7 +2249,6 @@
         ]),
       ]);
     }
-    const preview = seedTailPreview(seed.tail);
     const prog = seedProgress(seed.tail);
     const elapsed = fmtElapsed((Date.now() - (seed.started || Date.now())) / 1000);
     return h("section", { class: "settings-panel panel-card seed-running-panel", "aria-label": "Seed in progress" }, [
@@ -2033,7 +2268,7 @@
         h("span", { class: "seed-progress-fill", style: prog.indeterminate ? {} : { width: prog.pct + "%" } }),
       ]),
       h("p", { class: "seed-running-hint" }, "This runs in the background — it's safe to wait here. Larger catalogs can take a few minutes."),
-      preview ? h("pre", { class: "seed-log" }, preview) : null,
+      renderSeedConsole(seed.tail),
     ]);
   }
 
@@ -2061,6 +2296,7 @@
         started: Date.now(),
         preset: payload.preset,
       };
+      state.seedLogExpanded = false;
       navigate("settings", "seed");
       startSeedTicker();
       render();
@@ -2399,6 +2635,7 @@
           value: showNewKey ? "__new__" : (pickKey || ""),
           onchange: (e) => {
             const value = e.target.value;
+            clearTestState(slot);
             if (value === "__new__") {
               form.mode = "new";
               form.pickKey = "";
@@ -2423,7 +2660,7 @@
           value: form.apiKey,
           placeholder: showUpdate ? "Paste replacement key" : "Paste API key",
           autocomplete: "off",
-          oninput: (e) => { form.apiKey = e.target.value; },
+          oninput: (e) => { form.apiKey = e.target.value; clearTestState(slot, true); },
         }),
       ]));
     }
@@ -2458,6 +2695,7 @@
       });
       await refreshCredentialState();
       if (slot === "provider") hydrateProviderFromCandidate(candidate);
+      clearTestState(slot);
       form.mode = "select";
       clearSlotFormSecret(slot);
       toast(SLOT_TITLES[slot] + " credential selected", "success");
@@ -2478,6 +2716,7 @@
         body: { api_key: apiKey },
       });
       await refreshCredentialState();
+      clearTestState(slot);
       form.mode = "select";
       clearSlotFormSecret(slot);
       toast(SLOT_TITLES[slot] + " key saved", "success");
@@ -2502,6 +2741,7 @@
         },
       });
       await refreshCredentialState();
+      clearTestState(slot);
       form.mode = "select";
       clearSlotFormSecret(slot);
       toast(SLOT_TITLES[slot] + " key updated", "success");
@@ -2517,6 +2757,7 @@
     try {
       await api("/api/credentials/slots/" + encodeURIComponent(slot) + "/selection", { method: "DELETE" });
       await refreshCredentialState();
+      clearTestState(slot);
       state.credentialSlotForms[slot].mode = "select";
       clearSlotFormSecret(slot);
       toast("Selection removed", "success");
@@ -2531,6 +2772,7 @@
     try {
       await api("/api/credentials/slots/" + encodeURIComponent(slot) + "/credential" + query, { method: "DELETE" });
       await refreshCredentialState();
+      clearTestState(slot);
       state.credentialSlotForms[slot].mode = "select";
       state.credentialSlotForms[slot].pickKey = "";
       clearSlotFormSecret(slot);
@@ -2679,19 +2921,33 @@
     return "";
   }
 
-  // A button that swaps its label for an inline spinner while its keyed action
-  // is running.
+  // A button that keeps its normal footprint and shows a centered spinner while
+  // its keyed action is running.
   function busyButton(opts) {
     const busy = opts.key ? testBusy(opts.key) : false;
+    const stateClass = opts.key ? testButtonClass(opts.key) : "";
     return h("button", {
-      class: "vw-btn " + (opts.variant || "vw-btn-secondary") + (opts.extraClass ? " " + opts.extraClass : "") + (busy ? " is-busy" : ""),
+      class: "vw-btn " + (opts.variant || "vw-btn-secondary") + (opts.extraClass ? " " + opts.extraClass : "") + (busy ? " is-busy" : "") + stateClass,
       type: "button",
       disabled: busy || Boolean(opts.disabled),
       title: opts.title,
+      "aria-label": busy ? (opts.busyLabel || opts.label) : undefined,
+      "aria-busy": busy ? "true" : undefined,
       onclick: opts.onclick,
     }, busy
-      ? [h("span", { class: "vw-spinner btn-spinner", "aria-hidden": "true" }), h("span", null, opts.busyLabel || opts.label)]
+      ? [
+        h("span", { class: "btn-busy-measure", "aria-hidden": "true" }, opts.label),
+        h("span", { class: "btn-spinner", "aria-hidden": "true" }),
+      ]
       : opts.label);
+  }
+
+  function testButtonClass(key) {
+    const s = testState(key);
+    if (s.busy) return "";
+    if (s.ok === true) return " is-test-ok";
+    if (s.ok === false) return " is-test-fail";
+    return "";
   }
 
   const RESEARCH_SOURCES = [
@@ -2718,22 +2974,29 @@
     },
   ];
 
-  function researchSourceCard(source) {
+  function researchSourceCard(source, opts) {
+    const compact = opts && opts.compact;
     const configured = Boolean(state.provider[source.configuredKey]);
     const result = testState(source.slot);
     const failed = result.ok === false;
+    const passed = result.ok === true;
+    const busy = result.busy;
     const cardClass = "research-card"
+      + (compact ? " is-compact" : "")
       + (configured ? " is-connected" : "")
-      + (failed ? " is-fail" : "");
+      + (passed ? " is-test-ok" : "")
+      + (failed ? " is-fail" : "")
+      + (busy ? " is-testing" : "");
     return h("section", { class: cardClass, "aria-label": source.name }, [
       h("div", { class: "research-card-head" }, [
         h("div", { class: "research-card-heading" }, [
           h("h3", { class: "research-card-title" }, source.name),
-          statusPill(configured ? "Connected" : "Not configured", configured ? "fresh" : "unknown"),
+          compact ? infoTip(source.blurb, source.name + " details") : null,
+          compact ? null : statusPill(configured ? "Connected" : "Not configured", configured ? "fresh" : "unknown"),
         ]),
         source.test ? busyButton({
           key: source.slot,
-          label: "Test",
+          label: compact ? "Test source" : "Test",
           variant: "vw-btn-secondary",
           extraClass: "research-test-btn",
           disabled: !configured,
@@ -2741,7 +3004,7 @@
           onclick: source.test,
         }) : null,
       ]),
-      h("p", { class: "research-card-blurb" }, source.blurb),
+      compact ? null : h("p", { class: "research-card-blurb" }, source.blurb),
       renderCredentialSlot(source.slot, { title: source.name + " API key" }),
       testResultNote(source.slot),
     ]);
@@ -2749,6 +3012,43 @@
 
   function settingsResearchFields() {
     return RESEARCH_SOURCES.map(researchSourceCard);
+  }
+
+  function wizardResearchSources() {
+    const active = RESEARCH_SOURCES.find((source) => source.slot === state.setupResearchSource) || RESEARCH_SOURCES[0];
+    return h("section", { class: "wizard-research-panel", "aria-label": "Research source setup" }, [
+      h("div", { class: "wizard-research-tabs", role: "tablist", "aria-label": "Research sources" }, RESEARCH_SOURCES.map((source) => {
+        const configured = Boolean(state.provider[source.configuredKey]);
+        const result = testState(source.slot);
+        const selected = source.slot === active.slot;
+        const stateText = result.busy ? "Testing" : result.ok === false ? "Failed" : configured ? "Connected" : "Optional";
+        const stateName = result.busy ? "running" : result.ok === false ? "failed" : configured ? "fresh" : "unknown";
+        const tabId = "wizard-research-tab-" + source.slot;
+        const panelId = "wizard-research-panel-" + source.slot;
+        return h("button", {
+          class: "wizard-research-tab" + (selected ? " is-active" : "") + (configured ? " is-connected" : "") + (result.busy ? " is-testing" : "") + (result.ok === false ? " is-fail" : ""),
+          type: "button",
+          role: "tab",
+          id: tabId,
+          "aria-controls": panelId,
+          "aria-selected": selected ? "true" : "false",
+          onclick: () => { state.setupResearchSource = source.slot; render(); },
+        }, [
+          h("span", { class: "wizard-research-tab-copy" }, [
+            h("span", { class: "wizard-research-tab-name" }, source.name),
+          ]),
+          statusPill(stateText, stateName),
+        ]);
+      })),
+      h("div", {
+        class: "wizard-research-detail",
+        role: "tabpanel",
+        id: "wizard-research-panel-" + active.slot,
+        "aria-labelledby": "wizard-research-tab-" + active.slot,
+      }, [
+        active ? researchSourceCard(active, { compact: true }) : null,
+      ]),
+    ]);
   }
 
   function settingsResearch() {
@@ -2823,6 +3123,13 @@
   function setTestState(key, patch) {
     state.testStatus[key] = { ...testState(key), ...patch };
     render();
+  }
+
+  function clearTestState(key, rerender) {
+    if (!state.testStatus[key]) return false;
+    state.testStatus[key] = { busy: false, ok: null, msg: "" };
+    if (rerender) render();
+    return true;
   }
 
   function testBusy(key) {
@@ -2996,12 +3303,45 @@
       toast("Add a provider connection first.", "warning");
       return;
     }
+    state.refreshOptionsOpen = true;
+    render();
+  }
+
+  async function startRefreshRun(payload) {
     try {
-      const data = await api("/api/run-update", { method: "POST" });
-      state.run = { open: true, id: data.id, state: data.state || "running", started: Date.now(), tail: "", error: "" };
+      const data = await api("/api/run-update", { method: "POST", body: payload || { preset: "exa", count: 25 } });
+      state.refreshOptionsOpen = false;
+      state.run = {
+        open: true,
+        id: data.id,
+        state: data.state || "running",
+        started: Date.now(),
+        tail: "",
+        error: "",
+        source: (payload && payload.preset) || "exa",
+      };
       render();
       pollRun();
     } catch (error) { toast(message(error), "error"); }
+  }
+
+  async function cancelRun() {
+    if (!state.run.id || state.run.state !== "running") {
+      state.run.open = false;
+      render();
+      return;
+    }
+    try {
+      const data = await api("/api/run-update/" + encodeURIComponent(state.run.id) + "/cancel", { method: "POST" });
+      state.run.state = data.state || "canceled";
+      state.run.tail = data.tail || state.run.tail;
+      state.run.error = data.tail || state.run.error;
+      window.clearTimeout(state.runTimer);
+      toast("Refresh canceled", "warning");
+      render();
+    } catch (error) {
+      toast(message(error), "error");
+    }
   }
 
   async function pollRun() {
@@ -3028,6 +3368,43 @@
       state.run.state = "failed";
       render();
     }
+  }
+
+  function runStateTone(run) {
+    if (run.state === "failed") return "expired";
+    if (run.state === "succeeded") return "fresh";
+    if (run.state === "canceled") return "canceled";
+    return "running";
+  }
+
+  function renderRunWindow() {
+    const running = state.run.state === "running";
+    const logText = state.run.tail || state.run.error || "Waiting for update logs...";
+    const elapsed = state.run.started ? fmtElapsed((Date.now() - state.run.started) / 1000) : "";
+    return modal("Refresh run", [
+      h("div", { class: "run-window" + (running ? " is-running" : "") }, [
+        h("div", { class: "run-status" }, [
+          h("div", { class: "run-status-main" }, [
+            running ? h("span", { class: "run-activity", "aria-hidden": "true" }) : null,
+            statusPill(state.run.state, runStateTone(state.run)),
+            state.run.source ? h("span", { class: "run-source" }, state.run.source) : null,
+          ]),
+          h("span", { class: "run-elapsed" }, elapsed || state.run.id || ""),
+        ]),
+        h("textarea", {
+          class: "run-log",
+          readonly: "",
+          spellcheck: "false",
+          value: logText,
+          onclick: (event) => event.currentTarget.focus(),
+        }),
+        h("div", { class: "action-row run-actions" }, [
+          h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: () => copyText(logText).then(() => toast("Run log copied", "success")) }, "Copy log"),
+          running ? h("button", { class: "vw-btn vw-btn-danger", type: "button", onclick: cancelRun }, "Cancel run") : null,
+          !running ? h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: () => { state.run.open = false; render(); } }, "Close") : null,
+        ]),
+      ]),
+    ], running ? null : () => { state.run.open = false; render(); });
   }
 
   async function openManualPrompt() {
@@ -3071,11 +3448,8 @@
         h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: openTerminal }, "Open terminal"),
       ]),
     ], () => { state.manualOpen = false; render(); }));
-    if (state.run.open) nodes.push(modal("Refresh run", [
-      h("div", { class: "run-status" }, [statusPill(state.run.state, state.run.state === "failed" ? "expired" : state.run.state === "succeeded" ? "fresh" : "stale"), h("span", null, state.run.id || "starting")]),
-      h("pre", { class: "run-log" }, state.run.tail || state.run.error || "Waiting for update logs..."),
-      state.run.state === "succeeded" || state.run.state === "failed" ? h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: () => { state.run.open = false; render(); } }, "Close") : null,
-    ], state.run.state === "running" ? null : () => { state.run.open = false; render(); }));
+    if (state.refreshOptionsOpen) nodes.push(modal("Refresh options", [renderRefreshOptions()], () => { state.refreshOptionsOpen = false; render(); }));
+    if (state.run.open) nodes.push(renderRunWindow());
     if (state.approval.open) {
       const approval = state.approval;
       const passwordOnly = approval.passwordRequired && !(approval.secretRequired && !approval.stagedSecret);
@@ -3191,6 +3565,7 @@
         state.helpOpen = false; state.manualOpen = false; render(); return;
       }
       if (state.drawerOpen) { closeDrawer(); return; }
+      if (state.refreshOptionsOpen) { state.refreshOptionsOpen = false; render(); return; }
       if (state.run.open && state.run.state !== "running") { state.run.open = false; render(); return; }
     }
     if (state.drawerOpen || state.helpOpen || state.manualOpen || state.approval.open || state.compareOpen) return;
@@ -3375,7 +3750,7 @@
   const TOAST_GLYPH = { success: "✓", error: "✕", warning: "!", info: "i" };
 
   function toast(text, tone, actionLabel, action) {
-    const modalOpen = state.helpOpen || state.manualOpen || state.approval.open || state.run.open;
+    const modalOpen = state.helpOpen || state.manualOpen || state.refreshOptionsOpen || state.approval.open || state.run.open;
     if (modalOpen && tone !== "error") return;
     const id = ++state.toastId;
     const t = tone || "info";
@@ -3664,6 +4039,7 @@
     succeeded: "vw-status-success",
     stale: "vw-status-warning",
     running: "vw-status-generating",
+    canceled: "vw-status-warning",
     expired: "vw-status-error",
     failed: "vw-status-error",
   };

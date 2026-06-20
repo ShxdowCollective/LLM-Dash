@@ -18,9 +18,11 @@ from typing import Any
 
 try:
     from scripts.config import (
+        AA_BASE_URL,
         LLMSTATS_BASE_URL,
         ConfigError,
         build_auth_headers,
+        load_aa_api_key,
         load_exa_api_key,
         load_llmstats_api_key,
         load_provider_bundle,
@@ -32,9 +34,11 @@ try:
     from scripts.migrate_model_metadata_v4 import migrate as migrate_metadata_v4
 except ModuleNotFoundError:
     from config import (  # type: ignore
+        AA_BASE_URL,
         LLMSTATS_BASE_URL,
         ConfigError,
         build_auth_headers,
+        load_aa_api_key,
         load_exa_api_key,
         load_llmstats_api_key,
         load_provider_bundle,
@@ -55,6 +59,12 @@ AGENT_RUNTIME = "openai-agents"
 EXA_MCP_URL = "https://mcp.exa.ai/mcp"
 MAX_AGENT_TURNS = 50
 LLMSTATS_ENRICHMENT_MAX_CHARS = 8000
+OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
+AA_INDEX_FIELDS = {
+    "intelligence": "artificial_analysis_intelligence_index",
+    "coding": "artificial_analysis_coding_index",
+    "agentic": "artificial_analysis_agentic_index",
+}
 METRICS_COLUMNS = [
     "changelog_date",
     "started_at",
@@ -793,10 +803,140 @@ def fetch_llmstats_enrichment(api_key: str, since_date: str | None, log_path: Pa
     return text
 
 
-async def generate_diff(log_path: Path, db_path: Path = DB_PATH) -> tuple[dict[str, Any], dict[str, Any], str, bool]:
+def read_custom_endpoint_bearer(credential_name: str) -> str:
+    try:
+        from scripts import voidware_auth
+    except ModuleNotFoundError:
+        import voidware_auth  # type: ignore
+
+    name = str(credential_name or "").strip()
+    if name:
+        try:
+            secret = str(voidware_auth.read_secret_with_grant(name).get("secret") or "")
+            if secret:
+                return secret
+        except Exception:
+            pass
+    bundle = load_provider_bundle()
+    return bundle.secrets.api_key
+
+
+def fetch_refresh_candidates(args: argparse.Namespace, log_path: Path) -> list[dict[str, Any]]:
+    preset = args.source_preset
+    count = max(1, min(int(args.source_count or 25), 100))
+    if preset in {"exa", "custom-prompt"}:
+        return []
+
+    import httpx
+
+    if preset == "llmstats":
+        key = load_llmstats_api_key()
+        if not key:
+            write_log(log_path, "refresh_source_error preset=llmstats error=missing_key")
+            return []
+        with httpx.Client(timeout=30) as client:
+            response = client.get(
+                f"{LLMSTATS_BASE_URL}/v1/models",
+                headers={"Authorization": f"Bearer {key}", "Accept": "application/json"},
+                params={"limit": str(count)},
+            )
+        if response.status_code != 200:
+            write_log(log_path, f"refresh_source_error preset=llmstats status={response.status_code}")
+            return []
+        data = response.json()
+        items = data.get("data") or data.get("models") or [] if isinstance(data, dict) else data
+        if not isinstance(items, list):
+            return []
+        return [
+            {"name": item.get("name") or item.get("id") or item.get("slug"), "source": "https://llm-stats.com/"}
+            for item in items[:count]
+            if isinstance(item, dict) and (item.get("name") or item.get("id") or item.get("slug"))
+        ]
+
+    if preset == "aa":
+        key = load_aa_api_key()
+        if not key:
+            write_log(log_path, "refresh_source_error preset=aa error=missing_key")
+            return []
+        field = AA_INDEX_FIELDS.get(args.source_index or "intelligence", AA_INDEX_FIELDS["intelligence"])
+        with httpx.Client(timeout=30) as client:
+            response = client.get(
+                f"{AA_BASE_URL}/language/models/free",
+                headers={"x-api-key": key, "Accept": "application/json"},
+            )
+        if response.status_code != 200:
+            write_log(log_path, f"refresh_source_error preset=aa status={response.status_code}")
+            return []
+        payload = response.json()
+        models = payload if isinstance(payload, list) else payload.get("data") or payload.get("models") or []
+        if not isinstance(models, list):
+            return []
+
+        def sort_key(item: dict[str, Any]) -> float:
+            try:
+                return float(item.get(field) or 0)
+            except (TypeError, ValueError):
+                return 0.0
+
+        ranked = sorted((m for m in models if isinstance(m, dict)), key=sort_key, reverse=True)[:count]
+        return [
+            {
+                "name": item.get("name") or item.get("slug"),
+                "vendor": (item.get("model_creator") or {}).get("name") if isinstance(item.get("model_creator"), dict) else "",
+                "source": "https://artificialanalysis.ai/",
+            }
+            for item in ranked
+            if item.get("name") or item.get("slug")
+        ]
+
+    if preset == "openrouter":
+        with httpx.Client(timeout=30) as client:
+            response = client.get(OPENROUTER_MODELS_URL, headers={"Accept": "application/json"})
+        if response.status_code != 200:
+            write_log(log_path, f"refresh_source_error preset=openrouter status={response.status_code}")
+            return []
+        data = response.json()
+        items = data.get("data") or [] if isinstance(data, dict) else []
+        if not isinstance(items, list):
+            return []
+
+        def sort_key(item: dict[str, Any]) -> tuple[int, str]:
+            ctx = item.get("context_length") or item.get("top_provider", {}).get("context_length") or 0
+            try:
+                ctx_val = int(ctx)
+            except (TypeError, ValueError):
+                ctx_val = 0
+            return (ctx_val, str(item.get("created") or ""))
+
+        ranked = sorted((m for m in items if isinstance(m, dict)), key=sort_key, reverse=True)[:count]
+        return [{"name": item.get("id") or item.get("name"), "source": "https://openrouter.ai/models"} for item in ranked if item.get("id") or item.get("name")]
+
+    if preset == "custom-endpoint" and args.source_endpoint:
+        bearer = read_custom_endpoint_bearer(args.source_credential)
+        headers = {"Accept": "application/json"}
+        if bearer:
+            headers["Authorization"] = f"Bearer {bearer}"
+        url = args.source_endpoint if args.source_endpoint.endswith("/models") else args.source_endpoint.rstrip("/") + "/models"
+        with httpx.Client(timeout=30) as client:
+            response = client.get(url, headers=headers)
+        if response.status_code != 200:
+            write_log(log_path, f"refresh_source_error preset=custom-endpoint status={response.status_code}")
+            return []
+        data = response.json()
+        items = data.get("data") or [] if isinstance(data, dict) else []
+        if not isinstance(items, list):
+            return []
+        return [{"name": item.get("id") or item.get("name"), "source": url} for item in items[:count] if isinstance(item, dict) and (item.get("id") or item.get("name"))]
+
+    return []
+
+
+async def generate_diff(log_path: Path, db_path: Path = DB_PATH, args: argparse.Namespace | None = None) -> tuple[dict[str, Any], dict[str, Any], str, bool]:
     bundle = load_provider_bundle()
     if not bundle.has_provider:
         raise ConfigError("Agent Provider requires base_url, api_key, and default_model")
+    if args is None:
+        args = argparse.Namespace(source_preset="exa", source_count=25, source_index="", source_prompt="", source_endpoint="", source_credential="")
     state = current_state(db_path)
     skill = SKILL_PATH.read_text(encoding="utf-8")
     exa_key = load_exa_api_key()
@@ -811,6 +951,22 @@ async def generate_diff(log_path: Path, db_path: Path = DB_PATH) -> tuple[dict[s
         skill,
         "Required JSON keys: date, title, summary, new_models, score_updates, status_changes, changelog_markdown.",
     ]
+
+    write_log(log_path, f"refresh_source preset={args.source_preset} count={args.source_count}")
+    source_candidates = fetch_refresh_candidates(args, log_path)
+    if source_candidates:
+        write_log(log_path, f"refresh_source_candidates resolved={len(source_candidates)}")
+        prompt_parts.append(
+            "Refresh source candidate models. Prioritize checking these candidates for new models, score changes, and status changes:"
+        )
+        prompt_parts.append(json.dumps(source_candidates, ensure_ascii=False, indent=2))
+    elif args.source_preset == "custom-prompt" and args.source_prompt:
+        prompt_parts.append("Refresh discovery brief:")
+        prompt_parts.append(args.source_prompt)
+    elif args.source_preset == "exa":
+        prompt_parts.append(
+            f"Refresh source: Exa web research. Discover up to {args.source_count} current model changes from primary sources."
+        )
 
     llmstats_enriched = False
     if llmstats_key:
@@ -884,6 +1040,12 @@ def main() -> int:
     parser.add_argument("--db-path", default=str(DB_PATH), help="SQLite database path")
     parser.add_argument("--log-path", default="", help="log file path")
     parser.add_argument("--diff-json", default="", help="apply an existing diff JSON file instead of calling the model")
+    parser.add_argument("--source-preset", default="exa", choices=("aa", "llmstats", "exa", "openrouter", "custom-prompt", "custom-endpoint"))
+    parser.add_argument("--source-count", type=int, default=25)
+    parser.add_argument("--source-index", default="intelligence")
+    parser.add_argument("--source-prompt", default="")
+    parser.add_argument("--source-endpoint", default="")
+    parser.add_argument("--source-credential", default="")
     args = parser.parse_args()
 
     log_path = Path(args.log_path) if args.log_path else default_log_path()
@@ -913,7 +1075,7 @@ def main() -> int:
             usage = {"tokens_input": None, "tokens_output": None, "tokens_cached": None, "cost_usd": None}
             agent_name = "diff-json"
         else:
-            update, usage, agent_name, enriched = asyncio.run(generate_diff(log_path, db_path))
+            update, usage, agent_name, enriched = asyncio.run(generate_diff(log_path, db_path, args))
 
         completed = utc_now()
         notes_parts = [f"Agent Provider update. Log: {safe_rel_path(log_path)}"]

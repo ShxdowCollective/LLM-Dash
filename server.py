@@ -131,6 +131,15 @@ class SeedPayload(BaseModel):
     credential: str = ""
 
 
+class RunUpdatePayload(BaseModel):
+    preset: str = "exa"
+    count: int = 25
+    index: str = ""
+    prompt: str = ""
+    endpoint: str = ""
+    credential: str = ""
+
+
 class VoidwareGrantPayload(BaseModel):
     credential_name: str = ""
     credential_ref: dict[str, Any] | None = None
@@ -183,6 +192,11 @@ def _safe_tail(path: Path, max_chars: int = 4000) -> str:
     except FileNotFoundError:
         return ""
     return _redact_known_secrets(data[-max_chars:])
+
+
+def _job_tail(log_path: Path, job: dict[str, Any]) -> str:
+    max_chars = 64000 if job.get("kind") == "seed" else 4000
+    return _safe_tail(log_path, max_chars=max_chars)
 
 
 def _redact_known_secrets(text: str) -> str:
@@ -309,13 +323,18 @@ def _watch_job(job_id: str, process: subprocess.Popen[str], log_path: Path) -> N
             return
         job["completed_at"] = completed_at
         job["exit_code"] = exit_code
-        job["state"] = "succeeded" if exit_code == 0 else "failed"
-        job["tail"] = _safe_tail(log_path)
+        job["state"] = "canceled" if job.get("cancel_requested") else "succeeded" if exit_code == 0 else "failed"
+        job.pop("process", None)
+        job["tail"] = _job_tail(log_path, job)
 
 
 def _any_update_job_running() -> bool:
     with _jobs_lock:
         return any(job.get("state") == "running" for job in _jobs.values())
+
+
+def _public_job(job: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in job.items() if key not in {"process"}}
 
 
 def _last_updated() -> str | None:
@@ -998,7 +1017,7 @@ def delete_schedule() -> dict[str, Any]:
 
 
 @app.post("/api/run-update")
-def run_update() -> dict[str, str]:
+def run_update(payload: RunUpdatePayload | None = None) -> dict[str, str]:
     if _any_update_job_running():
         raise HTTPException(
             status_code=409,
@@ -1015,7 +1034,25 @@ def run_update() -> dict[str, str]:
     log_path = _job_log_path(job_id)
     log_path.parent.mkdir(exist_ok=True)
     started_at = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    command = [sys.executable, str(RUN_UPDATE_PATH), "--log-path", str(log_path)]
+    payload = payload or RunUpdatePayload()
+    command = [
+        sys.executable,
+        str(RUN_UPDATE_PATH),
+        "--log-path",
+        str(log_path),
+        "--source-preset",
+        payload.preset,
+        "--source-count",
+        str(payload.count),
+    ]
+    if payload.index:
+        command.extend(["--source-index", payload.index])
+    if payload.prompt:
+        command.extend(["--source-prompt", payload.prompt])
+    if payload.endpoint:
+        command.extend(["--source-endpoint", payload.endpoint])
+    if payload.credential:
+        command.extend(["--source-credential", payload.credential])
     log_file = log_path.open("a", encoding="utf-8")
     try:
         process = subprocess.Popen(
@@ -1037,7 +1074,10 @@ def run_update() -> dict[str, str]:
             "started_at": started_at,
             "completed_at": None,
             "exit_code": None,
+            "kind": "refresh",
+            "source": payload.preset,
             "log_path": str(log_path.relative_to(ROOT)),
+            "process": process,
             "tail": "",
         }
     watcher = threading.Thread(target=_watch_job, args=(job_id, process, log_path), name=f"llm-dash-run-{job_id}", daemon=True)
@@ -1048,13 +1088,40 @@ def run_update() -> dict[str, str]:
 @app.get("/api/run-update/{job_id}")
 def run_update_status(job_id: str) -> dict[str, Any]:
     with _jobs_lock:
-        job = dict(_jobs.get(job_id) or {})
+        job = _public_job(dict(_jobs.get(job_id) or {}))
     if not job:
         raise HTTPException(status_code=404, detail="Unknown update job.")
     log_path = ROOT / str(job["log_path"])
     if job["state"] == "running":
-        job["tail"] = _safe_tail(log_path)
+        job["tail"] = _job_tail(log_path, job)
     return job
+
+
+@app.post("/api/run-update/{job_id}/cancel")
+def cancel_run_update(job_id: str) -> dict[str, Any]:
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Unknown update job.")
+        if job.get("state") != "running":
+            return _public_job(dict(job))
+        process = job.get("process")
+        job["cancel_requested"] = True
+    if isinstance(process, subprocess.Popen):
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+    with _jobs_lock:
+        updated = _jobs.get(job_id) or job
+        if updated.get("state") == "running":
+            updated["state"] = "canceled"
+            updated["completed_at"] = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+            updated["exit_code"] = getattr(process, "returncode", None)
+            updated.pop("process", None)
+            updated["tail"] = _job_tail(ROOT / str(updated["log_path"]), updated)
+        return _public_job(dict(updated))
 
 
 @app.post("/api/seed")
@@ -1114,7 +1181,9 @@ def post_seed(payload: SeedPayload) -> dict[str, str]:
             "started_at": started_at,
             "completed_at": None,
             "exit_code": None,
+            "kind": "seed",
             "log_path": str(log_path.relative_to(ROOT)),
+            "process": process,
             "tail": "",
         }
     watcher = threading.Thread(

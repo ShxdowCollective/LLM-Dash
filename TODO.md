@@ -19,6 +19,20 @@ Standing update-run maintenance:
 
 ## Recent Completed
 
+- **Seed console verbosity — DONE (2026-06-19).** Added richer seed-job
+  lifecycle log events, replaced the always-visible raw setup console with
+  scan-friendly summary rows, and moved the expanded redacted terminal output
+  behind a disclosure. Followed up with candidate-level seed log rows and
+  centered short wizard completion states.
+- **Refresh options and run window — DONE (2026-06-19).** Reworked Refresh to
+  choose the same discovery sources as setup seeding, pass source context into
+  the update agent, and show a larger animated run window with copyable,
+  scrollable, resizable logs plus cancel controls.
+- **Setup wizard compact pass — DONE (2026-06-19).** Reworked first-launch
+  Research and Catalog into compact subtabs, moved helper copy into tooltips,
+  and verified every wizard step fits short desktop and mobile viewports without
+  scrolling. Added stronger busy/success/fail test-button feedback and cleared
+  stale test results when credentials change.
 - **Release media banner correction — DONE (2026-06-17).** Re-exported
   corrected LLM-Dash banners from the shxdowdesign asset library: centered
   logo/text/highlight lockups across repo/app/dark/SVG variants, with a real

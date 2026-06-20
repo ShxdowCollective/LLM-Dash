@@ -390,9 +390,15 @@ def run_seed(
 ) -> dict[str, Any]:
     skill_text = SKILL_PATH.read_text(encoding="utf-8")
     exa_key = load_exa_api_key()
+    write_log(
+        log_path,
+        f"seed_prepare preset={args.preset} count={args.count} index={args.index or 'intelligence'}",
+    )
     candidates = prefetch_candidates(args)
+    write_log(log_path, f"seed_candidates resolved={len(candidates)}")
     batches = _chunk_batches(candidates, args.count, args.preset)
     batch_total = len(batches)
+    write_log(log_path, f"seed_plan batches={batch_total} batch_size={BATCH_SIZE}")
 
     merged_models: list[dict[str, Any]] = []
     usages: list[dict[str, Any]] = []
@@ -406,6 +412,18 @@ def run_seed(
             log_path,
             f"seed_batch {batch_idx}/{batch_total} scoring {scoring_count} models",
         )
+        total_candidates = len(candidates) if candidates else args.count
+        batch_candidates = batch or [
+            {"name": f"agent-discovered model {idx}"}
+            for idx in range(1, args.count + 1)
+        ]
+        for item_idx, candidate in enumerate(batch_candidates, start=1):
+            global_idx = ((batch_idx - 1) * BATCH_SIZE) + item_idx if candidates else item_idx
+            model_name = str(candidate.get("name") or candidate.get("id") or f"candidate {global_idx}")
+            write_log(
+                log_path,
+                f"seed_scoring_candidate {global_idx}/{total_candidates} name={json.dumps(model_name, ensure_ascii=False)}",
+            )
         prompt = build_seed_prompt(
             batch,
             preset=args.preset,
@@ -422,6 +440,10 @@ def run_seed(
         usages.append(usage)
         batch_models = update.get("new_models") or []
         merged_models = _dedupe_models(merged_models + list(batch_models))
+        write_log(
+            log_path,
+            f"seed_batch_complete {batch_idx}/{batch_total} models={len(batch_models)} total_models={len(merged_models)}",
+        )
         if update.get("title"):
             title = str(update["title"])
         if update.get("summary"):
@@ -450,6 +472,7 @@ def run_seed(
         "score_updates": [],
         "status_changes": [],
     }
+    write_log(log_path, f"seed_apply models={len(merged_models)}")
     validate_update(final_update, db_path)
     return {
         "update": final_update,
