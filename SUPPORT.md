@@ -5,7 +5,7 @@ Thanks for using LLM-Dash. Here's where to go depending on what you need.
 ## Questions & Help
 
 - **How-to questions, ideas, show-and-tell** → open a
-  [GitHub Discussion](https://github.com/phxntomkid/LLM-Dash/discussions)
+  [GitHub Discussion](https://github.com/ShxdowCollective/LLM-Dash/discussions)
   (if enabled) or a question issue.
 - **Check the docs first** — most setup and usage answers live in:
   - [README](README.md) — quick start and overview
@@ -17,11 +17,11 @@ Thanks for using LLM-Dash. Here's where to go depending on what you need.
 ## Bugs & Feature Requests
 
 - **Found a bug?** Open a
-  [bug report](https://github.com/phxntomkid/LLM-Dash/issues/new?template=bug_report.yml).
+  [bug report](https://github.com/ShxdowCollective/LLM-Dash/issues/new?template=bug_report.yml).
 - **Want a feature?** Open a
-  [feature request](https://github.com/phxntomkid/LLM-Dash/issues/new?template=feature_request.yml).
+  [feature request](https://github.com/ShxdowCollective/LLM-Dash/issues/new?template=feature_request.yml).
 
-Before filing, search existing [issues](https://github.com/phxntomkid/LLM-Dash/issues)
+Before filing, search existing [issues](https://github.com/ShxdowCollective/LLM-Dash/issues)
 in case it's already tracked.
 
 ## Security

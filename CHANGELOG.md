@@ -50,6 +50,6 @@ tracks changes to the **application** itself.
 - Cross-platform `llm-dash` CLI and installers (macOS/Linux/Windows) with
   foreground, silent/background, status, stop, and reset commands.
 
-[Unreleased]: https://github.com/phxntomkid/LLM-Dash/compare/v1.1.0...HEAD
-[1.1.0]: https://github.com/phxntomkid/LLM-Dash/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/phxntomkid/LLM-Dash/releases/tag/v1.0.0
+[Unreleased]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/ShxdowCollective/LLM-Dash/releases/tag/v1.0.0

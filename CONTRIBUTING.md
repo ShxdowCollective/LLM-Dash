@@ -17,7 +17,7 @@ conventions, and the pull-request flow. For deeper detail see
 ## Local Setup
 
 ```bash
-git clone https://github.com/phxntomkid/LLM-Dash.git
+git clone https://github.com/ShxdowCollective/LLM-Dash.git
 cd LLM-Dash
 
 ./install.sh        # macOS / Linux   (.\install.bat on Windows)
