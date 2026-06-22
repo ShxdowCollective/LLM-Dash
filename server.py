@@ -195,8 +195,10 @@ def _safe_tail(path: Path, max_chars: int = 4000) -> str:
 
 
 def _job_tail(log_path: Path, job: dict[str, Any]) -> str:
-    max_chars = 64000 if job.get("kind") == "seed" else 4000
-    return _safe_tail(log_path, max_chars=max_chars)
+    # Seed and refresh both now emit a rich, parsed marker stream (tool calls,
+    # phases). Give refresh the same generous tail so the in-app console can show
+    # the full timeline, not just the last few lines.
+    return _safe_tail(log_path, max_chars=64000)
 
 
 def _redact_known_secrets(text: str) -> str:

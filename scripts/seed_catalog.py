@@ -89,6 +89,10 @@ def _sum_usage(usages: list[dict[str, Any]]) -> dict[str, Any]:
         "tokens_output": None,
         "tokens_cached": None,
         "cost_usd": None,
+        # Counts (default 0, never None) so a multi-batch seed reports real
+        # research volume in run_metrics + the changelog footer.
+        "exa_searches": 0,
+        "exa_fetches": 0,
     }
     for usage in usages:
         for key in totals:

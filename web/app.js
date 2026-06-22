@@ -180,6 +180,7 @@
     toastId: 0,
     searchDebounce: 0,
     runTimer: 0,
+    runTick: 0,
     seedTimer: 0,
     seedTick: 0,
     metaTimer: 0,
@@ -189,6 +190,7 @@
     setupStep: "provider",
     setupResearchSource: "exa",
     seedLogExpanded: false,
+    runLogExpanded: false,
     focusIndex: 0,
     drawerOpen: false,
     helpOpen: false,
@@ -2062,8 +2064,36 @@
     ]);
   }
 
-  function seedPhaseLabel(tail) {
+  function clipText(value, max) {
+    const text = String(value || "");
+    return text.length > max ? text.slice(0, max - 1) + "…" : text;
+  }
+
+  function parseJsonTail(text) {
+    try { return JSON.parse(text); } catch (_error) { return null; }
+  }
+
+  // Friendly phase label for the in-progress job console, shared by seed (batch
+  // math) and refresh (phase + live tool activity from the streamed agent).
+  function jobPhaseLabel(tail, kind) {
     const text = String(tail || "");
+    if (kind === "refresh") {
+      if (/\brun_complete\b/.test(text)) return "Update complete";
+      if (text.includes("refresh_apply")) return "Writing updates to the catalog…";
+      if (text.includes("refresh_diff")) return "Reviewing the diff…";
+      const toolMatches = [...text.matchAll(/agent_tool_call\s+(\{.*\})/g)];
+      if (toolMatches.length) {
+        const last = parseJsonTail(toolMatches[toolMatches.length - 1][1]) || {};
+        const arg = last.arg ? ` ${clipText(last.arg, 48)}` : "";
+        if (last.kind === "search") return `Searching the web…${arg}`;
+        if (last.kind === "fetch") return `Reading sources…${arg}`;
+        return "Researching models…";
+      }
+      if (text.includes("agent_start") || text.includes("agent_run")) return "Research agent is working…";
+      if (text.includes("refresh_source_candidates")) return "Reviewing candidate models…";
+      if (text.includes("refresh_source")) return "Gathering the refresh source…";
+      return "Starting the refresh run…";
+    }
     const candidateMatches = [...text.matchAll(/seed_scoring_candidate\s+(\d+)\/(\d+)/g)];
     if (candidateMatches.length) {
       const last = candidateMatches[candidateMatches.length - 1];
@@ -2077,8 +2107,27 @@
 
   // Turns the raw seed log tail into a progress bar value. Indeterminate until
   // the first batch line lands so the bar still animates during warm-up.
-  function seedProgress(tail) {
+  function jobProgress(tail, kind) {
     const text = String(tail || "");
+    if (kind === "refresh") {
+      const label = jobPhaseLabel(text, kind);
+      if (/\brun_complete\b/.test(text)) return { pct: 100, indeterminate: false, label };
+      // Refresh is a single agent turn with no batch count, so ramp the bar off
+      // discrete phases plus live tool-call count (each Exa search/fetch nudges
+      // it forward), capped below "done" until the diff is applied.
+      let pct = 0;
+      if (text.includes("refresh_apply")) pct = 96;
+      else if (text.includes("refresh_diff")) pct = 92;
+      else {
+        const tools = (text.match(/agent_tool_call\s/g) || []).length;
+        if (tools || text.includes("agent_start") || text.includes("agent_run")) pct = Math.min(88, 18 + tools * 6);
+        else if (text.includes("refresh_source_candidates")) pct = 16;
+        else if (text.includes("refresh_source")) pct = 12;
+        else if (text.includes("run_start")) pct = 6;
+      }
+      if (!pct) return { pct: 0, indeterminate: true, label };
+      return { pct, indeterminate: false, label };
+    }
     if (text.includes("seed_complete")) return { pct: 100, indeterminate: false, label: "Finishing up…" };
     const batchMatch = text.match(/seed_batch\s+(\d+)\/(\d+)/);
     if (batchMatch) {
@@ -2086,9 +2135,9 @@
       const total = Math.max(1, Number(batchMatch[2]));
       // Cap at 92% mid-run so the bar never reads "done" before completion.
       const pct = Math.min(92, Math.round((done / total) * 92));
-      return { pct, indeterminate: false, label: seedPhaseLabel(tail) };
+      return { pct, indeterminate: false, label: jobPhaseLabel(tail, kind) };
     }
-    return { pct: 0, indeterminate: true, label: seedPhaseLabel(tail) };
+    return { pct: 0, indeterminate: true, label: jobPhaseLabel(tail, kind) };
   }
 
   function fmtElapsed(totalSec) {
@@ -2097,12 +2146,12 @@
     return m > 0 ? `${m}m ${String(s % 60).padStart(2, "0")}s` : `${s}s`;
   }
 
-  function seedTailPreview(tail, maxLines) {
+  function jobTailPreview(tail, maxLines) {
     const lines = String(tail || "").trim().split("\n").filter(Boolean);
     return lines.slice(-(maxLines || 8)).join("\n");
   }
 
-  function parseSeedLogLine(raw) {
+  function parseJobLogLine(raw) {
     const line = String(raw || "").trim();
     const match = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)\s+(.+)$/);
     return {
@@ -2112,7 +2161,7 @@
     };
   }
 
-  function seedLogValue(value) {
+  function jobLogValue(value) {
     const text = String(value || "").trim();
     if (!text) return "";
     try {
@@ -2123,10 +2172,13 @@
     }
   }
 
-  function seedLogSummaryRows(tail, maxRows) {
+  // Shared parser: turns the raw job log tail (seed OR refresh) into friendly
+  // timeline rows. Seed and refresh logs never share a file, so one parser that
+  // covers both marker families is safe.
+  function jobLogSummaryRows(tail, maxRows) {
     const rows = [];
     String(tail || "").split("\n").forEach((rawLine) => {
-      const parsed = parseSeedLogLine(rawLine);
+      const parsed = parseJobLogLine(rawLine);
       const body = parsed.body;
       if (!body) return;
       let text = "";
@@ -2136,6 +2188,68 @@
 
       if (body === "seed_start") {
         text = "Seed run started";
+      } else if (body === "run_start") {
+        text = "Refresh run started";
+      } else if (/_migration_applied$/.test(body)) {
+        text = "Applied a schema migration";
+      } else if ((match = body.match(/^refresh_state_loaded\s+models=(\d+)/))) {
+        text = "Loaded current catalog";
+        detail = `${match[1]} model${match[1] === "1" ? "" : "s"}`;
+      } else if ((match = body.match(/^refresh_source\s+preset=([^\s]+)\s+count=(\d+)/))) {
+        text = `Refresh source: ${match[1]}`;
+        detail = `up to ${match[2]} models`;
+      } else if ((match = body.match(/^refresh_source_candidates\s+resolved=(\d+)/))) {
+        text = `Resolved ${match[1]} candidate model${match[1] === "1" ? "" : "s"}`;
+      } else if ((match = body.match(/^refresh_source_error\s+preset=([^\s]+)/))) {
+        text = `Source ${match[1]} unavailable`;
+        detail = "continuing with web research";
+        tone = "warn";
+      } else if (body.startsWith("agent_start")) {
+        // agent_run is the shared machine marker logged right after agent_start;
+        // surface only one "started" row (seed shows its batch row instead).
+        const payload = parseJsonTail(body.replace(/^agent_start\s*/, "")) || {};
+        text = "Research agent started";
+        if (payload.model) detail = String(payload.model);
+      } else if (body.startsWith("agent_tool_call ")) {
+        const payload = parseJsonTail(body.slice("agent_tool_call ".length)) || {};
+        if (payload.kind === "search") text = "Searching the web";
+        else if (payload.kind === "fetch") text = "Reading a source";
+        else text = `Calling ${payload.name || "a tool"}`;
+        detail = payload.arg ? clipText(payload.arg, 60) : (payload.name || "");
+      } else if (body.startsWith("agent_tool_summary ")) {
+        const payload = parseJsonTail(body.slice("agent_tool_summary ".length)) || {};
+        const calls = Number(payload.calls || 0);
+        if (calls) {
+          text = `Researched ${calls} source${calls === 1 ? "" : "s"}`;
+          detail = `${payload.searches || 0} searches, ${payload.fetches || 0} fetches`;
+          tone = "ok";
+        }
+      } else if ((match = body.match(/^agent_error\s+model=([^\s]+)/))) {
+        text = `Agent attempt failed on ${match[1]}`;
+        detail = "trying fallback";
+        tone = "warn";
+      } else if (body.startsWith("exa_mcp_")) {
+        text = "Web research hit a limit";
+        detail = "retrying";
+        tone = "warn";
+      } else if (body.startsWith("llmstats_enrichment_ok")) {
+        text = "Loaded LLM Stats context";
+        tone = "ok";
+      } else if ((match = body.match(/^refresh_diff\s+(\{.*\})/))) {
+        const payload = parseJsonTail(match[1]) || {};
+        text = "Diff ready";
+        detail = `${payload.new_models || 0} new, ${payload.score_updates || 0} score, ${payload.status_changes || 0} status`;
+      } else if ((match = body.match(/^refresh_apply\s+(\{.*\})/))) {
+        const payload = parseJsonTail(match[1]) || {};
+        text = "Writing updates to the catalog";
+        detail = `${payload.new_models || 0} new, ${payload.score_updates || 0} score, ${payload.status_changes || 0} status`;
+      } else if (body.startsWith("run_complete")) {
+        text = body.includes("dry_run=true") ? "Dry run complete" : "Update complete";
+        tone = "ok";
+      } else if (body.startsWith("run_error")) {
+        text = "Update error";
+        detail = body.replace(/^run_error\s*/, "");
+        tone = "fail";
       } else if ((match = body.match(/^seed_prepare\s+.*preset=([^\s]+).*count=(\d+)/))) {
         text = `Preparing ${match[1]} seed`;
         detail = `${match[2]} target models`;
@@ -2148,7 +2262,7 @@
         detail = `batch ${match[1]} of ${match[2]}`;
       } else if ((match = body.match(/^seed_scoring_candidate\s+(\d+)\/(\d+)\s+name=(.+)$/))) {
         text = `Scoring candidate ${match[1]} of ${match[2]}`;
-        detail = seedLogValue(match[3]);
+        detail = jobLogValue(match[3]);
       } else if ((match = body.match(/^seed_batch_complete\s+(\d+)\/(\d+)\s+models=(\d+)\s+total_models=(\d+)/))) {
         text = `Batch ${match[1]} complete`;
         detail = `${match[3]} scored, ${match[4]} total`;
@@ -2182,9 +2296,12 @@
     return rows.slice(-(maxRows || 6));
   }
 
-  function renderSeedConsole(tail) {
-    const raw = seedTailPreview(tail, 120);
-    const rows = seedLogSummaryRows(tail, 7);
+  // Shared parsed-timeline console for seed and refresh jobs. `expandedKey` is the
+  // state field that tracks whether the raw terminal output is expanded.
+  function renderJobConsole(tail, expandedKey) {
+    const key = expandedKey || "seedLogExpanded";
+    const raw = jobTailPreview(tail, 120);
+    const rows = jobLogSummaryRows(tail, 7);
     const visibleRows = rows.slice(-3);
     return h("div", { class: "seed-console" }, [
       h("div", { class: "seed-console-rows", role: "log", "aria-live": "polite" }, visibleRows.length ? visibleRows.map((row) => (
@@ -2203,12 +2320,25 @@
       ]),
       raw ? h("details", {
         class: "seed-console-details",
-        open: state.seedLogExpanded ? true : undefined,
-        ontoggle: (event) => { state.seedLogExpanded = Boolean(event.currentTarget.open); },
+        open: state[key] ? true : undefined,
+        ontoggle: (event) => { state[key] = Boolean(event.currentTarget.open); },
       }, [
         h("summary", null, "Terminal output"),
         h("pre", { class: "seed-log" }, raw),
       ]) : null,
+    ]);
+  }
+
+  // Shared progress bar for seed + refresh job panels.
+  function renderJobProgressBar(prog) {
+    return h("div", {
+      class: "seed-progress" + (prog.indeterminate ? " is-indeterminate" : ""),
+      role: "progressbar",
+      "aria-valuemin": "0",
+      "aria-valuemax": "100",
+      "aria-valuenow": prog.indeterminate ? undefined : String(prog.pct),
+    }, [
+      h("span", { class: "seed-progress-fill", style: prog.indeterminate ? {} : { width: prog.pct + "%" } }),
     ]);
   }
 
@@ -2237,9 +2367,11 @@
       ]);
     }
     if (seed.state === "failed" || seed.error) {
+      const failTail = seed.tail || seed.error || "Seed failed.";
       return h("section", { class: "settings-panel panel-card seed-error-panel", "aria-label": "Seed failed" }, [
         h("h2", { class: "settings-panel-title" }, "Seed failed"),
-        h("pre", { class: "seed-log seed-log-error" }, seed.error || "Seed failed."),
+        h("p", { class: "settings-summary" }, "The seed run didn't finish. Check the steps below, then try again."),
+        renderJobConsole(failTail, "seedLogExpanded"),
         h("div", { class: "action-row" }, [
           h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: () => { state.seed = { id: "", state: "", tail: "", error: "", preset: "", started: 0 }; navigate("settings", "catalog"); } }, "Try again"),
         ]),
@@ -2249,7 +2381,7 @@
         ]),
       ]);
     }
-    const prog = seedProgress(seed.tail);
+    const prog = jobProgress(seed.tail, "seed");
     const elapsed = fmtElapsed((Date.now() - (seed.started || Date.now())) / 1000);
     return h("section", { class: "settings-panel panel-card seed-running-panel", "aria-label": "Seed in progress" }, [
       h("h2", { class: "settings-panel-title" }, "Seeding catalog"),
@@ -2258,17 +2390,9 @@
         h("p", { class: "seed-phase-label" }, prog.label),
         h("span", { class: "seed-elapsed", title: "Elapsed time" }, elapsed),
       ]),
-      h("div", {
-        class: "seed-progress" + (prog.indeterminate ? " is-indeterminate" : ""),
-        role: "progressbar",
-        "aria-valuemin": "0",
-        "aria-valuemax": "100",
-        "aria-valuenow": prog.indeterminate ? undefined : String(prog.pct),
-      }, [
-        h("span", { class: "seed-progress-fill", style: prog.indeterminate ? {} : { width: prog.pct + "%" } }),
-      ]),
+      renderJobProgressBar(prog),
       h("p", { class: "seed-running-hint" }, "This runs in the background — it's safe to wait here. Larger catalogs can take a few minutes."),
-      renderSeedConsole(seed.tail),
+      renderJobConsole(seed.tail, "seedLogExpanded"),
     ]);
   }
 
@@ -3311,6 +3435,7 @@
     try {
       const data = await api("/api/run-update", { method: "POST", body: payload || { preset: "exa", count: 25 } });
       state.refreshOptionsOpen = false;
+      state.runLogExpanded = false;
       state.run = {
         open: true,
         id: data.id,
@@ -3320,14 +3445,30 @@
         error: "",
         source: (payload && payload.preset) || "exa",
       };
+      startRunTicker();
       render();
       pollRun();
     } catch (error) { toast(message(error), "error"); }
   }
 
+  // 1s heartbeat re-render so elapsed + the indeterminate bar keep moving between
+  // the slower 3s status polls (mirrors the seed ticker).
+  function startRunTicker() {
+    stopRunTicker();
+    state.runTick = window.setInterval(() => {
+      if (state.run.open && state.run.state === "running") render();
+      else stopRunTicker();
+    }, 1000);
+  }
+
+  function stopRunTicker() {
+    if (state.runTick) { window.clearInterval(state.runTick); state.runTick = 0; }
+  }
+
   async function cancelRun() {
     if (!state.run.id || state.run.state !== "running") {
       state.run.open = false;
+      stopRunTicker();
       render();
       return;
     }
@@ -3337,6 +3478,7 @@
       state.run.tail = data.tail || state.run.tail;
       state.run.error = data.tail || state.run.error;
       window.clearTimeout(state.runTimer);
+      stopRunTicker();
       toast("Refresh canceled", "warning");
       render();
     } catch (error) {
@@ -3352,18 +3494,24 @@
       state.run.state = data.state || "running";
       state.run.tail = data.tail || "";
       if (state.run.state === "succeeded") {
+        stopRunTicker();
         toast("Dashboard update finished", "success");
         await loadDatabase();
         refreshModels();
         render();
       } else if (state.run.state === "failed") {
+        stopRunTicker();
         state.run.error = data.tail || "Update failed.";
+        render();
+      } else if (state.run.state === "canceled") {
+        stopRunTicker();
         render();
       } else {
         render();
         state.runTimer = window.setTimeout(pollRun, RUN_POLL_MS);
       }
     } catch (error) {
+      stopRunTicker();
       state.run.error = message(error);
       state.run.state = "failed";
       render();
@@ -3377,34 +3525,102 @@
     return "running";
   }
 
+  // Pull the applied/diff counts out of the log so success/failure can summarize
+  // what the run actually changed.
+  function runDiffCounts(tail) {
+    const text = String(tail || "");
+    const matches = [...text.matchAll(/(?:run_complete|refresh_apply|refresh_diff)\s+(\{[^\n]*\})/g)];
+    for (let i = matches.length - 1; i >= 0; i -= 1) {
+      const payload = parseJsonTail(matches[i][1]);
+      if (payload) return payload;
+    }
+    return null;
+  }
+
+  function runCountsSummary(tail) {
+    const counts = runDiffCounts(tail);
+    if (!counts) return "";
+    const parts = [];
+    const add = (n, one, many) => { const v = Number(n || 0); if (v) parts.push(`${v} ${v === 1 ? one : many}`); };
+    add(counts.new_models, "new model", "new models");
+    add(counts.score_updates, "score update", "score updates");
+    add(counts.status_changes, "status change", "status changes");
+    return parts.join(" · ");
+  }
+
+  function closeRunWindow() {
+    state.run.open = false;
+    stopRunTicker();
+    render();
+  }
+
   function renderRunWindow() {
-    const running = state.run.state === "running";
-    const logText = state.run.tail || state.run.error || "Waiting for update logs...";
-    const elapsed = state.run.started ? fmtElapsed((Date.now() - state.run.started) / 1000) : "";
+    const run = state.run;
+    const running = run.state === "running";
+    const elapsed = run.started ? fmtElapsed((Date.now() - run.started) / 1000) : "";
+    const rawTail = run.tail || run.error || "";
+
+    let body;
+    if (run.state === "succeeded") {
+      const summary = runCountsSummary(run.tail);
+      body = [
+        h("div", { class: "run-result-head" }, [
+          statusPill("Update complete", "fresh"),
+          run.source ? h("span", { class: "run-source" }, run.source) : null,
+          elapsed ? h("span", { class: "run-elapsed" }, elapsed) : null,
+        ]),
+        h("p", { class: "settings-summary" }, summary ? `Applied ${summary}.` : "The dashboard is up to date."),
+        renderJobConsole(run.tail, "runLogExpanded"),
+      ];
+    } else if (run.state === "failed") {
+      body = [
+        h("div", { class: "run-result-head" }, [
+          statusPill("Refresh failed", "expired"),
+          run.source ? h("span", { class: "run-source" }, run.source) : null,
+        ]),
+        h("p", { class: "settings-summary" }, "The refresh didn't finish. Review the steps below, then try again."),
+        renderJobConsole(rawTail, "runLogExpanded"),
+        h("p", { class: "settings-note seed-cli-hint" }, [
+          "Or refresh from the terminal: ",
+          h("code", null, "python scripts/run_update.py"),
+        ]),
+      ];
+    } else if (run.state === "canceled") {
+      body = [
+        h("div", { class: "run-result-head" }, [
+          statusPill("Canceled", "canceled"),
+          run.source ? h("span", { class: "run-source" }, run.source) : null,
+        ]),
+        h("p", { class: "settings-summary" }, "This refresh was canceled before it finished."),
+        renderJobConsole(rawTail, "runLogExpanded"),
+      ];
+    } else {
+      const prog = jobProgress(run.tail, "refresh");
+      body = [
+        h("div", { class: "seed-status run-status" }, [
+          h("span", { class: "vw-spinner", "aria-hidden": "true" }),
+          h("p", { class: "seed-phase-label" }, prog.label),
+          h("div", { class: "run-status-meta" }, [
+            run.source ? h("span", { class: "run-source" }, run.source) : null,
+            h("span", { class: "seed-elapsed", title: "Elapsed time" }, elapsed),
+          ]),
+        ]),
+        renderJobProgressBar(prog),
+        h("p", { class: "seed-running-hint" }, "This runs in the background — it's safe to wait here. Researching and scoring can take a few minutes."),
+        renderJobConsole(run.tail, "runLogExpanded"),
+      ];
+    }
+
     return modal("Refresh run", [
       h("div", { class: "run-window" + (running ? " is-running" : "") }, [
-        h("div", { class: "run-status" }, [
-          h("div", { class: "run-status-main" }, [
-            running ? h("span", { class: "run-activity", "aria-hidden": "true" }) : null,
-            statusPill(state.run.state, runStateTone(state.run)),
-            state.run.source ? h("span", { class: "run-source" }, state.run.source) : null,
-          ]),
-          h("span", { class: "run-elapsed" }, elapsed || state.run.id || ""),
-        ]),
-        h("textarea", {
-          class: "run-log",
-          readonly: "",
-          spellcheck: "false",
-          value: logText,
-          onclick: (event) => event.currentTarget.focus(),
-        }),
+        ...body,
         h("div", { class: "action-row run-actions" }, [
-          h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: () => copyText(logText).then(() => toast("Run log copied", "success")) }, "Copy log"),
+          rawTail ? h("button", { class: "vw-btn vw-btn-secondary", type: "button", onclick: () => copyText(rawTail).then(() => toast("Run log copied", "success")) }, "Copy log") : null,
           running ? h("button", { class: "vw-btn vw-btn-danger", type: "button", onclick: cancelRun }, "Cancel run") : null,
-          !running ? h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: () => { state.run.open = false; render(); } }, "Close") : null,
+          !running ? h("button", { class: "vw-btn vw-btn-primary", type: "button", onclick: closeRunWindow }, "Close") : null,
         ]),
       ]),
-    ], running ? null : () => { state.run.open = false; render(); });
+    ], running ? null : closeRunWindow);
   }
 
   async function openManualPrompt() {
@@ -3566,7 +3782,7 @@
       }
       if (state.drawerOpen) { closeDrawer(); return; }
       if (state.refreshOptionsOpen) { state.refreshOptionsOpen = false; render(); return; }
-      if (state.run.open && state.run.state !== "running") { state.run.open = false; render(); return; }
+      if (state.run.open && state.run.state !== "running") { closeRunWindow(); return; }
     }
     if (state.drawerOpen || state.helpOpen || state.manualOpen || state.approval.open || state.compareOpen) return;
     // Don't fire single-key shortcuts while the user is typing in a field.

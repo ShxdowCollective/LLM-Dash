@@ -19,6 +19,17 @@ Standing update-run maintenance:
 
 ## Recent Completed
 
+- **Seed + refresh verbosity / unified job UX — DONE (2026-06-22).** Streamed the
+  shared agent turn (`run_agent_once` → `Runner.run_streamed`) so seed *and*
+  refresh log live tool activity (`agent_tool_call`/`agent_tool_summary`); added
+  refresh phase markers (`refresh_state_loaded`/`refresh_diff`/`refresh_apply`,
+  counts on `run_complete`). Generalized the seed parser/console/progress into
+  shared `job*` helpers and rebuilt the refresh run window to match the seed
+  experience (phase label, progress bar, parsed timeline, success/failed/canceled
+  states, 1s ticker). Then wired real `exa_searches`/`exa_fetches` from the
+  streamed tool counts into `run_metrics` + the changelog footer (was hardcoded
+  0). Full Playwright suite green (45) with no visual-baseline drift; fixed a
+  pre-existing stale `shell.spec` refresh test along the way.
 - **Seed console verbosity — DONE (2026-06-19).** Added richer seed-job
   lifecycle log events, replaced the always-visible raw setup console with
   scan-friendly summary rows, and moved the expanded redacted terminal output

@@ -43,6 +43,10 @@ test.describe("app shell", () => {
     await app({ mocks: { "GET /api/provider": { loaded: true, has_provider: true } } });
     const shell = new AppShell(page);
     await shell.refresh.click();
+    // Refresh first opens the source picker, then the live run window.
+    const options = page.getByRole("dialog", { name: /Refresh options/i });
+    await expect(options).toBeVisible();
+    await options.getByRole("button", { name: /Start refresh/i }).click();
     const dialog = page.getByRole("dialog", { name: /Refresh run/i });
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText(/succeeded|complete/i);

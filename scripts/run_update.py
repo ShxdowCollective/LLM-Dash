@@ -694,8 +694,75 @@ def usage_metrics(result: Any) -> dict[str, Any]:
     return totals
 
 
+def _summarize_tool_arg(raw_item: Any) -> str:
+    """Pull a short, human-readable hint (query/url) out of a tool call's args."""
+    args = getattr(raw_item, "arguments", None)
+    if not isinstance(args, str) or not args:
+        return ""
+    try:
+        data = json.loads(args)
+    except Exception:
+        return args.strip()[:80]
+    if isinstance(data, dict):
+        for key in ("query", "url", "urls", "question", "input", "text", "id", "ids"):
+            value = data.get(key)
+            if value:
+                if isinstance(value, (list, tuple)):
+                    value = ", ".join(str(v) for v in value)
+                return str(value)[:80]
+    return ""
+
+
+def _classify_tool(name: str) -> str:
+    low = name.lower()
+    if "search" in low:
+        return "search"
+    if any(token in low for token in ("content", "crawl", "fetch", "get", "read", "page")):
+        return "fetch"
+    return "other"
+
+
+async def _consume_agent_stream(result: Any, log_path: Path) -> dict[str, int]:
+    """Drain a streamed agent run, logging tool activity so seed/refresh narrate
+    the otherwise-opaque research phase. Per-event logging is defensive: a logging
+    error must never kill a real run. MaxTurnsExceeded / MCP runtime errors are
+    raised by the stream iterator itself (outside the try) so they still propagate
+    to the caller's retry/fallback logic."""
+    counts = {"calls": 0, "searches": 0, "fetches": 0}
+    listed_tools = False
+    async for event in result.stream_events():
+        try:
+            if getattr(event, "type", "") != "run_item_stream_event":
+                continue
+            name = getattr(event, "name", "")
+            item = getattr(event, "item", None)
+            if name == "tool_called":
+                raw = getattr(item, "raw_item", None)
+                tool_name = str(getattr(raw, "name", None) or getattr(item, "title", None) or "tool")
+                kind = _classify_tool(tool_name)
+                counts["calls"] += 1
+                if kind == "search":
+                    counts["searches"] += 1
+                elif kind == "fetch":
+                    counts["fetches"] += 1
+                payload = {"n": counts["calls"], "kind": kind, "name": tool_name}
+                arg = _summarize_tool_arg(raw)
+                if arg:
+                    payload["arg"] = arg
+                write_log(log_path, "agent_tool_call " + json.dumps(payload, ensure_ascii=False))
+            elif name == "mcp_list_tools" and not listed_tools:
+                listed_tools = True
+                write_log(log_path, "agent_research_tools ready=exa")
+        except Exception as exc:  # noqa: BLE001 - logging must never abort a run
+            write_log(log_path, f"agent_stream_log_error={type(exc).__name__}: {exc}")
+    write_log(log_path, "agent_tool_summary " + json.dumps(counts))
+    return counts
+
+
 async def run_agent_once(model_name: str, prompt: str, exa_key: str, log_path: Path) -> tuple[str, dict[str, Any]]:
     from agents import Agent, AsyncOpenAI, MaxTurnsExceeded, OpenAIChatCompletionsModel, Runner, set_tracing_disabled
+
+    write_log(log_path, "agent_run " + json.dumps({"model": model_name}))
 
     bundle = load_provider_bundle()
     set_tracing_disabled(disabled=True)
@@ -736,14 +803,23 @@ async def run_agent_once(model_name: str, prompt: str, exa_key: str, log_path: P
             require_approval="never",
         )
 
+    # Holds the tool-call counts from the attempt that ultimately succeeds. Each
+    # attempt overwrites (not adds), so a retry/fallback never double-counts: a
+    # failed attempt raises inside _consume_agent_stream before returning counts.
+    agent_counts: dict[str, int] = {"calls": 0, "searches": 0, "fetches": 0}
+
     async def run_with_exa(max_turns: int) -> Any:
         async with make_exa_server() as server:
             agent = make_agent([server])
-            return await Runner.run(agent, prompt, max_turns=max_turns)
+            result = Runner.run_streamed(agent, prompt, max_turns=max_turns)
+            agent_counts.update(await _consume_agent_stream(result, log_path))
+            return result
 
     async def run_without_exa(max_turns: int) -> Any:
         agent = make_agent()
-        return await Runner.run(agent, prompt, max_turns=max_turns)
+        result = Runner.run_streamed(agent, prompt, max_turns=max_turns)
+        agent_counts.update(await _consume_agent_stream(result, log_path))
+        return result
 
     if can_use_exa and exa_key:
         try:
@@ -764,7 +840,10 @@ async def run_agent_once(model_name: str, prompt: str, exa_key: str, log_path: P
     else:
         result = await run_without_exa(MAX_AGENT_TURNS)
 
-    return str(result.final_output), usage_metrics(result)
+    usage = usage_metrics(result)
+    usage["exa_searches"] = agent_counts.get("searches", 0)
+    usage["exa_fetches"] = agent_counts.get("fetches", 0)
+    return str(result.final_output), usage
 
 
 def fetch_llmstats_enrichment(api_key: str, since_date: str | None, log_path: Path) -> str | None:
@@ -938,6 +1017,7 @@ async def generate_diff(log_path: Path, db_path: Path = DB_PATH, args: argparse.
     if args is None:
         args = argparse.Namespace(source_preset="exa", source_count=25, source_index="", source_prompt="", source_endpoint="", source_credential="")
     state = current_state(db_path)
+    write_log(log_path, f"refresh_state_loaded models={len(state.get('models') or [])}")
     skill = SKILL_PATH.read_text(encoding="utf-8")
     exa_key = load_exa_api_key()
     llmstats_key = load_llmstats_api_key()
@@ -1003,6 +1083,17 @@ async def generate_diff(log_path: Path, db_path: Path = DB_PATH, args: argparse.
             output, usage = await run_agent_once(model_name, prompt, exa_key, log_path)
             update = parse_json_output(output)
             validate_update(update, db_path)
+            write_log(
+                log_path,
+                "refresh_diff "
+                + json.dumps(
+                    {
+                        "new_models": len(update.get("new_models") or []),
+                        "score_updates": len(update.get("score_updates") or []),
+                        "status_changes": len(update.get("status_changes") or []),
+                    }
+                ),
+            )
             return update, usage, model_name, llmstats_enriched
         except Exception as exc:
             errors.append(f"{model_name}: {type(exc).__name__}: {exc}")
@@ -1091,8 +1182,14 @@ def main() -> int:
             "notes": " ".join(notes_parts),
             **usage,
         }
+        diff_counts = {
+            "new_models": len(update.get("new_models") or []),
+            "score_updates": len(update.get("score_updates") or []),
+            "status_changes": len(update.get("status_changes") or []),
+        }
+        write_log(log_path, "refresh_apply " + json.dumps(diff_counts))
         apply_update(update, metrics, db_path, log_path, changelogs_dir, csv_path)
-        write_log(log_path, "run_complete")
+        write_log(log_path, "run_complete " + json.dumps(diff_counts))
         print(json.dumps({"ok": True, "date": update.get("date"), "log_path": str(log_path)}, indent=2))
         return 0
     except (ConfigError, RunUpdateError, sqlite3.Error, json.JSONDecodeError) as exc:

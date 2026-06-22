@@ -12,7 +12,7 @@ from unittest.mock import patch
 from scripts import config
 from scripts.init_db import ensure_schema
 from scripts.run_update import apply_update, iso_z, local_date, utc_now, validate_update
-from scripts.seed_catalog import build_seed_prompt
+from scripts.seed_catalog import _sum_usage, build_seed_prompt
 
 
 def _sample_model(name: str = "Test Model Alpha") -> dict:
@@ -63,6 +63,25 @@ class EnsureSchemaTests(unittest.TestCase):
                 self.assertIn("meta", tables)
             finally:
                 con.close()
+
+
+class SumUsageTests(unittest.TestCase):
+    def test_sums_tokens_and_exa_counts_across_batches(self):
+        usages = [
+            {"tokens_input": 100, "tokens_output": 20, "cost_usd": 0.01, "exa_searches": 3, "exa_fetches": 2},
+            {"tokens_input": 50, "tokens_output": 10, "cost_usd": 0.02, "exa_searches": 1, "exa_fetches": 4},
+        ]
+        totals = _sum_usage(usages)
+        self.assertEqual(totals["tokens_input"], 150)
+        self.assertEqual(totals["tokens_output"], 30)
+        self.assertAlmostEqual(totals["cost_usd"], 0.03)
+        self.assertEqual(totals["exa_searches"], 4)
+        self.assertEqual(totals["exa_fetches"], 6)
+
+    def test_exa_counts_default_zero_when_absent(self):
+        totals = _sum_usage([{"tokens_input": 5}])
+        self.assertEqual(totals["exa_searches"], 0)
+        self.assertEqual(totals["exa_fetches"], 0)
 
 
 class ValidateUpdateTests(unittest.TestCase):
