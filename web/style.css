@@ -1527,6 +1527,18 @@ body.is-col-resizing .model-row { pointer-events: none; }
   gap: 12px;
 }
 
+/* The app's spinners are empty <span class="vw-spinner">; the vendored spinner
+   only draws via an inner SVG, so without one it was an invisible spacer that
+   pushed the phase label off-center. Render a lightweight ring for the empty
+   case (`:empty` leaves any SVG-bearing spinners untouched). */
+.seed-status .vw-spinner:empty {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-top-color: var(--vw-accent);
+}
+
 .seed-phase-label {
   margin: 0;
   flex: 1 1 auto;
@@ -1601,6 +1613,7 @@ body.is-col-resizing .model-row { pointer-events: none; }
 
 .seed-log {
   width: 100%;
+  max-width: 100%;
   max-height: 220px;
   overflow: auto;
   margin: 0;
@@ -1609,6 +1622,10 @@ body.is-col-resizing .model-row { pointer-events: none; }
   font-family: var(--vw-font-mono);
   font-size: 12px;
   line-height: 1.5;
+  /* Wrap long log lines (JSON tool args, URLs) instead of forcing a horizontal
+     scrollbar that blew the whole modal out of its width. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   background: var(--vw-bg);
   border-radius: var(--vw-radius-md);
   box-shadow: inset 0 0 0 1px var(--vw-border);
@@ -1622,6 +1639,15 @@ body.is-col-resizing .model-row { pointer-events: none; }
   display: grid;
   gap: 8px;
   width: 100%;
+  /* Grid/flex items default to min-width:auto, which lets the terminal <pre>'s
+     content dictate width and overflow the modal. Pin these to 0 so the console
+     (and its scroll containers) stay within the window. */
+  min-width: 0;
+}
+
+.seed-console-rows,
+.seed-console-details {
+  min-width: 0;
 }
 
 .seed-console-rows {
@@ -3323,6 +3349,11 @@ button.vw-wizard-dot {
   display: grid;
   gap: 14px;
   min-height: 0;
+  min-width: 0;
+}
+
+.run-window > * {
+  min-width: 0;
 }
 
 .run-status {
@@ -3344,13 +3375,16 @@ button.vw-wizard-dot {
 }
 
 .run-source {
-  padding: 2px 8px;
+  flex: 0 0 auto;
+  padding: 2px 10px;
   border-radius: 999px;
   background: var(--vw-surface-3);
   box-shadow: inset 0 0 0 1px var(--vw-border);
   color: var(--vw-text-muted);
-  font-family: var(--vw-font-mono);
   font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 .run-elapsed {

@@ -2111,22 +2111,14 @@
     const text = String(tail || "");
     if (kind === "refresh") {
       const label = jobPhaseLabel(text, kind);
+      // The final write stages are discrete and quick, so show a determinate
+      // fill there. Everything before is a single open-ended research turn with
+      // no measurable progress — loop the bar instead of faking a percentage off
+      // the tool-call count (which only ever looked proportional by accident).
       if (/\brun_complete\b/.test(text)) return { pct: 100, indeterminate: false, label };
-      // Refresh is a single agent turn with no batch count, so ramp the bar off
-      // discrete phases plus live tool-call count (each Exa search/fetch nudges
-      // it forward), capped below "done" until the diff is applied.
-      let pct = 0;
-      if (text.includes("refresh_apply")) pct = 96;
-      else if (text.includes("refresh_diff")) pct = 92;
-      else {
-        const tools = (text.match(/agent_tool_call\s/g) || []).length;
-        if (tools || text.includes("agent_start") || text.includes("agent_run")) pct = Math.min(88, 18 + tools * 6);
-        else if (text.includes("refresh_source_candidates")) pct = 16;
-        else if (text.includes("refresh_source")) pct = 12;
-        else if (text.includes("run_start")) pct = 6;
-      }
-      if (!pct) return { pct: 0, indeterminate: true, label };
-      return { pct, indeterminate: false, label };
+      if (text.includes("refresh_apply")) return { pct: 96, indeterminate: false, label };
+      if (text.includes("refresh_diff")) return { pct: 88, indeterminate: false, label };
+      return { pct: 0, indeterminate: true, label };
     }
     if (text.includes("seed_complete")) return { pct: 100, indeterminate: false, label: "Finishing up…" };
     const batchMatch = text.match(/seed_batch\s+(\d+)\/(\d+)/);
@@ -2138,6 +2130,20 @@
       return { pct, indeterminate: false, label: jobPhaseLabel(tail, kind) };
     }
     return { pct: 0, indeterminate: true, label: jobPhaseLabel(tail, kind) };
+  }
+
+  // Human label for a refresh/seed source key (the run pill showed the raw
+  // preset id like "aa", which reads as a cryptic chip).
+  const SOURCE_LABELS = {
+    aa: "Artificial Analysis",
+    llmstats: "LLM Stats",
+    exa: "Exa search",
+    openrouter: "OpenRouter",
+    "custom-prompt": "Custom prompt",
+    "custom-endpoint": "Custom endpoint",
+  };
+  function sourceLabel(source) {
+    return SOURCE_LABELS[source] || source;
   }
 
   function fmtElapsed(totalSec) {
@@ -2296,28 +2302,34 @@
     return rows.slice(-(maxRows || 6));
   }
 
-  // Shared parsed-timeline console for seed and refresh jobs. `expandedKey` is the
-  // state field that tracks whether the raw terminal output is expanded.
-  function renderJobConsole(tail, expandedKey) {
-    const key = expandedKey || "seedLogExpanded";
-    const raw = jobTailPreview(tail, 120);
-    const rows = jobLogSummaryRows(tail, 7);
-    const visibleRows = rows.slice(-3);
-    return h("div", { class: "seed-console" }, [
-      h("div", { class: "seed-console-rows", role: "log", "aria-live": "polite" }, visibleRows.length ? visibleRows.map((row) => (
-        h("div", { class: "seed-console-row" + (row.tone ? " is-" + row.tone : ""), title: row.raw }, [
-          h("span", { class: "seed-console-dot", "aria-hidden": "true" }),
-          h("span", { class: "seed-console-text" }, row.text),
-          row.detail ? h("span", { class: "seed-console-detail" }, row.detail) : null,
-          h("span", { class: "seed-console-time" }, row.time || "--:--:--"),
-        ])
-      )) : [
+  // The 3 most recent parsed timeline rows (or a placeholder while warming up).
+  // Split out so the live tickers can swap just these in place — see
+  // patchJobWindow — instead of tearing down the whole console each second.
+  function jobConsoleRowNodes(tail) {
+    const visibleRows = jobLogSummaryRows(tail, 7).slice(-3);
+    if (!visibleRows.length) {
+      return [
         h("div", { class: "seed-console-row" }, [
           h("span", { class: "seed-console-dot", "aria-hidden": "true" }),
           h("span", { class: "seed-console-text" }, "Waiting for terminal output"),
           h("span", { class: "seed-console-time" }, "--:--:--"),
         ]),
-      ]),
+      ];
+    }
+    return visibleRows.map((row) => (
+      h("div", { class: "seed-console-row" + (row.tone ? " is-" + row.tone : ""), title: row.raw }, [
+        h("span", { class: "seed-console-dot", "aria-hidden": "true" }),
+        h("span", { class: "seed-console-text" }, row.text),
+        row.detail ? h("span", { class: "seed-console-detail" }, row.detail) : null,
+        h("span", { class: "seed-console-time" }, row.time || "--:--:--"),
+      ])
+    ));
+  }
+
+  function jobConsoleChildren(tail, key) {
+    const raw = jobTailPreview(tail, 120);
+    return [
+      h("div", { class: "seed-console-rows", role: "log", "aria-live": "polite" }, jobConsoleRowNodes(tail)),
       raw ? h("details", {
         class: "seed-console-details",
         open: state[key] ? true : undefined,
@@ -2326,7 +2338,75 @@
         h("summary", null, "Terminal output"),
         h("pre", { class: "seed-log" }, raw),
       ]) : null,
-    ]);
+    ];
+  }
+
+  // Shared parsed-timeline console for seed and refresh jobs. `expandedKey` is the
+  // state field that tracks whether the raw terminal output is expanded.
+  function renderJobConsole(tail, expandedKey) {
+    return h("div", { class: "seed-console" }, jobConsoleChildren(tail, expandedKey || "seedLogExpanded"));
+  }
+
+  function selectionInside(root) {
+    const sel = window.getSelection && window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return false;
+    const node = sel.anchorNode;
+    return Boolean(node && root && root.contains(node));
+  }
+
+  // Live heartbeat for an already-mounted job window (run or seed). The overlay is
+  // otherwise rebuilt from scratch each second, which reset the terminal's scroll
+  // ("jumps"), wiped any text selection ("snapping"), and restarted the looping
+  // progress animation. Patching the few dynamic nodes in place keeps the <pre>,
+  // its scroll position, the user's selection, and the animation intact.
+  // Returns false when the window isn't mounted so callers can fall back to render().
+  function patchJobWindow(root, tail, prog, elapsed, key) {
+    if (!root) return false;
+    const label = root.querySelector(".seed-phase-label");
+    if (label && label.textContent !== prog.label) label.textContent = prog.label;
+    const elapsedEl = root.querySelector(".seed-elapsed");
+    if (elapsedEl && elapsedEl.textContent !== elapsed) elapsedEl.textContent = elapsed;
+
+    const bar = root.querySelector(".seed-progress");
+    if (bar) {
+      bar.classList.toggle("is-indeterminate", Boolean(prog.indeterminate));
+      const fill = bar.querySelector(".seed-progress-fill");
+      if (prog.indeterminate) {
+        bar.removeAttribute("aria-valuenow");
+        if (fill) fill.style.width = "";
+      } else {
+        bar.setAttribute("aria-valuenow", String(prog.pct));
+        if (fill) fill.style.width = prog.pct + "%";
+      }
+    }
+
+    // Leave the console alone while the user is selecting log text — the swaps
+    // below would clobber the selection. It catches up on the next idle tick.
+    if (selectionInside(root)) return true;
+
+    const consoleEl = root.querySelector(".seed-console");
+    if (consoleEl && !consoleEl.querySelector(".seed-console-details") && jobTailPreview(tail, 120)) {
+      // Window opened with an empty tail, so the terminal block was never built;
+      // build it once now that output exists. Subsequent ticks patch it in place.
+      consoleEl.replaceChildren(...jobConsoleChildren(tail, key));
+      return true;
+    }
+
+    const rowsHost = root.querySelector(".seed-console-rows");
+    if (rowsHost) rowsHost.replaceChildren(...jobConsoleRowNodes(tail));
+
+    const pre = root.querySelector(".seed-log");
+    if (pre) {
+      const next = jobTailPreview(tail, 120);
+      if (pre.textContent !== next) {
+        // Keep following new output only if already pinned to the bottom; if the
+        // user scrolled up to read, leave their position untouched.
+        const pinned = pre.scrollHeight - pre.scrollTop - pre.clientHeight <= 4;
+        pre.textContent = next;
+        if (pinned) pre.scrollTop = pre.scrollHeight;
+      }
+    }
+    return true;
   }
 
   // Shared progress bar for seed + refresh job panels.
@@ -2436,13 +2516,23 @@
   function startSeedTicker() {
     stopSeedTicker();
     state.seedTick = window.setInterval(() => {
-      if (state.setupMode || state.subpage.settings === "seed") render();
+      if (state.setupMode || state.subpage.settings === "seed") patchSeedWindow();
       else stopSeedTicker();
     }, 1000);
   }
 
   function stopSeedTicker() {
     if (state.seedTick) { window.clearInterval(state.seedTick); state.seedTick = 0; }
+  }
+
+  // In-place heartbeat for the seed panel (settings page or setup wizard).
+  function patchSeedWindow() {
+    if (state.seed.state && state.seed.state !== "running") { render(); return; }
+    const root = document.querySelector(".seed-running-panel");
+    if (!root) { render(); return; }
+    const prog = jobProgress(state.seed.tail, "seed");
+    const elapsed = fmtElapsed((Date.now() - (state.seed.started || Date.now())) / 1000);
+    if (!patchJobWindow(root, state.seed.tail, prog, elapsed, "seedLogExpanded")) render();
   }
 
   async function pollSeed() {
@@ -2463,7 +2553,7 @@
         state.seed.error = data.tail || "Seed failed.";
         render();
       } else {
-        render();
+        patchSeedWindow();
         state.seedTimer = window.setTimeout(pollSeed, RUN_POLL_MS);
       }
     } catch (error) {
@@ -3451,18 +3541,28 @@
     } catch (error) { toast(message(error), "error"); }
   }
 
-  // 1s heartbeat re-render so elapsed + the indeterminate bar keep moving between
-  // the slower 3s status polls (mirrors the seed ticker).
+  // 1s heartbeat so elapsed + the looping bar keep moving between the slower 3s
+  // status polls (mirrors the seed ticker). Patches in place rather than
+  // re-rendering so the terminal's scroll, selection, and animation survive.
   function startRunTicker() {
     stopRunTicker();
     state.runTick = window.setInterval(() => {
-      if (state.run.open && state.run.state === "running") render();
+      if (state.run.open && state.run.state === "running") patchRunWindow();
       else stopRunTicker();
     }, 1000);
   }
 
   function stopRunTicker() {
     if (state.runTick) { window.clearInterval(state.runTick); state.runTick = 0; }
+  }
+
+  function patchRunWindow() {
+    if (!(state.run.open && state.run.state === "running")) { render(); return; }
+    const root = els.overlay && els.overlay.querySelector(".run-window");
+    if (!root) { render(); return; }
+    const prog = jobProgress(state.run.tail, "refresh");
+    const elapsed = state.run.started ? fmtElapsed((Date.now() - state.run.started) / 1000) : "";
+    if (!patchJobWindow(root, state.run.tail, prog, elapsed, "runLogExpanded")) render();
   }
 
   async function cancelRun() {
@@ -3507,7 +3607,7 @@
         stopRunTicker();
         render();
       } else {
-        render();
+        patchRunWindow();
         state.runTimer = window.setTimeout(pollRun, RUN_POLL_MS);
       }
     } catch (error) {
@@ -3566,7 +3666,7 @@
       body = [
         h("div", { class: "run-result-head" }, [
           statusPill("Update complete", "fresh"),
-          run.source ? h("span", { class: "run-source" }, run.source) : null,
+          run.source ? h("span", { class: "run-source" }, sourceLabel(run.source)) : null,
           elapsed ? h("span", { class: "run-elapsed" }, elapsed) : null,
         ]),
         h("p", { class: "settings-summary" }, summary ? `Applied ${summary}.` : "The dashboard is up to date."),
@@ -3576,7 +3676,7 @@
       body = [
         h("div", { class: "run-result-head" }, [
           statusPill("Refresh failed", "expired"),
-          run.source ? h("span", { class: "run-source" }, run.source) : null,
+          run.source ? h("span", { class: "run-source" }, sourceLabel(run.source)) : null,
         ]),
         h("p", { class: "settings-summary" }, "The refresh didn't finish. Review the steps below, then try again."),
         renderJobConsole(rawTail, "runLogExpanded"),
@@ -3589,7 +3689,7 @@
       body = [
         h("div", { class: "run-result-head" }, [
           statusPill("Canceled", "canceled"),
-          run.source ? h("span", { class: "run-source" }, run.source) : null,
+          run.source ? h("span", { class: "run-source" }, sourceLabel(run.source)) : null,
         ]),
         h("p", { class: "settings-summary" }, "This refresh was canceled before it finished."),
         renderJobConsole(rawTail, "runLogExpanded"),
@@ -3601,7 +3701,7 @@
           h("span", { class: "vw-spinner", "aria-hidden": "true" }),
           h("p", { class: "seed-phase-label" }, prog.label),
           h("div", { class: "run-status-meta" }, [
-            run.source ? h("span", { class: "run-source" }, run.source) : null,
+            run.source ? h("span", { class: "run-source" }, sourceLabel(run.source)) : null,
             h("span", { class: "seed-elapsed", title: "Elapsed time" }, elapsed),
           ]),
         ]),
