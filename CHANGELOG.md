@@ -10,6 +10,31 @@ tracks changes to the **application** itself.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-06-24
+
+### Added
+
+- Live, streaming job console for both seeding and refresh runs: the agent's
+  research turn now narrates per-tool activity (search vs fetch) with a phase
+  label, gradient progress bar, parsed timeline, and a 1s ticker so elapsed time
+  and the progress bar animate between polls instead of going dark.
+- Refresh-run phase markers (state loaded, diff, apply) with model counts on
+  completion.
+
+### Changed
+
+- Unified the seed and refresh run experience behind shared job console and
+  progress helpers; rebuilt the refresh run window to match the seed flow, with
+  explicit success / failed / canceled states.
+- Pointed repository URLs at the `ShxdowCollective/LLM-Dash` org location across
+  the changelog, issue templates, CONTRIBUTING, and SUPPORT.
+
+### Fixed
+
+- Record real `exa_searches` / `exa_fetches` counts in the `run_metrics` row and
+  the changelog Run Metadata footer (were hardcoded to 0), using a per-attempt
+  accumulator that does not double-count on retry or Exa fallback.
+
 ## [1.1.0] - 2026-06-20
 
 ### Added
