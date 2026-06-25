@@ -10,6 +10,8 @@ tracks changes to the **application** itself.
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-06-24
+
 ### Fixed
 
 - Catalog seeding now fails fast instead of silently applying fewer models than
@@ -87,7 +89,8 @@ tracks changes to the **application** itself.
 - Cross-platform `llm-dash` CLI and installers (macOS/Linux/Windows) with
   foreground, silent/background, status, stop, and reset commands.
 
-[Unreleased]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/ShxdowCollective/LLM-Dash/releases/tag/v1.0.0
