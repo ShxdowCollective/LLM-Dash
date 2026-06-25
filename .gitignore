@@ -33,3 +33,4 @@ e2e/audit/output/
 test-results/
 playwright-report/
 E2E_AUDIT_REPORT.md
+.DS_Store
