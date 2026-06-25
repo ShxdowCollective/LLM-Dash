@@ -71,6 +71,16 @@ except ModuleNotFoundError:
 
 SKILL_PATH = ROOT / "skill" / "SKILL.md"
 BATCH_SIZE = 25
+PREFETCHED_PRESETS = {"aa", "llmstats", "openrouter", "custom-endpoint"}
+DISCOVERY_PRESETS = {"exa", "custom-prompt"}
+PRESET_LABELS = {
+    "aa": "Artificial Analysis",
+    "llmstats": "LLM Stats",
+    "openrouter": "OpenRouter",
+    "custom-endpoint": "Custom endpoint",
+    "exa": "Exa",
+    "custom-prompt": "Custom prompt",
+}
 AA_INDEX_FIELDS = {
     "intelligence": "artificial_analysis_intelligence_index",
     "coding": "artificial_analysis_coding_index",
@@ -106,6 +116,10 @@ def _sum_usage(usages: list[dict[str, Any]]) -> dict[str, Any]:
     return totals
 
 
+def _model_key(value: Any) -> str:
+    return " ".join(str(value or "").strip().lower().split())
+
+
 def _dedupe_models(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
     seen: set[str] = set()
     merged: list[dict[str, Any]] = []
@@ -113,12 +127,85 @@ def _dedupe_models(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
         name = str(model.get("name") or "").strip()
         if not name:
             continue
-        key = name.lower()
+        key = _model_key(name)
         if key in seen:
             continue
         seen.add(key)
         merged.append(model)
     return merged
+
+
+def _missing_candidates(candidates: list[dict[str, Any]], models: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    returned = {_model_key(model.get("name")) for model in models if isinstance(model, dict)}
+    missing: list[dict[str, Any]] = []
+    for candidate in candidates:
+        name = candidate.get("name") or candidate.get("id") or ""
+        if name and _model_key(name) not in returned:
+            missing.append(candidate)
+    return missing
+
+
+def _missing_names(candidates: list[dict[str, Any]], limit: int = 8) -> str:
+    names = [str(item.get("name") or item.get("id") or "").strip() for item in candidates]
+    names = [name for name in names if name]
+    shown = names[:limit]
+    suffix = "" if len(names) <= limit else f", +{len(names) - limit} more"
+    return ", ".join(shown) + suffix
+
+
+def _candidate_key(candidate: dict[str, Any]) -> str:
+    return _model_key(candidate.get("name") or candidate.get("id"))
+
+
+def _append_unique_candidate(
+    candidates: list[dict[str, Any]],
+    seen: set[str],
+    candidate: dict[str, Any],
+    limit: int,
+) -> None:
+    if len(candidates) >= limit:
+        return
+    key = _candidate_key(candidate)
+    if not key or key in seen:
+        return
+    seen.add(key)
+    candidates.append(candidate)
+
+
+def _preset_label(preset: str) -> str:
+    return PRESET_LABELS.get(preset, preset)
+
+
+def _require_prefetch_count(preset: str, requested_count: int, candidates: list[dict[str, Any]]) -> None:
+    if preset not in PREFETCHED_PRESETS:
+        return
+    if len(candidates) >= requested_count:
+        return
+    label = _preset_label(preset)
+    raise SeedCatalogError(
+        f"{label} returned {len(candidates)} named candidates for requested top {requested_count}; "
+        "seed not applied."
+    )
+
+
+def _require_final_count(preset: str, requested_count: int, models: list[dict[str, Any]]) -> None:
+    if len(models) == requested_count:
+        return
+    label = _preset_label(preset)
+    raise RunUpdateError(
+        f"Seed agent returned {len(models)} unique {label} models for requested top {requested_count}; "
+        "seed not applied."
+    )
+
+
+def _bounded_count(value: Any) -> int:
+    try:
+        count = int(value)
+    except (TypeError, ValueError) as exc:
+        raise SeedCatalogError("Seed count must be an integer.") from exc
+    if count < 1 or count > 100:
+        raise SeedCatalogError("Seed count must be between 1 and 100.")
+    return count
 
 
 def _chunk_batches(candidates: list[dict[str, Any]], count: int, preset: str) -> list[list[dict[str, Any]]]:
@@ -200,8 +287,9 @@ def _fetch_aa_candidates(index: str, count: int) -> list[dict[str, Any]]:
         except (TypeError, ValueError):
             return 0.0
 
-    ranked = sorted((m for m in models if isinstance(m, dict)), key=sort_key, reverse=True)[:count]
+    ranked = sorted((m for m in models if isinstance(m, dict)), key=sort_key, reverse=True)
     candidates: list[dict[str, Any]] = []
+    seen: set[str] = set()
     for item in ranked:
         creator = item.get("model_creator") or {}
         vendor = creator.get("name") if isinstance(creator, dict) else str(creator or "")
@@ -215,7 +303,9 @@ def _fetch_aa_candidates(index: str, count: int) -> list[dict[str, Any]]:
             "artificial_analysis_coding_index": item.get("artificial_analysis_coding_index"),
             "artificial_analysis_agentic_index": item.get("artificial_analysis_agentic_index"),
         }
-        candidates.append(
+        _append_unique_candidate(
+            candidates,
+            seen,
             {
                 "name": item.get("name") or item.get("slug") or "",
                 "vendor": vendor,
@@ -224,9 +314,10 @@ def _fetch_aa_candidates(index: str, count: int) -> list[dict[str, Any]]:
                 "priors": priors,
                 "card_url": f"https://artificialanalysis.ai/models/{item.get('slug') or ''}".rstrip("/"),
                 "source": "https://artificialanalysis.ai/",
-            }
+            },
+            count,
         )
-    return [c for c in candidates if c.get("name")]
+    return candidates
 
 
 def _fetch_llmstats_candidates(count: int) -> list[dict[str, Any]]:
@@ -235,11 +326,12 @@ def _fetch_llmstats_candidates(count: int) -> list[dict[str, Any]]:
     key = load_llmstats_api_key()
     if not key:
         raise SeedCatalogError("LLM Stats API key is not configured.")
+    request_limit = min(max(count * 3, count), 100)
     with httpx.Client(timeout=30) as client:
         response = client.get(
             f"{LLMSTATS_BASE_URL}/v1/models",
             headers={"Authorization": f"Bearer {key}", "Accept": "application/json"},
-            params={"limit": str(count)},
+            params={"limit": str(request_limit)},
         )
     if response.status_code != 200:
         raise SeedCatalogError(
@@ -250,12 +342,13 @@ def _fetch_llmstats_candidates(count: int) -> list[dict[str, Any]]:
     if not isinstance(items, list):
         raise SeedCatalogError("LLM Stats API returned an unexpected payload shape.")
     candidates: list[dict[str, Any]] = []
-    for item in items[:count]:
+    seen: set[str] = set()
+    for item in items:
         if not isinstance(item, dict):
             continue
         name = item.get("name") or item.get("id") or item.get("slug") or ""
         if name:
-            candidates.append({"name": name, "source": "https://llm-stats.com/"})
+            _append_unique_candidate(candidates, seen, {"name": name, "source": "https://llm-stats.com/"}, count)
     return candidates
 
 
@@ -289,12 +382,13 @@ def _fetch_openrouter_candidates(count: int) -> list[dict[str, Any]]:
     # OpenRouter exposes no popularity ranking on /models, so we proxy "top" by
     # largest context window then recency. The agent re-scores from primary
     # sources regardless, so this only shapes which N candidates are considered.
-    ranked = sorted((m for m in items if isinstance(m, dict)), key=sort_key, reverse=True)[:count]
+    ranked = sorted((m for m in items if isinstance(m, dict)), key=sort_key, reverse=True)
     candidates: list[dict[str, Any]] = []
+    seen: set[str] = set()
     for item in ranked:
         model_id = item.get("id") or item.get("name") or ""
         if model_id:
-            candidates.append({"name": model_id, "source": "https://openrouter.ai/models"})
+            _append_unique_candidate(candidates, seen, {"name": model_id, "source": "https://openrouter.ai/models"}, count)
     return candidates
 
 
@@ -334,17 +428,51 @@ def _fetch_custom_endpoint_candidates(endpoint: str, credential: str, count: int
             f"Custom endpoint returned HTTP {response.status_code}: {response.text[:300]}"
         )
     data = response.json()
-    items = data.get("data") or [] if isinstance(data, dict) else []
+    items = data.get("data") or data.get("models") or [] if isinstance(data, dict) else data
     if not isinstance(items, list):
         raise SeedCatalogError("Custom endpoint returned an unexpected /models payload shape.")
     candidates: list[dict[str, Any]] = []
-    for item in items[:count]:
+    seen: set[str] = set()
+    for item in items:
         if not isinstance(item, dict):
             continue
         model_id = item.get("id") or item.get("name") or ""
         if model_id:
-            candidates.append({"name": model_id, "source": models_url})
+            _append_unique_candidate(candidates, seen, {"name": model_id, "source": models_url}, count)
     return candidates
+
+
+def _build_discovery_recovery_prompt(
+    *,
+    preset: str,
+    count: int,
+    index: str,
+    prompt_text: str,
+    skill_text: str,
+    existing_models: list[dict[str, Any]],
+) -> str:
+    existing_names = [
+        str(model.get("name") or "").strip()
+        for model in existing_models
+        if isinstance(model, dict) and str(model.get("name") or "").strip()
+    ]
+    prompt = build_seed_prompt(
+        [],
+        preset=preset,
+        count=count,
+        index=index,
+        prompt_text=prompt_text,
+        skill_text=skill_text,
+        batch_index=1,
+        batch_total=1,
+    )
+    prompt += (
+        "\n\nRecovery pass: the previous discovery response returned fewer unique models than requested. "
+        f"Return exactly {count} additional unique models in new_models."
+    )
+    if existing_names:
+        prompt += "\n\nDo not repeat these already-scored models:\n" + json.dumps(existing_names, ensure_ascii=False, indent=2)
+    return prompt
 
 
 def prefetch_candidates(args: argparse.Namespace) -> list[dict[str, Any]]:
@@ -384,6 +512,62 @@ async def _score_batch(
     raise RunUpdateError("All configured models failed: " + " | ".join(errors))
 
 
+async def _score_batch_with_recovery(
+    *,
+    batch: list[dict[str, Any]],
+    prompt: str,
+    preset: str,
+    index: str,
+    skill_text: str,
+    exa_key: str,
+    log_path: Path,
+    db_path: Path,
+    batch_index: int,
+    batch_total: int,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], str]:
+    update, usage, agent_name = await _score_batch(prompt, exa_key, log_path, db_path)
+    usages = [usage]
+    batch_models = list(update.get("new_models") or [])
+    if not batch:
+        return update, batch_models, usages, agent_name
+
+    missing = _missing_candidates(batch, batch_models)
+    if not missing:
+        return update, batch_models, usages, agent_name
+
+    write_log(
+        log_path,
+        "seed_batch_incomplete "
+        f"{batch_index}/{batch_total} returned={len(batch_models)} expected={len(batch)} "
+        f"missing={json.dumps(_missing_names(missing), ensure_ascii=False)}",
+    )
+    retry_prompt = build_seed_prompt(
+        missing,
+        preset=preset,
+        count=len(missing),
+        index=index,
+        prompt_text="",
+        skill_text=skill_text,
+        batch_index=batch_index,
+        batch_total=batch_total,
+    )
+    retry_prompt += (
+        "\n\nRecovery pass: the previous batch response omitted these candidate models. "
+        "Score EVERY listed model below. Return ONLY the missing models in new_models."
+    )
+    retry_update, retry_usage, agent_name = await _score_batch(retry_prompt, exa_key, log_path, db_path)
+    usages.append(retry_usage)
+    retry_models = list(retry_update.get("new_models") or [])
+    batch_models = _dedupe_models(batch_models + retry_models)
+    missing = _missing_candidates(batch, batch_models)
+    if missing:
+        raise RunUpdateError(
+            f"Seed agent returned {len(batch_models)} of {len(batch)} requested candidates "
+            f"for batch {batch_index}/{batch_total}; missing: {_missing_names(missing)}"
+        )
+    return update, batch_models, usages, agent_name
+
+
 def run_seed(
     args: argparse.Namespace,
     *,
@@ -392,6 +576,7 @@ def run_seed(
     changelogs_dir: Path,
     csv_path: Path,
 ) -> dict[str, Any]:
+    args.count = _bounded_count(args.count)
     skill_text = SKILL_PATH.read_text(encoding="utf-8")
     exa_key = load_exa_api_key()
     write_log(
@@ -400,6 +585,7 @@ def run_seed(
     )
     candidates = prefetch_candidates(args)
     write_log(log_path, f"seed_candidates resolved={len(candidates)}")
+    _require_prefetch_count(args.preset, args.count, candidates)
     batches = _chunk_batches(candidates, args.count, args.preset)
     batch_total = len(batches)
     write_log(log_path, f"seed_plan batches={batch_total} batch_size={BATCH_SIZE}")
@@ -438,11 +624,21 @@ def run_seed(
             batch_index=batch_idx,
             batch_total=batch_total,
         )
-        update, usage, agent_name = asyncio.run(
-            _score_batch(prompt, exa_key, log_path, db_path)
+        update, batch_models, batch_usages, agent_name = asyncio.run(
+            _score_batch_with_recovery(
+                batch=batch,
+                prompt=prompt,
+                preset=args.preset,
+                index=args.index or "intelligence",
+                skill_text=skill_text,
+                exa_key=exa_key,
+                log_path=log_path,
+                db_path=db_path,
+                batch_index=batch_idx,
+                batch_total=batch_total,
+            )
         )
-        usages.append(usage)
-        batch_models = update.get("new_models") or []
+        usages.extend(batch_usages)
         merged_models = _dedupe_models(merged_models + list(batch_models))
         write_log(
             log_path,
@@ -452,6 +648,37 @@ def run_seed(
             title = str(update["title"])
         if update.get("summary"):
             summary = str(update["summary"])
+
+    if args.preset in DISCOVERY_PRESETS and len(merged_models) < args.count:
+        remaining = args.count - len(merged_models)
+        write_log(
+            log_path,
+            f"seed_discovery_incomplete returned={len(merged_models)} expected={args.count} retrying={remaining}",
+        )
+        retry_prompt = _build_discovery_recovery_prompt(
+            preset=args.preset,
+            count=remaining,
+            index=args.index or "intelligence",
+            prompt_text=args.prompt,
+            skill_text=skill_text,
+            existing_models=merged_models,
+        )
+        retry_update, retry_usage, agent_name = asyncio.run(
+            _score_batch(retry_prompt, exa_key, log_path, db_path)
+        )
+        usages.append(retry_usage)
+        retry_models = list(retry_update.get("new_models") or [])
+        merged_models = _dedupe_models(merged_models + retry_models)
+        write_log(
+            log_path,
+            f"seed_discovery_retry_complete models={len(retry_models)} total_models={len(merged_models)}",
+        )
+        if retry_update.get("title"):
+            title = str(retry_update["title"])
+        if retry_update.get("summary"):
+            summary = str(retry_update["summary"])
+
+    _require_final_count(args.preset, args.count, merged_models)
 
     if not merged_models:
         raise RunUpdateError("Seed agent returned no models.")
@@ -487,6 +714,7 @@ def run_seed(
 
 
 def dry_run_plan(args: argparse.Namespace) -> None:
+    args.count = _bounded_count(args.count)
     skill_text = SKILL_PATH.read_text(encoding="utf-8")
     try:
         candidates = prefetch_candidates(args)
@@ -495,6 +723,7 @@ def dry_run_plan(args: argparse.Namespace) -> None:
             candidates = []
         else:
             raise
+    _require_prefetch_count(args.preset, args.count, candidates)
     batches = _chunk_batches(candidates, args.count, args.preset)
     prompt = build_seed_prompt(
         batches[0] if batches else [],

@@ -365,7 +365,18 @@ def start_foreground(host: str, port: int, *, open_browser: bool = True) -> int:
 def stop(*, timeout: float = 8.0) -> ServerStatus:
     data = _load_state()
     if not data:
-        return status(cleanup_stale=True)
+        host = str(os.environ.get("LLM_DASH_HOST") or "127.0.0.1")
+        port = int(os.environ.get("LLM_DASH_PORT") or 8787)
+        return ServerStatus(
+            state="stopped",
+            running=False,
+            managed=False,
+            url=display_url(host, port),
+            host=host,
+            port=port,
+            log_path=str(DEFAULT_LOG_PATH),
+            message="No managed server state found.",
+        )
     proc = _process_from_state(data)
     if proc is None:
         _remove_state()

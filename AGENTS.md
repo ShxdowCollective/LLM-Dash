@@ -78,7 +78,7 @@ need to reinstall them.
  the research agent (`scripts/seed_catalog.py` → `POST /api/seed`).
  `scripts/init_db.py` remains the offline CLI escape hatch to preseed the 34-model
  bootstrap set (`python scripts/init_db.py`).
-- **Tests:** `.venv/bin/python -m pytest tests/` runs the full suite (86 tests).
+- **Tests:** `.venv/bin/python -m pytest tests/` runs the full suite.
  `tests/test_m13.py` requires `pytest` (installed by the update script, not in
  `requirements.txt`); plain `python -m unittest discover` skips/errors on it.
 - **Lint/syntax (no linter configured):** `.venv/bin/python -m py_compile server.py scripts/*.py tests/*.py`

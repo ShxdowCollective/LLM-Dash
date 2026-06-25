@@ -19,6 +19,17 @@ Standing update-run maintenance:
 
 ## Recent Completed
 
+- **Seed count invariants — DONE (2026-06-24).** Fixed catalog seeding so no
+  selectable source can silently write fewer models than requested: prefetched
+  sources now count unique candidates, fail fast when they resolve short, and
+  retry once for omitted candidate models; Exa/custom-prompt discovery retries
+  once when the agent returns short; final unique model count must match the
+  selected count before apply. LLM Stats now over-fetches and de-dupes its first
+  page, custom endpoints accept top-level array `/models` responses, and direct
+  seed counts are bounded to 1-100. Added regression coverage for all seed
+  source classes and repaired two release-suite regressions surfaced by the full
+  pytest run (`llm_dash.__version__` drift and `stop()` probing live unmanaged
+  server state).
 - **Seed + refresh verbosity / unified job UX — DONE (2026-06-22).** Streamed the
   shared agent turn (`run_agent_once` → `Runner.run_streamed`) so seed *and*
   refresh log live tool activity (`agent_tool_call`/`agent_tool_summary`); added

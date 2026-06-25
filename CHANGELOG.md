@@ -10,6 +10,18 @@ tracks changes to the **application** itself.
 
 ## [Unreleased]
 
+### Fixed
+
+- Catalog seeding now fails fast instead of silently applying fewer models than
+  requested: prefetched sources require enough unique candidates, scored batches
+  retry once when prefetched models are omitted, discovery presets retry once
+  when they return short, and final unique output must match the selected count.
+- LLM Stats and other prefetched seed sources now de-dupe candidates before
+  counting them; custom endpoint seeding also accepts top-level array `/models`
+  responses.
+- `llm-dash stop` no longer reports an unmanaged live server as running when no
+  managed server state file exists.
+
 ## [1.2.0] - 2026-06-24
 
 ### Added
@@ -75,6 +87,7 @@ tracks changes to the **application** itself.
 - Cross-platform `llm-dash` CLI and installers (macOS/Linux/Windows) with
   foreground, silent/background, status, stop, and reset commands.
 
-[Unreleased]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/ShxdowCollective/LLM-Dash/releases/tag/v1.0.0

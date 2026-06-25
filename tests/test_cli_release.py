@@ -32,6 +32,15 @@ def test_stop_when_already_stopped(monkeypatch, tmp_path):
     assert result.running is False
 
 
+def test_stop_without_state_does_not_report_unmanaged_ready_server(monkeypatch, tmp_path):
+    monkeypatch.setattr(process, "SERVER_STATE_PATH", tmp_path / "server.json")
+    monkeypatch.setattr(process, "_ready", lambda url: True)
+    result = process.stop()
+    assert result.state == "stopped"
+    assert result.running is False
+    assert result.managed is False
+
+
 def test_stale_state_cleanup(monkeypatch, tmp_path):
     state_path = tmp_path / "server.json"
     state_path.write_text(

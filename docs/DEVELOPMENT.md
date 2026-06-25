@@ -117,7 +117,7 @@ config. Names above match what `scripts/config.py` reads; the canonical
 | `scripts/vendor_voidware_css.mjs` | Copies `@shxdowcollective/voidware` CSS into `web/vendor/voidware/` and refreshes provenance |
 | `scripts/voidware_package_smoke.mjs` | Verifies package CSS sources and runtime exports (`auth`, `auth-templates`, `logging`) |
 | `scripts/init_db.py` | Offline CLI preseed escape hatch (34-model bootstrap) + shared `ensure_schema()`; not auto-run on launch |
-| `scripts/seed_catalog.py` | Wizard-driven catalog seeder: prefetch candidates (AA/LLM Stats/OpenRouter/custom) → batch-score via the research harness → single `apply_update` (`POST /api/seed`) |
+| `scripts/seed_catalog.py` | Wizard-driven catalog seeder: prefetch candidates (AA/LLM Stats/OpenRouter/custom) → batch-score via the research harness with missing-candidate recovery/count guards → single `apply_update` (`POST /api/seed`) |
 | `scripts/run_update.py` | Agent Provider update executor (OpenAI Agents SDK) |
 | `scripts/export_metrics_csv.py` | Regenerates `data/run_metrics.csv` from SQLite |
 | `scripts/schedule_job.py` | OS-level scheduled job installer/remover |
