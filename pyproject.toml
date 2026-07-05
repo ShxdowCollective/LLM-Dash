@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llm-dash"
-version = "1.2.1"
+version = "1.2.2"
 description = "Local LLM benchmark dashboard with AI-driven daily changelog updates."
 readme = "README.md"
 requires-python = ">=3.10"

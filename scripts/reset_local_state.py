@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import csv as _csv
 import json
+import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -32,17 +33,11 @@ from scripts.config import config_path
 from scripts.schedule_job import SCHEDULE_PATH, remove_schedule, status as schedule_status
 from scripts.voidware_auth import clear_llmdash_grants
 
-DB_PATH = ROOT / "data" / "dash.sqlite"
-CSV_PATH = ROOT / "data" / "run_metrics.csv"
-CHANGELOGS_DIR = ROOT / "changelogs"
+DATA_DIR = Path(os.environ.get("LLM_DASH_DATA_DIR") or (ROOT / "data")).resolve()
+DB_PATH = DATA_DIR / "dash.sqlite"
+CSV_PATH = DATA_DIR / "run_metrics.csv"
+CHANGELOGS_DIR = Path(os.environ.get("LLM_DASH_CHANGELOGS_DIR") or (ROOT / "changelogs")).resolve()
 LOGS_DIR = ROOT / "logs"
-DB_SIDECARS = (
-    DB_PATH,
-    DB_PATH.with_name(DB_PATH.name + "-wal"),
-    DB_PATH.with_name(DB_PATH.name + "-shm"),
-    DB_PATH.with_name(DB_PATH.name + "-journal"),
-    CSV_PATH,
-)
 
 # Scope -> required typed confirmation token (validated server-side).
 RESET_TOKENS = {"stats": "STATS", "changelog": "CHANGELOG", "models": "MODELS", "full": "RESET"}
@@ -59,6 +54,16 @@ def _delete_file(path: Path, removed: list[str], *, dry_run: bool = False) -> No
     removed.append(str(path.relative_to(ROOT)) if path.is_relative_to(ROOT) else str(path))
     if not dry_run:
         path.unlink()
+
+
+def db_sidecars() -> tuple[Path, ...]:
+    return (
+        DB_PATH,
+        DB_PATH.with_name(DB_PATH.name + "-wal"),
+        DB_PATH.with_name(DB_PATH.name + "-shm"),
+        DB_PATH.with_name(DB_PATH.name + "-journal"),
+        CSV_PATH,
+    )
 
 
 def _selected_secret_names() -> list[str]:
@@ -114,7 +119,7 @@ def reset_local_state(*, dry_run: bool = False) -> tuple[list[str], list[str]]:
 
     _delete_file(config_path(), removed, dry_run=dry_run)
 
-    for path in DB_SIDECARS:
+    for path in db_sidecars():
         _delete_file(path, removed, dry_run=dry_run)
 
     for log_file in sorted(LOGS_DIR.glob("run-update-*.log")):

@@ -10,6 +10,14 @@ tracks changes to the **application** itself.
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-07-05
+
+### Fixed
+
+- Aligned deployed first-run seed/update/reset paths so env-overridden
+  `LLM_DASH_DATA_DIR` and `LLM_DASH_CHANGELOGS_DIR` installs no longer split
+  server reads from subprocess writes or reset cleanup.
+
 ## [1.2.1] - 2026-06-24
 
 ### Fixed
@@ -89,7 +97,8 @@ tracks changes to the **application** itself.
 - Cross-platform `llm-dash` CLI and installers (macOS/Linux/Windows) with
   foreground, silent/background, status, stop, and reset commands.
 
-[Unreleased]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.2.2...HEAD
+[1.2.2]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.0.0...v1.1.0

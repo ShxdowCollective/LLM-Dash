@@ -19,10 +19,12 @@ from scripts.seed_catalog import (
     _fetch_custom_endpoint_candidates,
     _fetch_llmstats_candidates,
     _fetch_openrouter_candidates,
+    output_paths_for_db,
     _sum_usage,
     build_seed_prompt,
     run_seed,
 )
+from scripts import seed_catalog
 
 
 def _sample_model(name: str = "Test Model Alpha") -> dict:
@@ -101,6 +103,27 @@ class EnsureSchemaTests(unittest.TestCase):
                 self.assertIn("meta", tables)
             finally:
                 con.close()
+
+
+class OutputPathTests(unittest.TestCase):
+    def test_seed_uses_active_csv_path_for_env_db(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db_path = root / "mounted-data" / "dash.sqlite"
+            changelogs_dir = root / "mounted-changelogs"
+            csv_path = root / "mounted-data" / "run_metrics.csv"
+            with patch.object(seed_catalog, "DB_PATH", db_path), \
+                    patch.object(seed_catalog, "CHANGELOGS_DIR", changelogs_dir), \
+                    patch.object(seed_catalog, "CSV_PATH", csv_path):
+                self.assertEqual(output_paths_for_db(db_path), (changelogs_dir, csv_path))
+
+    def test_seed_custom_db_keeps_artifacts_next_to_db(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            active_db = root / "active" / "dash.sqlite"
+            custom_db = root / "custom" / "dash.sqlite"
+            with patch.object(seed_catalog, "DB_PATH", active_db):
+                self.assertEqual(output_paths_for_db(custom_db), (custom_db.parent / "changelogs", custom_db.parent / "run_metrics.csv"))
 
 
 class SumUsageTests(unittest.TestCase):

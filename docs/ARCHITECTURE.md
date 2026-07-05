@@ -277,23 +277,25 @@ Catalog → Seed → Finish) instead of fetching a missing `dash.sqlite`.
 The **Catalog** step picks a seed strategy (gated by configured keys): Artificial
 Analysis (AA Data API, `aa` credential slot, ranked by Intelligence/Coding/Agentic
 index), LLM Stats top N, Exa top N, OpenRouter top N, a custom prompt, or a custom
-OpenAI-compatible endpoint. `POST /api/seed` spawns `scripts/seed_catalog.py`,
-which `ensure_schema()`s the DB, prefetches a candidate list, batches scoring
-through the same research harness (`run_agent_once` → `validate_update` →
-`apply_update`), and writes one changelog + `run_metrics` row + `meta.last_updated`
-like a normal run. Prefetched sources de-dupe candidates before counting, fail
-fast if they resolve fewer unique named candidates than the selected top-N, and
-retry once if the scoring agent omits a listed candidate. Exa/custom-prompt
-discovery runs get one recovery pass when they return short. Every seed path
-checks final unique model count before applying, so a selected count either lands
-exactly or the seed fails without writing a short catalog. The **Seed** step polls
-the job (`/api/run-update/{id}`), shows live progress, then a completion
-animation + "Let's start!" → Dashboard. The seed job and `/api/run-update` share
-the `_any_update_job_running()` lock.
+OpenAI-compatible endpoint. `POST /api/seed` spawns `scripts/seed_catalog.py`
+with the server's active `DB_PATH`, so deployed `LLM_DASH_DATA_DIR` volumes and
+local checkouts use the same write target. The seeder `ensure_schema()`s the DB,
+prefetches a candidate list, batches scoring through the same research harness
+(`run_agent_once` → `validate_update` → `apply_update`), and writes one changelog
+with a `run_metrics` row and `meta.last_updated` like a normal run. Prefetched sources
+de-dupe candidates before counting, fail fast if they resolve fewer unique named
+candidates than the selected top-N, and retry once if the scoring agent omits a
+listed candidate. Exa/custom-prompt discovery runs get one recovery pass when they
+return short. Every seed path checks final unique model count before applying, so
+a selected count either lands exactly or the seed fails without writing a short
+catalog. The **Seed** step polls the job (`/api/run-update/{id}`), shows live
+progress, then a completion animation + "Let's start!" → Dashboard. The seed job
+and `/api/run-update` share the `_any_update_job_running()` lock.
 
 `scripts/init_db.py` is retained as the offline CLI preseed escape hatch
 (`python scripts/init_db.py`), not an auto-bootstrap. A **full reset** drops the
-DB and returns to `needs_setup`; a **models reset** clears the catalog + drops
+active DB, sidecars, metrics CSV, and logs using the same env-aware data paths;
+it returns to `needs_setup`. A **models reset** clears the catalog + drops
 `last_updated` and routes back into the wizard.
 
 ---

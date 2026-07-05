@@ -186,6 +186,32 @@ def test_reset_local_state_dry_run_previews_grant_cleanup(tmp_path, monkeypatch)
     assert any("grant cleanup preview" in item for item in warnings)
 
 
+def test_reset_local_state_removes_active_env_db_sidecars(tmp_path, monkeypatch):
+    db = tmp_path / "active" / "dash.sqlite"
+    csv_path = tmp_path / "active" / "run_metrics.csv"
+    wal = db.with_name(db.name + "-wal")
+    db.parent.mkdir()
+    for path in (db, csv_path, wal):
+        path.write_text("x", encoding="utf-8")
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    (logs / "run-update-1.log").write_text("x", encoding="utf-8")
+
+    monkeypatch.setattr(rls, "SCHEDULE_PATH", tmp_path / "schedule.json")
+    monkeypatch.setattr(rls, "config_path", lambda: tmp_path / "config.json")
+    monkeypatch.setattr(rls, "DB_PATH", db)
+    monkeypatch.setattr(rls, "CSV_PATH", csv_path)
+    monkeypatch.setattr(rls, "LOGS_DIR", logs)
+    with patch("scripts.reset_local_state.clear_llmdash_grants", return_value={"revoked": [], "removed_cache": [], "warnings": []}):
+        removed, warnings = rls.reset_local_state()
+
+    assert not warnings
+    assert not db.exists()
+    assert not csv_path.exists()
+    assert not wal.exists()
+    assert any(str(db) in item for item in removed)
+
+
 def test_api_reset_rejects_wrong_token(tmp_path):
     db = _seed(tmp_path)
     server.DB_PATH = db
@@ -232,6 +258,88 @@ def test_api_full_reset_includes_grant_cleanup_warnings(tmp_path):
     body = resp.json()
     assert body["scope"] == "full"
     assert any("broker unavailable" in item for item in body.get("warnings", []))
+
+
+def test_api_seed_passes_active_db_path_to_subprocess(tmp_path, monkeypatch):
+    active_db = tmp_path / "volume" / "dash.sqlite"
+    active_db.parent.mkdir()
+    calls = {}
+
+    class Bundle:
+        has_provider = True
+
+    class Process:
+        returncode = None
+
+    class Thread:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def start(self):
+            pass
+
+    def fake_popen(command, **kwargs):
+        calls["command"] = command
+        return Process()
+
+    monkeypatch.setattr(server, "DB_PATH", active_db)
+    monkeypatch.setattr(server, "load_provider_bundle", lambda: Bundle())
+    monkeypatch.setattr(server.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(server.threading, "Thread", Thread)
+    monkeypatch.setattr(server, "_job_log_path", lambda job_id: server.ROOT / "logs" / f"test-seed-{job_id}.log")
+    with server._jobs_lock:
+        server._jobs.clear()
+
+    client = TestClient(server.app)
+    resp = client.post("/api/seed", json={"preset": "aa", "count": 1})
+
+    assert resp.status_code == 200
+    command = calls["command"]
+    assert "--db-path" in command
+    assert command[command.index("--db-path") + 1] == str(active_db)
+    for log_file in (server.ROOT / "logs").glob("test-seed-*.log"):
+        log_file.unlink(missing_ok=True)
+
+
+def test_api_run_update_passes_active_db_path_to_subprocess(tmp_path, monkeypatch):
+    active_db = tmp_path / "volume" / "dash.sqlite"
+    active_db.parent.mkdir()
+    calls = {}
+
+    class Bundle:
+        has_provider = True
+
+    class Process:
+        returncode = None
+
+    class Thread:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def start(self):
+            pass
+
+    def fake_popen(command, **kwargs):
+        calls["command"] = command
+        return Process()
+
+    monkeypatch.setattr(server, "DB_PATH", active_db)
+    monkeypatch.setattr(server, "load_provider_bundle", lambda: Bundle())
+    monkeypatch.setattr(server.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(server.threading, "Thread", Thread)
+    monkeypatch.setattr(server, "_job_log_path", lambda job_id: server.ROOT / "logs" / f"test-run-update-{job_id}.log")
+    with server._jobs_lock:
+        server._jobs.clear()
+
+    client = TestClient(server.app)
+    resp = client.post("/api/run-update", json={"preset": "aa", "count": 1})
+
+    assert resp.status_code == 200
+    command = calls["command"]
+    assert "--db-path" in command
+    assert command[command.index("--db-path") + 1] == str(active_db)
+    for log_file in (server.ROOT / "logs").glob("test-run-update-*.log"):
+        log_file.unlink(missing_ok=True)
 
 
 def test_api_external_credential_mutation_returns_403(tmp_path):

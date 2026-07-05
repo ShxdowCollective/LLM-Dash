@@ -26,6 +26,7 @@ try:
     from scripts.run_update import (
         AGENT_RUNTIME,
         CHANGELOGS_DIR,
+        CSV_PATH,
         DB_PATH,
         ROOT,
         RunUpdateError,
@@ -54,6 +55,7 @@ except ModuleNotFoundError:
     from run_update import (  # type: ignore
         AGENT_RUNTIME,
         CHANGELOGS_DIR,
+        CSV_PATH,
         DB_PATH,
         ROOT,
         RunUpdateError,
@@ -91,6 +93,12 @@ OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 
 class SeedCatalogError(RuntimeError):
     pass
+
+
+def output_paths_for_db(db_path: Path) -> tuple[Path, Path]:
+    if db_path.resolve() == DB_PATH.resolve():
+        return CHANGELOGS_DIR, CSV_PATH
+    return db_path.parent / "changelogs", db_path.parent / "run_metrics.csv"
 
 
 def _sum_usage(usages: list[dict[str, Any]]) -> dict[str, Any]:
@@ -760,8 +768,7 @@ def main() -> int:
 
     log_path = Path(args.log_path) if args.log_path else ROOT / "logs" / "seed-catalog.log"
     db_path = Path(args.db_path)
-    changelogs_dir = CHANGELOGS_DIR if db_path.resolve() == DB_PATH.resolve() else db_path.parent / "changelogs"
-    csv_path = ROOT / "data" / "run_metrics.csv" if db_path.resolve() == DB_PATH.resolve() else db_path.parent / "run_metrics.csv"
+    changelogs_dir, csv_path = output_paths_for_db(db_path)
 
     started = utc_now()
     start_time = time.monotonic()

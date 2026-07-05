@@ -61,8 +61,8 @@ be removed.
 |---|---|
 | Provider config | `~/.shxdow/config/shxdow.llmdash.json` |
 | Scheduled job | OS-level timer/task + state file |
-| Database | `data/dash.sqlite` + WAL/SHM/journal sidecars |
-| Metrics CSV | `data/run_metrics.csv` |
+| Database | active `LLM_DASH_DATA_DIR` `dash.sqlite` + WAL/SHM/journal sidecars |
+| Metrics CSV | active `LLM_DASH_DATA_DIR` `run_metrics.csv` |
 | Run logs | `logs/run-update-*.log`, `logs/server.log`, `logs/scheduled-run.log` |
 | Broker grants | LLM-Dash's own Voidware broker grants/access tokens (revoked via the local CLI when the broker is reachable; skipped with a warning otherwise) and the legacy `llm-dash-voidware-grants` keyring cache |
 | UI state | `localStorage` (cleared via `?setup=1` / `?reset=1` on next load) |
@@ -90,8 +90,8 @@ keyring/keystore secrets, `web/` static assets, Python virtual environment.
 | `LLM_DASH_BACKUP_MODEL` | — | Optional fallback model (also accepts `BACKUP_MODEL`) |
 | `LLM_DASH_ENDPOINT_MODE` | `append_v1` | `append_v1` (append `/v1`) or `root` (use base URL as-is, e.g. when it already ends in `/v1`) |
 | `LLM_DASH_SHXDOW_ROOT` | `~/.shxdow` | Isolated config/auth root for tests |
-| `LLM_DASH_DATA_DIR` | `./data` | Override the data dir (DB + metrics CSV); used by the e2e harness for an isolated, throwaway database |
-| `LLM_DASH_CHANGELOGS_DIR` | `./changelogs` | Override the changelogs dir; used by the e2e harness so tests never write real, append-only history |
+| `LLM_DASH_DATA_DIR` | `./data` | Override the data dir (DB + metrics CSV); server, seed/update subprocesses, reset, and e2e all use this same path |
+| `LLM_DASH_CHANGELOGS_DIR` | `./changelogs` | Override the changelogs dir; server, seed/update subprocesses, reset, and e2e all use this same path |
 | `EXA_API_KEY` | — | Exa search API key (Exa seed preset + update enrichment) |
 | `ARTIFICIAL_ANALYSIS_API_KEY` | — | Artificial Analysis Data API key (AA seed preset; also accepts `AA_API_KEY`) |
 | `LLM_STATS_API_KEY` | — | LLM Stats API key (LLM Stats seed preset + update enrichment) |
@@ -119,7 +119,7 @@ config. Names above match what `scripts/config.py` reads; the canonical
 | `scripts/init_db.py` | Offline CLI preseed escape hatch (34-model bootstrap) + shared `ensure_schema()`; not auto-run on launch |
 | `scripts/seed_catalog.py` | Wizard-driven catalog seeder: prefetch candidates (AA/LLM Stats/OpenRouter/custom) → batch-score via the research harness with missing-candidate recovery/count guards → single `apply_update` (`POST /api/seed`) |
 | `scripts/run_update.py` | Agent Provider update executor (OpenAI Agents SDK) |
-| `scripts/export_metrics_csv.py` | Regenerates `data/run_metrics.csv` from SQLite |
+| `scripts/export_metrics_csv.py` | Regenerates the active data dir's `run_metrics.csv` from SQLite |
 | `scripts/schedule_job.py` | OS-level scheduled job installer/remover |
 | `scripts/launch_server.py` | Backward-compatible wrapper around `llm_dash.process.start_background()` |
 | `scripts/build_release.py` | Builds curated GitHub release zip/tar assets and checksums |
@@ -161,7 +161,7 @@ config. Names above match what `scripts/config.py` reads; the canonical
 | Path | Contents |
 |---|---|
 | `data/dash.sqlite` | Source of truth. Created on first launch. Not committed. |
-| `data/run_metrics.csv` | Human-readable mirror of `run_metrics` table |
+| `data/run_metrics.csv` | Human-readable mirror of `run_metrics` table (or active `LLM_DASH_DATA_DIR` equivalent) |
 | `changelogs/*.md` | Append-only daily changelog files |
 
 ### Documentation

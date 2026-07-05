@@ -5,7 +5,7 @@ Short, current, and actionable. Use `[ ]` only for still-open work.
 ## Now
 
 Public release CLI/install/archive architecture is shipped. Latest cut is
-**v1.2.1** (catalog seed-count invariants). Next release work, when requested,
+**v1.2.2** (deployed first-run path alignment). Next release work, when requested,
 is the broader public-readiness gate: secrets/history scrub, GitHub metadata,
 community files, and release notes.
 
@@ -18,6 +18,10 @@ Standing update-run maintenance:
 
 ## Recent Completed
 
+- **Deployed first-run path alignment (2026-07-05).** Seed/update subprocesses
+  and reset now use the same env-aware data/changelog paths as the running
+  FastAPI server, fixing deployed volume split-brain where setup could report an
+  empty catalog while reset/seed touched repo-local `data/`.
 - **v1.2.1 — seed-count invariants (2026-06-24).** No selectable source can
   silently seed fewer models than requested: prefetched sources count unique
   candidates and fail fast / retry once when short, Exa & custom-prompt

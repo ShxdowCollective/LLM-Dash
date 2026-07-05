@@ -1046,6 +1046,8 @@ def run_update(payload: RunUpdatePayload | None = None) -> dict[str, str]:
         payload.preset,
         "--source-count",
         str(payload.count),
+        "--db-path",
+        str(DB_PATH),
     ]
     if payload.index:
         command.extend(["--source-index", payload.index])
@@ -1153,6 +1155,8 @@ def post_seed(payload: SeedPayload) -> dict[str, str]:
         payload.preset,
         "--count",
         str(payload.count),
+        "--db-path",
+        str(DB_PATH),
     ]
     if payload.index:
         command.extend(["--index", payload.index])

@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
-"""Regenerate data/run_metrics.csv from the run_metrics table in
-data/dash.sqlite. Run this after every daily update per skill/SKILL.md §8.
+"""Regenerate run_metrics.csv from the active LLM-Dash database.
+
+Run this after every daily update per skill/SKILL.md section 8.
 """
 
 from __future__ import annotations
 
 import csv
+import os
 import sqlite3
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DB_PATH = ROOT / "data" / "dash.sqlite"
-CSV_PATH = ROOT / "data" / "run_metrics.csv"
+DATA_DIR = Path(os.environ.get("LLM_DASH_DATA_DIR") or (ROOT / "data")).resolve()
+DB_PATH = DATA_DIR / "dash.sqlite"
+CSV_PATH = DATA_DIR / "run_metrics.csv"
 
 COLUMNS = [
     "changelog_date", "started_at", "completed_at", "duration_sec",
@@ -24,8 +27,7 @@ COLUMNS = [
 
 def main() -> None:
     if not DB_PATH.exists():
-        print(f"missing {DB_PATH.relative_to(ROOT)} — run init_db.py first",
-              file=sys.stderr)
+        print(f"missing {_display_path(DB_PATH)} - run init_db.py first", file=sys.stderr)
         sys.exit(1)
 
     con = sqlite3.connect(DB_PATH)
@@ -46,7 +48,14 @@ def main() -> None:
         w.writerow(COLUMNS)
         w.writerows(rows)
 
-    print(f"wrote {CSV_PATH.relative_to(ROOT)} ({len(rows)} row(s))")
+    print(f"wrote {_display_path(CSV_PATH)} ({len(rows)} row(s))")
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
 
 
 if __name__ == "__main__":

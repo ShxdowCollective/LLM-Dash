@@ -8,6 +8,7 @@ import asyncio
 import csv
 import datetime as dt
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -51,9 +52,11 @@ except ModuleNotFoundError:
 
 ROOT = Path(__file__).resolve().parent.parent
 CAPABILITY_VOCAB = ("text", "image", "audio", "video")
-DB_PATH = ROOT / "data" / "dash.sqlite"
+DATA_DIR = Path(os.environ.get("LLM_DASH_DATA_DIR") or (ROOT / "data")).resolve()
+DB_PATH = DATA_DIR / "dash.sqlite"
 SKILL_PATH = ROOT / "skill" / "SKILL.md"
-CHANGELOGS_DIR = ROOT / "changelogs"
+CHANGELOGS_DIR = Path(os.environ.get("LLM_DASH_CHANGELOGS_DIR") or (ROOT / "changelogs")).resolve()
+CSV_PATH = DATA_DIR / "run_metrics.csv"
 LOGS_DIR = ROOT / "logs"
 AGENT_RUNTIME = "openai-agents"
 EXA_MCP_URL = "https://mcp.exa.ai/mcp"
@@ -1142,7 +1145,7 @@ def main() -> int:
     log_path = Path(args.log_path) if args.log_path else default_log_path()
     db_path = Path(args.db_path)
     changelogs_dir = CHANGELOGS_DIR if db_path.resolve() == DB_PATH.resolve() else db_path.parent / "changelogs"
-    csv_path = ROOT / "data" / "run_metrics.csv" if db_path.resolve() == DB_PATH.resolve() else db_path.parent / "run_metrics.csv"
+    csv_path = CSV_PATH if db_path.resolve() == DB_PATH.resolve() else db_path.parent / "run_metrics.csv"
     started = utc_now()
     start_time = time.monotonic()
     write_log(log_path, "run_start")

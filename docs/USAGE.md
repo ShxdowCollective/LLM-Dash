@@ -104,6 +104,9 @@ run logs, revokes LLM-Dash's own Voidware broker grants/access tokens, clears
 saved UI preferences, and opens the guided setup wizard (`?setup=1`) to seed the
 catalog from scratch (no auto-reseed).
 
+When `LLM_DASH_DATA_DIR` or `LLM_DASH_CHANGELOGS_DIR` is set, reset and seeding
+use those active deployed paths instead of repo-local `data/` / `changelogs/`.
+
 Historical `changelogs/*.md`, Voidware credentials, the legacy
 `~/.shxdow/auth.json`, and keyring/keystore secrets are **never** deleted.
 
