@@ -222,6 +222,23 @@ network access. Only update runs (which research new models) require internet.
 
 `server.py` is a FastAPI application with three responsibilities:
 
+### 0. Access Control (`scripts/server_auth.py`)
+
+A single request middleware guards every request:
+
+- **Host / Origin guard (always on).** Requests with an unrecognized `Host`
+  header (DNS-rebinding) or a cross-site `Origin` on a state-changing method
+  (cross-site form/`fetch` POST) are rejected `403` — even on a loopback bind.
+- **Per-install bearer token (exposed binds only).** A loopback bind stays
+  token-free. When bound off-loopback (`LLM_DASH_BIND_HOST` is non-loopback, set
+  by the launcher from `--host`), every mutating `/api` route requires
+  `Authorization: Bearer <token>` (`401` otherwise). The frontend forwards a
+  token captured from a one-time `?token=` URL.
+- **SSRF guard (`guard_ssrf`).** Caller-supplied URLs (provider test-connection,
+  custom-endpoint seed/refresh) that resolve to loopback/private/link-local
+  addresses are rejected unless `LLM_DASH_ALLOW_LOCAL_ENDPOINTS=1`. Caller URLs
+  also never inherit the stored provider key (a foreign `base_url` gets no key).
+
 ### 1. Static File Serving
 
 Four explicit mounts maintain the frontend's fetch contract:
@@ -351,7 +368,8 @@ Re-running an update for the same date upserts rather than duplicates:
 | Data | Location | Rationale |
 |---|---|---|
 | Provider, Exa, and LLM Stats API keys | Environment, selected Voidware provider credential, or Voidware broker; legacy keyring reads remain migration fallbacks and new writes require Voidware approval | Secrets never in repo or API responses |
-| Provider credential name, base URL, models, headers, grant renewal metadata | `shxdow.llmdash.json` | Non-secret config and renewal prompts |
+| Provider credential name, base URL, models, custom `request_headers`, grant renewal metadata | `shxdow.llmdash.json` | Non-secret config and renewal prompts. **Custom `request_headers` are stored in plaintext** — do not place secret-bearing header values here; use a purpose-scoped provider credential instead. |
+| Per-install access token (exposed binds only) | `~/.shxdow/config/llmdash_access_token` (mode `0600`) | Bearer token required on mutating routes when bound off-loopback; env override `LLM_DASH_ACCESS_TOKEN` |
 | Selected credential identity per slot (`provider` / `exa` / `llmstats`): serialized Voidware ref or name fallback, safe metadata, grant renewal metadata | `shxdow.llmdash.json` (config `version: 2`; v1 files migrate in place) | One selected secret per feature without persisting secret material |
 | Selected provider grant token | Voidware OS keyring service `voidware-client-grants` | Opaque broker grant reuse without writing tokens to config |
 | Exa API key | Same as provider API key | Same credential pipeline |

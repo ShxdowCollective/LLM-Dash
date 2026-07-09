@@ -91,6 +91,27 @@ llm-dash start --host 0.0.0.0 --silent
 > Binding to `0.0.0.0` exposes the dashboard to your local network. Treat it as
 > trusted-network only and allow the port through your firewall deliberately.
 
+**Access token on an exposed bind.** A loopback bind (`127.0.0.1`, the default)
+needs no authentication. The moment you bind to a non-loopback host, LLM-Dash
+generates a per-install access token and requires it on every state-changing API
+call. On start it prints a ready-to-use URL:
+
+```
+LLM-Dash: server is exposed on 0.0.0.0; an access token is required.
+  Open: http://<lan-ip>:8787/?token=<token>
+```
+
+Open that URL once — the browser stores the token and drops it from the address
+bar. Scripts send it as `Authorization: Bearer <token>`. The token is stored at
+`~/.shxdow/config/llmdash_access_token`; set `LLM_DASH_ACCESS_TOKEN` to pin your
+own. A `Host`/`Origin` guard is always on (even on loopback) to block
+DNS-rebinding and cross-site requests.
+
+**Local model servers (Ollama, etc.).** The provider test-connection and
+custom-endpoint seed/refresh paths block URLs that resolve to private/loopback
+addresses (SSRF guard). If you legitimately point at a local server, opt in with
+`LLM_DASH_ALLOW_LOCAL_ENDPOINTS=1`.
+
 ### Reset to first run
 
 ```bash
