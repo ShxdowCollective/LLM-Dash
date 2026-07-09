@@ -308,9 +308,23 @@
     }
   }
 
+  function showMigrationBanner(errorText) {
+    const banner = document.getElementById("migration-banner");
+    if (!banner) return;
+    const text = String(errorText || "").trim();
+    if (text) {
+      banner.textContent = text;
+      banner.hidden = false;
+    } else {
+      banner.textContent = "";
+      banner.hidden = true;
+    }
+  }
+
   async function waitForBootstrap() {
     for (;;) {
       const data = await api("/api/bootstrap-status").catch((error) => ({ state: "error", detail: message(error) }));
+      showMigrationBanner(data.migration_error);
       if (data.state === "ready" || data.state === "unsupported") return data.state;
       if (data.state === "needs_setup") return "needs_setup";
       if (data.state === "error") throw new Error(data.detail || data.message || "Bootstrap failed.");
@@ -4341,8 +4355,18 @@
       if (lines[0] && lines[0].trim().replace(/\s+/g, " ") === normalizedSummary) lines.shift();
       text = lines.join("\n").replace(/^\s+/, "");
     }
-    box.innerHTML = window.marked ? window.marked.parse(text) : "<pre></pre>";
-    if (!window.marked) box.firstChild.textContent = text;
+    if (window.marked) {
+      const rawHtml = window.marked.parse(text);
+      // Changelog markdown is machine-generated but still passes through marked's
+      // raw-HTML mode; sanitize before insertion so no <script>/onerror/js: URL
+      // can execute in the dashboard origin (C5). DOMPurify is vendored (D1); if
+      // it is somehow missing, fail closed to text rather than raw HTML.
+      box.innerHTML = window.DOMPurify ? window.DOMPurify.sanitize(rawHtml) : "";
+      if (!window.DOMPurify) box.textContent = text;
+    } else {
+      box.innerHTML = "<pre></pre>";
+      box.firstChild.textContent = text;
+    }
     return box;
   }
 
@@ -4439,12 +4463,37 @@
     try { localStorage.setItem(STORE_KEY, JSON.stringify(state.ui)); } catch (_) {}
   }
 
+  const ACCESS_TOKEN_KEY = "llmDashAccessToken";
+
+  function accessToken() {
+    // A loopback install needs no token; on a LAN install the operator arrives via
+    // .../?token=<t>, which we capture once, persist, and strip from the URL so it
+    // is not left in history or shared links.
+    try {
+      const params = new URLSearchParams(location.search);
+      const fromUrl = (params.get("token") || "").trim();
+      if (fromUrl) {
+        localStorage.setItem(ACCESS_TOKEN_KEY, fromUrl);
+        params.delete("token");
+        const rest = params.toString();
+        history.replaceState(null, "", location.pathname + (rest ? "?" + rest : "") + location.hash);
+      }
+      return localStorage.getItem(ACCESS_TOKEN_KEY) || "";
+    } catch (_) {
+      return "";
+    }
+  }
+
   async function api(url, opts) {
     const options = opts || {};
+    const headers = {};
+    if (options.body) headers["Content-Type"] = "application/json";
+    const token = accessToken();
+    if (token) headers["Authorization"] = "Bearer " + token;
     const res = await fetch(url, {
       method: options.method || "GET",
       cache: "no-store",
-      headers: options.body ? { "Content-Type": "application/json" } : undefined,
+      headers: Object.keys(headers).length ? headers : undefined,
       body: options.body ? JSON.stringify(options.body) : undefined,
     });
     const text = await res.text();

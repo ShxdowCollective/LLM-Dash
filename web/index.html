@@ -13,12 +13,15 @@
   <link rel="stylesheet" href="style.css?v=brand-20260616b" />
   <script src="vendor/sql-wasm.js"></script>
   <script src="vendor/marked.min.js"></script>
+  <script src="vendor/purify.min.js"></script>
   <script src="vendor/uPlot.iife.min.js"></script>
 </head>
 <body>
   <a class="vw-skip-link" href="#content">Skip to dashboard</a>
   <div class="vw-page-bg" aria-hidden="true"></div>
   <div class="vw-page-noise" aria-hidden="true"></div>
+
+  <div id="migration-banner" class="migration-banner" role="alert" hidden></div>
 
   <main id="app" class="llm-app vw-page-shell" data-booting="true">
     <header id="mobile-header" class="mobile-shell-header" aria-label="Mobile navigation">
