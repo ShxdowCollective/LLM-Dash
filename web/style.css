@@ -675,6 +675,39 @@ table.models td:last-child {
   text-align: center;
 }
 
+/* U6: keep the Model column readable and ellipsized instead of wrapping or
+   collapsing. The table's own min-width:1180px keeps horizontal scroll intact. */
+.model-col,
+.model-col-cell {
+  min-width: 210px;
+}
+.model-col-cell .name {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Pinned-compare partition (U5c): hoisted rows keep the compare tint; a divider
+   and a left accent mark where the pinned group ends. No glow. */
+table.models tbody tr.is-pinned td:first-child {
+  box-shadow: inset 3px 0 0 var(--vw-accent);
+}
+table.models tbody tr.is-pinned + tr:not(.is-pinned) td {
+  border-top: 2px solid var(--vw-border-mid);
+}
+.model-list-row.is-pinned {
+  box-shadow: inset 3px 0 0 var(--vw-accent);
+}
+.model-list-row.is-pinned + .model-list-row:not(.is-pinned),
+.mobile-model-card.is-pinned + .mobile-model-card:not(.is-pinned) {
+  border-top: 2px solid var(--vw-border-mid);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
 .compare-check {
   display: inline-grid;
   place-items: center;
@@ -2010,11 +2043,13 @@ body.is-col-resizing .model-row { pointer-events: none; }
 }
 
 .chart-tip {
+  /* Position is set inline by positionChartTip() (Floating UI computePosition,
+     strategy: fixed) — absolute here is only the pre-JS/no-JS fallback box. */
   position: absolute;
-  z-index: 5;
-  transform: translate(-50%, calc(-100% - 12px));
+  z-index: 60;
+  display: grid;
+  gap: 3px;
   pointer-events: none;
-  white-space: nowrap;
   padding: 7px 11px;
   border-radius: 9px;
   font-size: 12px;
@@ -2024,6 +2059,7 @@ body.is-col-resizing .model-row { pointer-events: none; }
   box-shadow: inset 0 0 0 1px var(--vw-border-focus), 0 12px 30px rgba(0, 0, 0, 0.4);
 }
 .chart-tip[hidden] { display: none; }
+.chart-tip-line { white-space: nowrap; }
 
 .svg-shell > .analysis-svg {
   flex: 1 1 auto;
@@ -2071,6 +2107,18 @@ body.is-col-resizing .model-row { pointer-events: none; }
 
 .y-title {
   text-anchor: middle;
+}
+
+/* Pareto frontier overlay (U3) — subtle, no glow; sits behind the circles
+   via DOM order (see renderScatter). */
+.chart-frontier-line {
+  fill: none;
+  stroke: var(--vw-accent);
+  stroke-opacity: 0.4;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
 }
 
 .model-point {
@@ -2158,6 +2206,21 @@ body.is-col-resizing .model-row { pointer-events: none; }
 
 .legend-chip.is-active::before {
   box-shadow: 0 0 10px color-mix(in srgb, var(--model-color) 90%, transparent);
+}
+
+/* Frontier legend key (U3) — decorative, not a vendor filter, so it skips
+   the ::before dot and cursor:pointer that the clickable chips get. */
+.legend-frontier {
+  cursor: default;
+  color: var(--vw-text-soft);
+}
+
+.legend-frontier-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--vw-accent) 70%, transparent);
 }
 
 .changelog-view {
@@ -2467,36 +2530,13 @@ body.is-col-resizing .model-row { pointer-events: none; }
   gap: 16px;
 }
 
-.analytics-grid .panel-card:last-child {
-  grid-column: 1 / -1;
+.trend-chart {
+  width: 100%;
+  min-height: 156px;
 }
 
-.mini-bars {
-  display: flex;
-  align-items: end;
-  gap: 4px;
-  height: 150px;
-  padding-top: 12px;
-}
-
-.mini-bars span {
-  flex: 1 1 8px;
-  min-width: 5px;
-  border-radius: 999px 999px 0 0;
-  background: linear-gradient(180deg, var(--vw-accent), color-mix(in srgb, var(--vw-accent) 26%, transparent));
-}
-
-.mini-bars-wrap {
-  display: grid;
-  gap: 6px;
-}
-
-.mini-bars-axis {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  color: var(--vw-text-faint);
-  font-size: 11px;
+.trend-chart .uplot {
+  width: 100%;
 }
 
 .chart-empty-note {
@@ -3649,6 +3689,49 @@ kbd {
   grid-column: 1 / -1;
 }
 
+/* ── Frontier toggle (U5b) ── */
+.frontier-toggle {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.frontier-toggle.is-active {
+  color: var(--vw-text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vw-iridescent-5) 60%, var(--vw-border-focus));
+}
+
+/* ── Columns popover (U5a) — reuses .filter-pop chrome ── */
+.columns-anchor { position: relative; display: inline-flex; }
+.toolbar-columns-btn.is-open {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vw-iridescent-5) 60%, var(--vw-border-focus));
+}
+.columns-pop { width: min(240px, calc(100vw - 32px)); }
+.columns-menu { display: grid; gap: 10px; }
+.columns-menu-title {
+  margin: 0;
+  color: var(--vw-text-faint);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.columns-menu-list { display: grid; gap: 4px; }
+.columns-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 8px;
+  border-radius: var(--vw-radius-sm);
+  color: var(--vw-text-soft);
+  font-size: 14px;
+  cursor: pointer;
+}
+.columns-menu-item:hover { background: var(--vw-surface-3); color: var(--vw-text); }
+.columns-menu-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
 /* ── Expanded filters ─────────────────────────────────────────────── */
 
 .filter-dock {
@@ -3815,6 +3898,37 @@ kbd {
   font-weight: 800;
   text-align: right;
 }
+
+/* Score-history trend: sparkline + delta chip, sitting under the bar track
+   (spanning the track + value columns, leaving the label column empty). Only
+   present for metrics with >=2 history points. */
+.stat-bar-trend {
+  grid-column: 2 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+.stat-spark {
+  flex: 1;
+  min-width: 0;
+  height: 16px;
+  opacity: 0.85;
+}
+.stat-bar-delta {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--vw-text-muted);
+}
+.stat-bar-delta em { font-style: normal; font-size: 8px; }
+.stat-bar-delta.is-up { color: var(--vw-success); }
+.stat-bar-delta.is-down { color: var(--vw-error); }
+.stat-bar-delta.is-flat { color: var(--vw-text-faint); }
 
 .shortcut-note {
   margin: 8px 0 0;
@@ -4258,12 +4372,41 @@ kbd {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tier-color, transparent) 45%, transparent);
 }
 
+.detail-rail-copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: fit-content;
+  margin: 14px 0 0 auto;
+  padding: 5px 11px;
+  font-family: var(--vw-font-body);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--vw-text-soft);
+  background: var(--vw-surface-2);
+  border: 0;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px var(--vw-border);
+  cursor: pointer;
+  transition: color 140ms ease, box-shadow 140ms ease;
+}
+.detail-rail-copy:hover {
+  color: var(--vw-text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vw-accent) 45%, var(--vw-border));
+}
+
 .detail-rail-body {
   display: flex;
   flex-direction: column;
   flex: 1;
   padding: 18px 22px 24px;
 }
+
+/* Drawer reuse: the rail content is dropped into a modal on narrow viewports;
+   unpin the rail's full-height scroll so it flows inside the modal card. */
+.detail-drawer-inner { height: auto; overflow: visible; }
+.detail-drawer-inner .detail-rail-head { padding-top: 4px; }
+.detail-drawer-inner .detail-rail-body { padding: 18px 2px 4px; }
 
 .detail-rail-meta {
   display: grid;
@@ -4358,6 +4501,16 @@ kbd {
 #app.llm-app.has-rail .compare-tray { right: var(--llm-rail-w); }
 .compare-tray-count { font-size: 12.5px; color: var(--vw-text-muted); white-space: nowrap; }
 .compare-tray-count b { color: var(--vw-text); }
+.compare-tray-pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--vw-text-soft);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.compare-tray-pin input { accent-color: var(--vw-iridescent-5); }
 .compare-tray-chips { display: flex; gap: 8px; flex: 1; min-width: 0; overflow-x: auto; padding: 2px; }
 .compare-tray-chip {
   display: inline-flex;

@@ -48,6 +48,30 @@ export function sortValue(model, key) {
   return Number(model[key]) || 0;
 }
 
+// Pareto frontier over a model set on two 0–10 score axes. Every metric (cost
+// included) is scaled higher-is-better, so a model is DOMINATED when another
+// model is at least as good on both axes and strictly better on at least one;
+// the frontier is the non-dominated remainder. A model whose value on either
+// axis is null/NaN/absent is excluded entirely — "no data" can't sit on a
+// frontier. Ties (identical x,y) are all kept: neither dominates the other.
+// Pure: takes model-like objects, returns a subset of the input array.
+export function paretoFrontier(models, xKey, yKey) {
+  const read = (model, key) => {
+    if (key === "overall") return overall(model);
+    if (key === "value") return valueScore(model);
+    const raw = model[key];
+    if (raw === null || raw === undefined || raw === "") return null;
+    const v = Number(raw);
+    return Number.isFinite(v) ? v : null;
+  };
+  const pts = (models || [])
+    .map((model) => ({ model, x: read(model, xKey), y: read(model, yKey) }))
+    .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+  return pts
+    .filter((p) => !pts.some((q) => q !== p && q.x >= p.x && q.y >= p.y && (q.x > p.x || q.y > p.y)))
+    .map((p) => p.model);
+}
+
 // String columns (name, vendor) compare lexically; everything else numerically.
 export function compareBy(a, b, key, dir) {
   let delta;

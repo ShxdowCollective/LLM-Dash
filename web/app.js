@@ -1,11 +1,14 @@
 // LLM-Dash frontend. Zero-build, package-vendored Voidware, browser SQLite.
-import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js";
+import { overall, valueScore, metricValue, tier, compareBy, paretoFrontier } from "./ranking.js";
 
 (function () {
   "use strict";
 
   const METRIC_KEYS = ["intelligence", "coding", "agents", "speed", "cost"];
   const CHART_METRIC_KEYS = ["cost", "overall", "value", "intelligence", "coding", "agents", "speed"];
+  // Cluster radius for scatter hover disambiguation (resolution 11): viewBox
+  // units, not screen px — the 720x400 viewBox scales with the container.
+  const CHART_CLUSTER_RADIUS = 10;
 
   // Single source of truth for per-metric label + signature color. Every view
   // (list bars, detail bars, table header dots, radar) reads from here so a
@@ -60,6 +63,9 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
     { key: "value", label: "Value", sort: "value", score: true, w: 102 },
     { key: "compare", label: "Compare", sort: null, w: 74 },
   ];
+  // Score columns are the only hideable ones (U5a). rank/provider/model/compare
+  // are structural and always render.
+  const HIDEABLE_COLUMNS = COLUMNS.filter((c) => c.score).map((c) => c.key);
   const SORT_KEYS = new Set(["overall", "value", "intelligence", "coding", "agents", "speed", "cost", "name", "vendor"]);
   const MOBILE_SORTS = [
     ["overall", "Overall"], ["value", "Value"], ["vendor", "Provider"], ["name", "Model"],
@@ -121,6 +127,10 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
     tableZoom: 1.0,
     colWidths: {},
     filtersOpen: false,
+    columnsOpen: false,
+    visibleColumns: null,
+    frontierOnly: false,
+    pinCompared: false,
     chartMode: "scatter",
     chartX: "cost",
     chartY: "overall",
@@ -194,6 +204,7 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
     runLogExpanded: false,
     focusIndex: 0,
     drawerOpen: false,
+    detailDrawerOpen: false,
     helpOpen: false,
     manualOpen: false,
     refreshOptionsOpen: false,
@@ -489,11 +500,19 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
     if (ui.hideDeprecated && ui.status !== "deprecated") list = list.filter((m) => m.status !== "deprecated");
     state.filteredModels = list.sort((a, b) => compareBy(a, b, ui.sortKey, ui.sortDir));
     const ids = new Set(state.filteredModels.map((m) => m.id));
+    const modelIds = new Set(state.models.map((m) => m.id));
     // compare = explicit checkbox set (empty by default). inspect = single
     // row/point click; falls back to the top model so the stat panel is never
     // blank, but never auto-joins the compare set.
-    state.ui.compare = (state.ui.compare || []).filter((id) => ids.has(id)).slice(0, MAX_COMPARE);
-    if (!ids.has(state.ui.inspect)) state.ui.inspect = state.filteredModels[0] ? state.filteredModels[0].id : "";
+    // When "Pin compared" is on the selection is scoped to the full catalog so a
+    // filtered/off-frontier pick stays pinned (U5c); otherwise it prunes to the
+    // visible set as before, so filtering away a compared row unchecks it.
+    const compareScope = state.ui.pinCompared ? modelIds : ids;
+    state.ui.compare = (state.ui.compare || []).filter((id) => compareScope.has(id)).slice(0, MAX_COMPARE);
+    // inspect membership is checked against the full catalog, not the filtered
+    // set, so a deep-linked (?m=) model stays inspected even when active filters
+    // exclude it. Only reset when the id has no backing model at all.
+    if (!modelIds.has(state.ui.inspect)) state.ui.inspect = state.filteredModels[0] ? state.filteredModels[0].id : "";
     savePrefs();
   }
 
@@ -530,6 +549,7 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
   }
 
   function render() {
+    destroyStatsCharts();
     syncShell();
     renderHeader();
     renderSubnav();
@@ -609,6 +629,7 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
   function renderModelToolbar() {
     const count = filterCount();
     const isTable = state.subpage.models === "table";
+    const frontierCount = paretoFrontier(state.filteredModels, "cost", "overall").length;
     return h("section", { class: "models-toolbar", "aria-label": "Model controls" }, [
       h("div", { class: "toolbar-primary" }, [
         h("label", { class: "search-field" }, [
@@ -639,6 +660,27 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
           state.ui.filtersOpen ? h("div", { class: "filter-pop-backdrop", "aria-hidden": "true", onclick: closeFilters }) : null,
           state.ui.filtersOpen ? h("div", { class: "filter-pop", role: "dialog", "aria-label": "Filters" }, renderFilters()) : null,
         ]),
+        // Pareto-frontier toggle (U5b): narrows every models sub-view to the
+        // cost/overall non-dominated set. Chip label carries the live count.
+        h("button", {
+          class: "vw-btn vw-btn-secondary frontier-toggle" + (state.ui.frontierOnly ? " is-active" : ""),
+          type: "button",
+          "aria-pressed": String(state.ui.frontierOnly),
+          title: "Show only cost/overall Pareto-frontier models",
+          onclick: () => { state.ui.frontierOnly = !state.ui.frontierOnly; savePrefs(); render(); },
+        }, `Frontier · ${frontierCount}`),
+        // Column presets (U5a) — table view only; mirrors the Filters popover idiom.
+        isTable ? h("div", { class: "filter-anchor columns-anchor" }, [
+          h("button", {
+            class: "vw-btn vw-btn-secondary toolbar-columns-btn" + (state.ui.columnsOpen ? " is-open" : ""),
+            type: "button",
+            "aria-expanded": String(state.ui.columnsOpen),
+            "aria-haspopup": "dialog",
+            onclick: () => { state.ui.columnsOpen = !state.ui.columnsOpen; savePrefs(); render(); },
+          }, "Columns"),
+          state.ui.columnsOpen ? h("div", { class: "filter-pop-backdrop", "aria-hidden": "true", onclick: closeColumns }) : null,
+          state.ui.columnsOpen ? h("div", { class: "filter-pop columns-pop", role: "dialog", "aria-label": "Table columns", "aria-labelledby": "columns-menu-title" }, renderColumnsMenu()) : null,
+        ]) : null,
       ]),
       h("div", { class: "toolbar-actions" }, [
         isTable ? zoomControl() : null,
@@ -770,42 +812,119 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
     if (label) label.textContent = `Min overall: ${Number(state.ui.minOverall) > 0 ? Number(state.ui.minOverall).toFixed(1) : "any"}`;
   }
 
+  // The score columns currently marked visible (U5a). null prefs => all visible;
+  // an array is intersected with the known hideable keys, preserving COLUMNS order.
+  function visibleScoreKeys() {
+    const vis = state.ui.visibleColumns;
+    return Array.isArray(vis) ? HIDEABLE_COLUMNS.filter((k) => vis.includes(k)) : [...HIDEABLE_COLUMNS];
+  }
+
+  // The COLUMNS actually rendered by the table: structural columns always, score
+  // columns only when visible. Colgroup, header, and body all key off this so the
+  // three stay index-aligned (resize handles depend on that alignment).
+  function tableColumns() {
+    const shown = new Set(visibleScoreKeys());
+    return COLUMNS.filter((c) => !c.score || shown.has(c.key));
+  }
+
+  function toggleColumn(key) {
+    const shown = new Set(visibleScoreKeys());
+    if (shown.has(key)) shown.delete(key); else shown.add(key);
+    state.ui.visibleColumns = HIDEABLE_COLUMNS.filter((k) => shown.has(k));
+    savePrefs();
+    render();
+  }
+
+  function closeColumns() {
+    if (!state.ui.columnsOpen) return;
+    state.ui.columnsOpen = false;
+    savePrefs();
+    render();
+  }
+
+  function renderColumnsMenu() {
+    const shown = new Set(visibleScoreKeys());
+    return h("div", { class: "columns-menu" }, [
+      h("p", { class: "columns-menu-title", id: "columns-menu-title" }, "Show columns"),
+      h("div", { class: "columns-menu-list" }, HIDEABLE_COLUMNS.map((key) => {
+        const col = COLUMNS.find((c) => c.key === key);
+        return h("label", { class: "columns-menu-item" }, [
+          h("input", { type: "checkbox", checked: shown.has(key), onchange: () => toggleColumn(key) }),
+          h("span", { class: "columns-menu-dot", "aria-hidden": "true", style: { background: metricColor(key) } }),
+          h("span", null, col ? col.label : key),
+        ]);
+      })),
+    ]);
+  }
+
+  // The ordered model set a view renders. Two view-only transforms sit here (not
+  // in refreshModels) so the canonical filteredModels stays intact: the frontier
+  // toggle (U5b) narrows to the cost/overall Pareto set, and pinned compare (U5c)
+  // hoists compare-selected models to the top even when the frontier/filters would
+  // drop them. Returns { pinned, rest } so the render path can draw a divider.
+  function displayModels() {
+    let base = state.filteredModels;
+    if (state.ui.frontierOnly) base = paretoFrontier(base, "cost", "overall");
+    if (!state.ui.pinCompared || !state.ui.compare.length) return { pinned: [], rest: base };
+    const pinnedIds = new Set(state.ui.compare);
+    // Resolve pins from the full catalog, in selection order, so a filtered/
+    // off-frontier compare pick still shows at the top.
+    const byId = new Map(state.models.map((m) => [m.id, m]));
+    const pinned = state.ui.compare.map((id) => byId.get(id)).filter(Boolean);
+    const rest = base.filter((m) => !pinnedIds.has(m.id));
+    return { pinned, rest };
+  }
+
+  // The scatter plot's point set: the frontier toggle narrows it across every
+  // sub-view (U5b). Pinning is order-only, meaningless on a scatter, so skip it.
+  function chartModels() {
+    return state.ui.frontierOnly ? paretoFrontier(state.filteredModels, "cost", "overall") : state.filteredModels;
+  }
+
   function renderTable() {
     if (!state.totalModelCount) return emptyState("No models tracked yet", "Run Refresh to discover and score models.", "Run Refresh", handleRefresh);
-    if (!state.filteredModels.length) return emptyState("No models match this view", "Clear filters or search for another vendor.", "Reset view", resetFilters);
+    const { pinned, rest } = displayModels();
+    if (!pinned.length && !rest.length) return emptyState("No models match this view", "Clear filters or search for another vendor.", "Reset view", resetFilters);
     const zoom = clampZoom(state.ui.tableZoom);
     const graded = zoom < GRADE_ZOOM;
     const widths = state.ui.colWidths || {};
+    const cols = tableColumns();
+    const ordered = [...pinned, ...rest];
+    const pinCount = pinned.length;
+    const bodyRow = (model, index) => h("tr", {
+      class: rowClasses(model.id) + (index < pinCount ? " is-pinned" : ""),
+      tabindex: "0",
+      "data-testid": "model-row",
+      "data-model": model.name || "",
+      onclick: () => setInspect(model.id),
+      onkeydown: (e) => rowKey(e, index, model.id),
+      style: { "--model-color": safeColor(model.color) },
+    }, cols.map((col) => bodyCell(col, model, index)));
     return h("section", {
-      class: "model-table-layout" + (graded ? " is-graded" : ""),
+      class: "model-table-layout" + (graded ? " is-graded" : "") + (pinCount ? " has-pins" : ""),
       style: { "--table-zoom": String(zoom) },
     }, [
       h("div", { class: "table-wrap models-table-wrap vw-scroll-shadow" }, [
         h("table", { class: "models" }, [
-          h("colgroup", null, COLUMNS.map((col) => {
+          h("colgroup", null, cols.map((col) => {
             const w = Number(widths[col.key]) || col.w;
             return h("col", w ? { style: { width: w + "px" } } : null);
           })),
-          h("thead", null, h("tr", null, COLUMNS.map(headerCell))),
-          h("tbody", null, state.filteredModels.map((model, index) => h("tr", {
-            class: rowClasses(model.id),
-            tabindex: "0",
-            "data-testid": "model-row",
-            "data-model": model.name || "",
-            onclick: () => setInspect(model.id),
-            onkeydown: (e) => rowKey(e, index, model.id),
-            style: { "--model-color": safeColor(model.color) },
-          }, COLUMNS.map((col) => bodyCell(col, model, index))))),
+          h("thead", null, h("tr", null, cols.map(headerCell))),
+          h("tbody", null, ordered.map((model, index) => bodyRow(model, index))),
         ]),
       ]),
-      h("div", { class: "models-mobile-list" }, state.filteredModels.map((model, index) => modelCard(model, index))),
+      h("div", { class: "models-mobile-list" }, ordered.map((model, index) => modelCard(model, index, index < pinCount))),
     ]);
   }
 
   function renderList() {
     if (!state.totalModelCount) return emptyState("No models tracked yet", "Run Refresh to discover and score models.", "Run Refresh", handleRefresh);
-    if (!state.filteredModels.length) return emptyState("No models match this view", "Clear filters or search for another vendor.", "Reset view", resetFilters);
-    return h("section", { class: "model-list-layout" }, [
+    const { pinned, rest } = displayModels();
+    if (!pinned.length && !rest.length) return emptyState("No models match this view", "Clear filters or search for another vendor.", "Reset view", resetFilters);
+    const ordered = [...pinned, ...rest];
+    const pinCount = pinned.length;
+    return h("section", { class: "model-list-layout" + (pinCount ? " has-pins" : "") }, [
       h("div", { class: "list-sort-bar" }, [
         h("label", { class: "field compact list-sort-field" }, [
           h("span", null, "Sort"),
@@ -814,7 +933,7 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
         ]),
       ]),
       h("div", { class: "model-list vw-scroll-shadow" },
-        state.filteredModels.map((model, index) => listRow(model, index))),
+        ordered.map((model, index) => listRow(model, index, index < pinCount))),
     ]);
   }
 
@@ -824,13 +943,13 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
   // narrow per-metric cells (~53px when the detail rail is open).
   const LIST_BAR_CODE = { intelligence: "Int", coding: "Cod", agents: "Agt", speed: "Spd" };
 
-  function listRow(model, index) {
+  function listRow(model, index, pinned) {
     const color = safeColor(model.color);
     const g = tier(overall(model));
     return h("div", {
       // Focusable container, not role=button: a button must not nest the compare
       // checkbox (axe nested-interactive). Keyboard nav still works via tabindex.
-      class: rowClasses(model.id) + " model-list-row",
+      class: rowClasses(model.id) + " model-list-row" + (pinned ? " is-pinned" : ""),
       tabindex: "0",
       "aria-label": (model.name || "Unknown model") + " — Enter to inspect, c to compare",
       "data-testid": "model-row",
@@ -895,7 +1014,7 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
   function headerCell(col) {
     const active = col.sort && state.ui.sortKey === col.sort;
     const ariaSort = active ? (state.ui.sortDir === "asc" ? "ascending" : "descending") : (col.sort ? "none" : null);
-    const cls = (col.key === "rank" ? "rank-col" : col.key === "compare" ? "compare-col" : "") + (col.sort ? " is-sortable" : "");
+    const cls = (col.key === "rank" ? "rank-col" : col.key === "compare" ? "compare-col" : col.key === "model" ? "model-col" : "") + (col.sort ? " is-sortable" : "");
     const inner = [];
     if (col.key === "compare") inner.push(h("span", { class: "sr-only" }, "Compare"));
     else if (col.sort) {
@@ -934,7 +1053,8 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
       const widths = { ...(state.ui.colWidths || {}) };
       widths[col.key] = next;
       state.ui.colWidths = widths;
-      const idx = COLUMNS.findIndex((c) => c.key === col.key);
+      // Index into the rendered colgroup, which only contains visible columns.
+      const idx = tableColumns().findIndex((c) => c.key === col.key);
       const colEl = document.querySelectorAll("table.models colgroup col")[idx];
       if (colEl) colEl.style.width = next + "px";
     };
@@ -954,7 +1074,7 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
   function bodyCell(col, model, index) {
     if (col.key === "rank") return h("td", { class: "rank-cell" }, index + 1);
     if (col.key === "provider") return h("td", { class: "provider-cell" }, providerCell(model));
-    if (col.key === "model") return h("td", null, modelIdentity(model));
+    if (col.key === "model") return h("td", { class: "model-col-cell" }, modelIdentity(model));
     if (col.key === "compare") return h("td", { class: "compare-cell" }, compareCheckbox(model));
     if (col.key === "overall") return scoreTd(overall(model));
     if (col.key === "value") return scoreTd(valueScore(model));
@@ -1015,10 +1135,10 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
     }, String(model.vendor || "?").trim().charAt(0).toUpperCase() || "?");
   }
 
-  function modelCard(model, index) {
+  function modelCard(model, index, pinned) {
     const inCompare = state.ui.compare.includes(model.id);
     return h("article", {
-      class: "mobile-model-card" + (state.ui.inspect === model.id ? " is-inspect" : "") + (inCompare ? " is-compare" : ""),
+      class: "mobile-model-card" + (state.ui.inspect === model.id ? " is-inspect" : "") + (inCompare ? " is-compare" : "") + (pinned ? " is-pinned" : ""),
       style: { "--model-color": safeColor(model.color) },
       // Focusable container, not role=button: avoids nesting the compare checkbox
       // inside an interactive role (axe nested-interactive). aria-pressed dropped
@@ -1060,6 +1180,9 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
 
   function renderChart() {
     if (!state.filteredModels.length) return emptyState("Nothing to chart", "Reset filters to bring model points back.", "Reset view", resetFilters);
+    // The frontier toggle can empty the scatter even with filtered models left
+    // (all null on the current axes) — same empty state, reset clears the toggle.
+    if (state.ui.chartMode === "scatter" && !chartModels().length) return emptyState("Nothing to chart", "Reset filters to bring model points back.", "Reset view", resetFilters);
     const focusList = compareModels().length ? compareModels() : [inspectModel()].filter(Boolean);
     return h("section", { class: "chart-workbench" }, [
       h("div", { class: "chart-controls" }, [
@@ -1090,6 +1213,44 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
     const xKey = state.ui.chartX, yKey = state.ui.chartY;
     const sx = (v) => pad.left + (clamp(Number(v) || 0, 0, 10) / 10) * (w - pad.left - pad.right);
     const sy = (v) => hgt - pad.bottom - (clamp(Number(v) || 0, 0, 10) / 10) * (hgt - pad.top - pad.bottom);
+
+    // Pareto frontier overlay (U3): non-dominated set on the CURRENT axes,
+    // computed over the same set the scatter plots (so the frontier-only
+    // toggle never draws a line through hidden points), sorted left-to-right.
+    // Drawn before the circles below so it paints behind them.
+    const frontierPts = paretoFrontier(chartModels(), xKey, yKey)
+      .map((model) => ({ model, x: metricValue(model, xKey), y: metricValue(model, yKey) }))
+      .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y))
+      .sort((a, b) => a.x - b.x);
+    const frontierLine = frontierPts.length > 1
+      ? h("path", {
+          d: frontierPts.map((p, i) => `${i ? "L" : "M"}${sx(p.x).toFixed(2)},${sy(p.y).toFixed(2)}`).join(" "),
+          class: "chart-frontier-line",
+          "aria-hidden": "true",
+        })
+      : null;
+
+    // Cluster overlapping points (resolution 11: ~10 viewBox units, not
+    // screen px) so hovering/focusing any one of them shows every model in
+    // the cluster, not just the topmost circle.
+    const plotted = chartModels().map((model) => ({ model, cx: sx(metricValue(model, xKey)), cy: sy(metricValue(model, yKey)) }));
+    const clusters = [];
+    plotted.forEach((p) => {
+      const cluster = clusters.find((c) => c.some((q) => Math.hypot(q.cx - p.cx, q.cy - p.cy) <= CHART_CLUSTER_RADIUS));
+      if (cluster) cluster.push(p);
+      else clusters.push([p]);
+    });
+    const clusterByModel = new Map();
+    clusters.forEach((cluster) => cluster.forEach((p) => clusterByModel.set(p.model.id, cluster)));
+    const tipLine = (model) => `${model.name} · ${METRIC_META[xKey] ? METRIC_META[xKey].short : labelFor(xKey)} ${fmtScore(metricValue(model, xKey))} · ${METRIC_META[yKey] ? METRIC_META[yKey].short : labelFor(yKey)} ${fmtScore(metricValue(model, yKey))}`;
+    const tipFor = (id) => (clusterByModel.get(id) || []).map((p) => tipLine(p.model));
+    // Keyboard/SR parity with the stacked hover tooltip: a clustered point's
+    // accessible name lists the models sharing its spot.
+    const clusterSuffix = (id) => {
+      const mates = (clusterByModel.get(id) || []).filter((p) => p.model.id !== id);
+      return mates.length ? `. Overlaps ${mates.length === 1 ? "1 other model" : mates.length + " other models"}: ${mates.map((p) => p.model.name).join(", ")}` : "";
+    };
+
     const svg = h("svg", { class: "analysis-svg", viewBox: `0 0 ${w} ${hgt}`, role: "img", "aria-label": `${labelFor(xKey)} by ${labelFor(yKey)} scatter plot` }, [
       h("rect", { x: pad.left, y: pad.top, width: w - pad.left - pad.right, height: hgt - pad.top - pad.bottom, rx: "18", class: "chart-plot-bg" }),
       ...[0, 2, 4, 6, 8, 10].flatMap((tick) => [
@@ -1100,47 +1261,86 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
       ]),
       h("text", { x: w / 2, y: hgt - 10, class: "chart-axis-title x-title" }, labelFor(xKey)),
       h("text", { x: 16, y: hgt / 2, class: "chart-axis-title y-title", transform: `rotate(-90 16 ${hgt / 2})` }, labelFor(yKey)),
-      ...state.filteredModels.map((model) => {
+      frontierLine,
+      ...plotted.map(({ model, cx, cy }) => {
         const inCompare = state.ui.compare.includes(model.id);
         const inspect = state.ui.inspect === model.id;
         return h("circle", {
-          cx: sx(metricValue(model, xKey)),
-          cy: sy(metricValue(model, yKey)),
+          cx, cy,
           r: inCompare || inspect ? "9" : "7",
           class: "model-point" + (inspect ? " is-inspect" : "") + (inCompare ? " is-compare" : ""),
           tabindex: "0",
           style: { "--model-color": safeColor(model.color) },
-          "aria-label": `${model.name}: ${labelFor(xKey)} ${fmtScore(metricValue(model, xKey))}, ${labelFor(yKey)} ${fmtScore(metricValue(model, yKey))}`,
+          "aria-label": `${model.name}: ${labelFor(xKey)} ${fmtScore(metricValue(model, xKey))}, ${labelFor(yKey)} ${fmtScore(metricValue(model, yKey))}${clusterSuffix(model.id)}`,
           onclick: () => setInspect(model.id),
           ondblclick: () => toggleCompare(model.id),
-          onmouseenter: (e) => showChartTip(e, `${model.name} · ${METRIC_META[xKey] ? METRIC_META[xKey].short : labelFor(xKey)} ${fmtScore(metricValue(model, xKey))} · ${METRIC_META[yKey] ? METRIC_META[yKey].short : labelFor(yKey)} ${fmtScore(metricValue(model, yKey))}`),
+          onmouseenter: (e) => showChartTip(e, tipFor(model.id)),
           onmousemove: moveChartTip,
           onmouseleave: hideChartTip,
+          onfocus: (e) => showChartTip(e, tipFor(model.id)),
+          onblur: hideChartTip,
           onkeydown: (e) => pointKey(e, model.id),
         });
       }),
     ]);
-    return h("div", { class: "svg-shell" }, [svg, h("div", { class: "chart-tip", id: "chart-tip", hidden: true }), renderLegend()]);
+    return h("div", { class: "svg-shell" }, [svg, h("div", { class: "chart-tip", id: "chart-tip", hidden: true }), renderLegend(chartModels(), { frontier: frontierPts.length > 1 })]);
   }
 
-  // Direct-DOM tooltip so hovering a point doesn't trigger a full re-render.
-  function showChartTip(e, text) {
+  // Direct-DOM tooltip so hovering/focusing a point doesn't trigger a full
+  // re-render. `lines` is one string per clustered model (single-item array
+  // for an isolated point). Positioned via vendored Floating UI (D2):
+  // flip+shift against a virtual element at the cursor (mouse) or the
+  // point's own rect (keyboard focus) so it never clips the shell/viewport.
+  function showChartTip(e, lines) {
     const tip = document.getElementById("chart-tip");
     if (!tip) return;
-    tip.textContent = text;
+    tip.replaceChildren(...(Array.isArray(lines) ? lines : [lines]).map((line) => h("div", { class: "chart-tip-line" }, line)));
     tip.hidden = false;
-    moveChartTip(e);
+    positionChartTip(e);
   }
   function moveChartTip(e) {
     const tip = document.getElementById("chart-tip");
     if (!tip || tip.hidden) return;
-    const shell = tip.parentElement.getBoundingClientRect();
-    tip.style.left = (e.clientX - shell.left) + "px";
-    tip.style.top = (e.clientY - shell.top) + "px";
+    positionChartTip(e);
   }
   function hideChartTip() {
     const tip = document.getElementById("chart-tip");
     if (tip) tip.hidden = true;
+  }
+  function positionChartTip(e) {
+    const tip = document.getElementById("chart-tip");
+    if (!tip) return;
+    // Mouse events carry a real point; focus events (keyboard) don't, so
+    // anchor to the focused circle's own rect instead.
+    const hasCursor = typeof e.clientX === "number";
+    const rect = hasCursor
+      ? { x: e.clientX, y: e.clientY, width: 0, height: 0 }
+      : e.target.getBoundingClientRect();
+    const virtualEl = {
+      getBoundingClientRect: () => ({
+        x: rect.x, y: rect.y, top: rect.y, left: rect.x,
+        width: rect.width || 0, height: rect.height || 0,
+        right: rect.x + (rect.width || 0), bottom: rect.y + (rect.height || 0),
+      }),
+    };
+    if (typeof FloatingUIDOM === "undefined") {
+      // Fallback if the vendor script failed to load: previous shell-relative math.
+      const shell = tip.parentElement.getBoundingClientRect();
+      tip.style.position = "absolute";
+      tip.style.left = (rect.x - shell.left) + "px";
+      tip.style.top = (rect.y - shell.top) + "px";
+      return;
+    }
+    FloatingUIDOM.computePosition(virtualEl, tip, {
+      placement: "top",
+      strategy: "fixed",
+      middleware: [FloatingUIDOM.offset(10), FloatingUIDOM.flip(), FloatingUIDOM.shift({ padding: 8 })],
+    }).then(({ x, y }) => {
+      if (tip.hidden) return;
+      tip.style.position = "fixed";
+      tip.style.left = x + "px";
+      tip.style.top = y + "px";
+    });
   }
 
   function renderRadar(models) {
@@ -1206,8 +1406,16 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
       ]));
       return;
     }
+    els.rail.replaceChildren(h("div", { class: "detail-rail-inner vw-scroll-shadow" }, railContent(model)));
+  }
+
+  // Shared builder for the model scorecard, used by both the docked/in-flow
+  // detail rail and the deep-link drawer (modal on narrow viewports) so the two
+  // never drift.
+  function railContent(model) {
     const card = modelCardUrl(model);
     const t = tier(overall(model));
+    const permalink = () => location.origin + location.pathname + hashFor("models", state.subpage.models, model.id);
     const head = h("header", { class: "detail-rail-head", style: { "--model-color": safeColor(model.color) } }, [
       h("div", { class: "detail-rail-id" }, [
         providerLogo(model, 42),
@@ -1217,6 +1425,11 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
         ]),
         h("span", { class: "detail-rail-grade " + t.cls, title: "Overall " + fmtScore(overall(model)) }, t.label),
       ]),
+      h("button", {
+        class: "detail-rail-copy", type: "button",
+        title: "Copy a link that opens this model",
+        onclick: () => copyText(permalink()).then((ok) => toast(ok ? "Permalink copied" : "Copy failed", ok ? "success" : "error")),
+      }, "Copy link"),
     ]);
     const meta = h("dl", { class: "detail-rail-meta" }, [
       metaItem("Price", model.pricing || (Number.isFinite(Number(model.cost)) ? "Cost score " + fmtScore(model.cost) : "Not listed")),
@@ -1229,7 +1442,7 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
     ]);
     const note = model.notes ? h("p", { class: "detail-rail-note" }, model.notes) : null;
     const link = card.url ? h("a", { class: "detail-rail-link", href: card.url, target: "_blank", rel: "noopener noreferrer" }, [card.official ? "Model card" : "Find model card", h("span", { "aria-hidden": "true" }, " ↗")]) : null;
-    els.rail.replaceChildren(h("div", { class: "detail-rail-inner vw-scroll-shadow" }, [
+    return [
       head,
       h("div", { class: "detail-rail-body" }, [
         meta,
@@ -1238,7 +1451,7 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
         h("div", { class: "detail-rail-bars" }, statBars(model)),
         railFooter(model),
       ]),
-    ]));
+    ];
   }
 
   // Board rank + strongest/weakest, filling the rail's bottom per the design.
@@ -1273,6 +1486,12 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
         h("span", { class: "compare-tray-chip-name" }, m.name || "Unknown"),
         h("button", { class: "compare-tray-remove", type: "button", "aria-label": "Remove " + (m.name || "model"), onclick: () => toggleCompare(m.id) }, "×"),
       ]))),
+      // Pin compared (U5c): keep the selection hoisted to the top of the table
+      // and list even when the frontier toggle or filters would exclude them.
+      h("label", { class: "compare-tray-pin", title: "Keep these models at the top of the table and list" }, [
+        h("input", { type: "checkbox", checked: Boolean(state.ui.pinCompared), onchange: (e) => { state.ui.pinCompared = e.target.checked; refreshModels(); render(); } }),
+        h("span", null, "Pin compared"),
+      ]),
       h("button", { class: "vw-btn vw-btn-ghost", type: "button", onclick: clearCompare }, "Clear"),
       h("button", { class: "vw-btn vw-btn-primary", type: "button", disabled: models.length < 2, onclick: () => { state.compareOpen = true; render(); } }, "Compare"),
     ]);
@@ -1333,8 +1552,59 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
         h("span", { class: "stat-bar-label" }, label),
         h("div", { class: "stat-bar-track" }, h("div", { class: "stat-bar-fill", style: { width: pct + "%" } })),
         h("span", { class: "stat-bar-val" }, fmtScore(value)),
+        metricTrend(model, key, label),
       ]);
     }));
+  }
+
+  // Per-metric history extracted from state.scoreHistory (Map<model_id, rows>),
+  // rows already ascending by as_of. Only the five directly-recorded score
+  // columns have history; overall/value are derived, so they return [] and
+  // silently render no sparkline.
+  function metricSeries(model, key) {
+    const hist = state.scoreHistory.get(model.id) || [];
+    return hist.map((r) => Number(r[key])).filter(Number.isFinite);
+  }
+
+  // Sparkline (SVG polyline, scatter idiom — not the CSS bar track) + a delta
+  // chip (latest vs previous). Renders only with >=2 history points; otherwise
+  // returns null and the row degrades to the bar alone.
+  function metricTrend(model, key, label) {
+    const series = metricSeries(model, key);
+    if (series.length < 2) return null;
+    const last = series[series.length - 1];
+    const prev = series[series.length - 2];
+    const delta = last - prev;
+    const dir = delta > 0.001 ? "up" : delta < -0.001 ? "down" : "flat";
+    const glyph = dir === "up" ? "▲" : dir === "down" ? "▼" : "·";
+    const word = dir === "up" ? "up" : dir === "down" ? "down" : "unchanged";
+    return h("div", { class: "stat-bar-trend" }, [
+      sparkline(series, metricColor(key)),
+      h("span", {
+        class: "stat-bar-delta is-" + dir,
+        "aria-label": label + " " + word + (dir === "flat" ? "" : " " + fmtScore(Math.abs(delta))) + " since previous update",
+      }, [
+        h("em", { "aria-hidden": "true" }, glyph),
+        dir === "flat" ? "0.0" : fmtScore(Math.abs(delta)),
+      ]),
+    ]);
+  }
+
+  function sparkline(series, colorVar) {
+    const w = 96, hh = 22, pad = 3;
+    const min = Math.min(...series), max = Math.max(...series);
+    const span = max - min || 1;
+    const n = series.length;
+    const pts = series.map((val, i) => {
+      const x = n === 1 ? w / 2 : pad + (i / (n - 1)) * (w - pad * 2);
+      const y = hh - pad - ((val - min) / span) * (hh - pad * 2);
+      return [x, y];
+    });
+    const tip = pts[pts.length - 1];
+    return h("svg", { class: "stat-spark", viewBox: "0 0 " + w + " " + hh, preserveAspectRatio: "none", "aria-hidden": "true" }, [
+      h("polyline", { points: pts.map((p) => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" "), fill: "none", stroke: colorVar, "stroke-width": "1.6", "stroke-linecap": "round", "stroke-linejoin": "round" }),
+      h("circle", { cx: tip[0].toFixed(1), cy: tip[1].toFixed(1), r: "2", fill: colorVar }),
+    ]);
   }
 
   // Prefer the official card_url recorded by the update (schema_version 3).
@@ -1348,11 +1618,11 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
     return { url: "https://www.google.com/search?q=" + q, official: false };
   }
 
-  function renderLegend(list) {
+  function renderLegend(list, opts) {
     const source = list && list.length ? list : state.filteredModels;
     const vendors = new Map();
     source.forEach((m) => { if (!vendors.has(m.vendor || "Other")) vendors.set(m.vendor || "Other", safeColor(m.color)); });
-    return h("div", { class: "chart-legend", role: "group", "aria-label": "Filter by provider" }, [...vendors.entries()].map(([name, color]) => {
+    const chips = [...vendors.entries()].map(([name, color]) => {
       const active = state.ui.vendors.includes(name);
       return h("button", {
         type: "button",
@@ -1362,7 +1632,16 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
         title: active ? "Showing only " + name + " — click to clear" : "Filter to " + name,
         onclick: () => toggleVendor(name),
       }, name);
-    }));
+    });
+    // Non-interactive frontier key (U3): only the scatter view passes this —
+    // it isn't a vendor filter, so it renders as a span, not a button.
+    if (opts && opts.frontier) {
+      chips.push(h("span", { class: "legend-chip legend-frontier" }, [
+        h("span", { class: "legend-frontier-swatch", "aria-hidden": "true" }),
+        "Pareto frontier",
+      ]));
+    }
+    return h("div", { class: "chart-legend", role: "group", "aria-label": "Filter by provider" }, chips);
   }
 
   function toggleCapability(cap) {
@@ -1532,12 +1811,122 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
         statCard("Tokens", totals.tokens ? compact.format(totals.tokens) : "—", "Input, output, and cached"),
         statCard("Words", totals.words ? int.format(totals.words) : "—", "Changelog body length"),
       ]),
-      single ? null : h("div", { class: "analytics-grid" }, [
-        h("section", { class: "panel-card" }, [h("h3", null, "Run duration"), miniBars(filtered, "duration_sec", "Duration seconds")]),
-        h("section", { class: "panel-card" }, [h("h3", null, "Cost per run"), miniBars(filtered, "cost_usd", "Cost USD")]),
-        h("section", { class: "panel-card" }, [h("h3", null, "Agent leaderboard"), leaderboard(filtered)]),
-      ]),
+      statsAnalytics(filtered, single),
     ]);
+  }
+
+  // Per-panel spec for the Stats trend charts. Colors reuse METRIC_META hues so a
+  // metric reads the same everywhere; cost=cost, duration=speed, tokens=overall.
+  const STATS_TRENDS = [
+    { title: "Run duration", color: metricColor("speed"), val: (r) => Number(r.duration_sec) || 0, fmt: (v) => fmtElapsed(v) },
+    { title: "Cost per run", color: metricColor("cost"), val: (r) => Number(r.cost_usd) || 0, fmt: (v) => money.format(v) },
+    { title: "Total tokens", color: metricColor("overall"), val: (r) => (Number(r.tokens_input) || 0) + (Number(r.tokens_output) || 0) + (Number(r.tokens_cached) || 0), fmt: (v) => compact.format(v) },
+  ];
+
+  function statsPanel(title, body) {
+    return h("section", { class: "panel-card" }, [h("h3", null, title), body]);
+  }
+
+  // Builds the 3 trend panels + leaderboard. Below 2 runs the charts can't show a
+  // trend, so the panels degrade to the standard chart-empty-note (U7) while the
+  // leaderboard still renders its honest 1-row board.
+  function statsAnalytics(rows, single) {
+    const specs = [];
+    const chron = rows.slice().reverse(); // state.metrics is newest-first; charts read oldest→newest
+    const panels = STATS_TRENDS.map((t) => {
+      if (single) {
+        return statsPanel(t.title, h("div", { class: "chart-empty-note" }, [
+          h("strong", null, "Trends unlock at 2+ runs"),
+          h("p", null, "Run Refresh again to chart this over time."),
+        ]));
+      }
+      const ys = chron.map(t.val);
+      const peak = ys.reduce((a, b) => Math.max(a, b), 0);
+      const latest = ys.length ? ys[ys.length - 1] : 0;
+      const el = h("div", {
+        class: "trend-chart",
+        role: "img",
+        "aria-label": `${t.title} trend across ${ys.length} runs — latest ${t.fmt(latest)}, peak ${t.fmt(peak)}.`,
+      });
+      specs.push({ el, chron, trend: t, ys });
+      return statsPanel(t.title, el);
+    });
+    panels.push(statsPanel("Agent leaderboard", leaderboard(rows)));
+    if (specs.length) scheduleStatsCharts(specs);
+    return h("div", { class: "analytics-grid" }, panels);
+  }
+
+  // uPlot lifecycle. Instances live outside the render tree (canvas is stateful),
+  // so they are tracked in a module registry, destroyed before every re-render
+  // (render() -> destroyStatsCharts), and re-created post-mount via rAF. The
+  // generation guard drops stale rAFs when filters fire renders back-to-back so
+  // toggling the Agent/Range filters N times leaks no canvases or observers.
+  let statsGen = 0;
+  const statsCharts = [];
+
+  function destroyStatsCharts() {
+    while (statsCharts.length) {
+      const c = statsCharts.pop();
+      if (c.ro) { try { c.ro.disconnect(); } catch (_) {} }
+      if (c.u) { try { c.u.destroy(); } catch (_) {} }
+    }
+  }
+
+  function scheduleStatsCharts(specs) {
+    const gen = ++statsGen;
+    requestAnimationFrame(() => {
+      if (gen !== statsGen || typeof uPlot === "undefined") return;
+      specs.forEach((spec) => {
+        if (!spec.el.isConnected) return;
+        const built = buildTrendChart(spec);
+        if (built) statsCharts.push(built);
+      });
+    });
+  }
+
+  function buildTrendChart(spec) {
+    const el = spec.el;
+    const root = getComputedStyle(document.documentElement);
+    const cvar = (ref) => {
+      const m = /var\((--[^)]+)\)/.exec(ref);
+      return root.getPropertyValue(m ? m[1] : ref).trim();
+    };
+    const border = cvar("--vw-border") || "rgba(255,255,255,0.08)";
+    const faint = cvar("--vw-text-faint") || "#72726b";
+    const stroke = cvar(spec.trend.color) || "#f1d47b";
+    const font = "11px " + (cvar("--vw-font-mono") || "ui-monospace, monospace");
+    // x = run date (changelog_date). If any date fails to parse, fall back to a
+    // plain run-index axis so the chart still draws rather than blowing up.
+    const ts = spec.chron.map((r) => Date.parse(r.changelog_date) / 1000);
+    const useTime = ts.every((n) => Number.isFinite(n));
+    const xs = useTime ? ts : spec.chron.map((_, i) => i + 1);
+    const dfmt = (u, splits) => splits.map((s) => {
+      const d = new Date(s * 1000);
+      return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+    });
+    const width = Math.max(el.clientWidth || 320, 160);
+    const opts = {
+      width, height: 156,
+      padding: [10, 8, 0, 4],
+      cursor: { show: true, points: { size: 6 } },
+      legend: { show: false },
+      scales: { x: { time: useTime } },
+      axes: [
+        { stroke: faint, font, size: 30, grid: { show: false }, ticks: { stroke: border, size: 4 }, values: useTime ? dfmt : null },
+        { stroke: faint, font, size: 46, grid: { stroke: border, width: 1 }, ticks: { show: false }, values: (u, vals) => vals.map(spec.trend.fmt) },
+      ],
+      series: [
+        { value: useTime ? "{M}/{D}" : (u, v) => (v == null ? "" : `run ${v}`) },
+        { label: spec.trend.title, stroke, width: 2, points: { show: true, size: 5, stroke, fill: stroke } },
+      ],
+    };
+    let u;
+    try { u = new uPlot(opts, [xs, spec.ys], el); } catch (_) { return null; }
+    const ro = new ResizeObserver(() => {
+      u.setSize({ width: Math.max(el.clientWidth || width, 160), height: 156 });
+    });
+    ro.observe(el);
+    return { u, ro };
   }
 
   // The Settings tab is always a plain tabbed page now — every sub-page is
@@ -3769,6 +4158,13 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
       if (co) nodes.push(co);
       else state.compareOpen = false;
     }
+    // Deep-link drawer: same scorecard content as the docked rail, surfaced as a
+    // modal when a ?m= link lands on a narrow viewport where the rail is offscreen.
+    if (state.detailDrawerOpen && state.area === "models" && !state.setupMode && state.ready) {
+      const dm = inspectModel();
+      if (dm) nodes.push(modal("Model details", [h("div", { class: "detail-rail-inner detail-drawer-inner" }, railContent(dm))], closeDetailDrawer));
+      else state.detailDrawerOpen = false;
+    }
     els.overlay.replaceChildren(...nodes);
     document.body.classList.toggle("has-overlay", nodes.length > 0 || state.drawerOpen);
     manageOverlayFocus(nodes.length > 0);
@@ -3886,17 +4282,19 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
 
   function keydown(event) {
     if (event.key === "Escape") {
+      if (state.ui.columnsOpen) { closeColumns(); return; }
       if (state.ui.filtersOpen) { closeFilters(); return; }
       if (state.compareOpen) { state.compareOpen = false; render(); return; }
       if (state.helpOpen || state.manualOpen || state.approval.open) {
         if (state.approval.open) { closeApproval(); return; }
         state.helpOpen = false; state.manualOpen = false; render(); return;
       }
+      if (state.detailDrawerOpen) { closeDetailDrawer(); return; }
       if (state.drawerOpen) { closeDrawer(); return; }
       if (state.refreshOptionsOpen) { state.refreshOptionsOpen = false; render(); return; }
       if (state.run.open && state.run.state !== "running") { closeRunWindow(); return; }
     }
-    if (state.drawerOpen || state.helpOpen || state.manualOpen || state.approval.open || state.compareOpen) return;
+    if (state.drawerOpen || state.helpOpen || state.manualOpen || state.approval.open || state.compareOpen || state.detailDrawerOpen) return;
     // Don't fire single-key shortcuts while the user is typing in a field.
     const tag = (event.target && event.target.tagName) || "";
     if (/^(INPUT|SELECT|TEXTAREA)$/.test(tag) || (event.target && event.target.isContentEditable)) return;
@@ -3924,6 +4322,10 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
     if (subpage && state.subpage[state.area] !== undefined) state.subpage[state.area] = subpage;
     if (state.setupMode && area === "settings" && subpage) state.setupStep = subpage;
     state.drawerOpen = false;
+    state.detailDrawerOpen = false;
+    // Copy-only permalinks: navigate() keeps emitting param-free hashes so the
+    // live URL never carries ?m= (no history spam). The ?m= param is authored
+    // solely by the Copy link button.
     history.pushState({}, "", hashFor(state.area, state.subpage[state.area]));
     render();
   }
@@ -3931,31 +4333,62 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
   function parseHash(hash) {
     const raw = String(hash || "").replace(/^#/, "");
     const legacy = { table: ["models", "table"], chart: ["models", "chart"], data: ["settings", "provider"], settings: ["settings", "provider"], changelog: ["changelog", "index"], stats: ["stats", "index"] };
-    if (!raw) return ["models", "list"];
-    if (legacy[raw]) return legacy[raw];
-    const [area, sub] = raw.split(/[/?]/);
-    return [AREA[area] ? area : "models", sub || (area === "settings" ? "provider" : area === "models" ? "list" : "index")];
+    const qIdx = raw.indexOf("?");
+    const path = qIdx >= 0 ? raw.slice(0, qIdx) : raw;
+    const model = qIdx >= 0 ? (new URLSearchParams(raw.slice(qIdx + 1)).get("m") || "") : "";
+    if (!path) return ["models", "list", model];
+    if (legacy[path]) return [...legacy[path], model];
+    const [area, sub] = path.split("/");
+    return [AREA[area] ? area : "models", sub || (area === "settings" ? "provider" : area === "models" ? "list" : "index"), model];
   }
 
   function applyRoute(route) {
     state.area = route[0];
     if (state.subpage[state.area] !== undefined) state.subpage[state.area] = route[1];
+    applyPermalinkModel(route[2]);
   }
 
-  function hashFor(area, sub) {
-    if (area === "models") return "#models/" + (sub || "list");
-    if (area === "settings") return "#settings/" + (sub || "provider");
-    return "#" + area;
+  // A ?m= deep link wins over the persisted inspect id (applied on boot after
+  // loadPrefs, before the first refreshModels, and re-applied on hashchange).
+  // On narrow viewports the docked rail is out of sight, so surface the same
+  // scorecard as a modal drawer. An empty id (every param-free navigate) is a
+  // no-op so ordinary navigation never clobbers the current selection.
+  function applyPermalinkModel(id) {
+    if (!id) return;
+    state.ui.inspect = id;
+    if (window.innerWidth <= 900) state.detailDrawerOpen = true;
+  }
+
+  function closeDetailDrawer() {
+    state.detailDrawerOpen = false;
+    render();
+  }
+
+  function hashFor(area, sub, model) {
+    let base;
+    if (area === "models") base = "#models/" + (sub || "list");
+    else if (area === "settings") base = "#settings/" + (sub || "provider");
+    else base = "#" + area;
+    if (model && area === "models") base += "?m=" + encodeURIComponent(model);
+    return base;
   }
 
   function compareModels() {
-    const byId = new Map(state.filteredModels.map((m) => [m.id, m]));
+    // With pinning on, resolve from the full catalog so a filtered/off-frontier
+    // pick still appears in the tray, overlay, and chart focus (U5c); otherwise
+    // the tray tracks the visible set.
+    const scope = state.ui.pinCompared ? state.models : state.filteredModels;
+    const byId = new Map(scope.map((m) => [m.id, m]));
     return state.ui.compare.map((id) => byId.get(id)).filter(Boolean);
   }
 
   function inspectModel() {
     const byId = new Map(state.filteredModels.map((m) => [m.id, m]));
-    return byId.get(state.ui.inspect) || state.filteredModels[0] || null;
+    // Resolve out-of-filter deep links from the full catalog before falling back
+    // to the top visible row, so the rail/drawer show the model the URL asked for.
+    return byId.get(state.ui.inspect)
+      || state.models.find((m) => m.id === state.ui.inspect)
+      || state.filteredModels[0] || null;
   }
 
   function setInspect(id) {
@@ -3999,10 +4432,14 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
   }
 
   function moveFocus(delta, from) {
-    if (state.area !== "models" || !state.filteredModels.length) return;
-    const idx = clamp(Number.isFinite(from) ? from + delta : state.focusIndex + delta, 0, state.filteredModels.length - 1);
+    if (state.area !== "models") return;
+    // Clamp against the rows actually rendered: pinning and the frontier toggle
+    // make the visible order longer/shorter than state.filteredModels.
+    const rows = document.querySelectorAll("table.models tbody tr, .model-list-row");
+    if (!rows.length) return;
+    const idx = clamp(Number.isFinite(from) ? from + delta : state.focusIndex + delta, 0, rows.length - 1);
     state.focusIndex = idx;
-    document.querySelectorAll("table.models tbody tr, .model-list-row")[idx]?.focus();
+    rows[idx].focus();
   }
 
   function setSort(key) {
@@ -4023,7 +4460,7 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
   function resetFilters() {
     Object.assign(state.ui, {
       text: "", vendors: [], tier: "", status: "", minOverall: 0, hasPricing: false, releasedAfter: "",
-      inputCapabilities: [], hideDeprecated: false,
+      inputCapabilities: [], hideDeprecated: false, frontierOnly: false,
     });
     refreshModels();
     render();
@@ -4115,7 +4552,7 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
   }
 
   function h(tag, attrs, children) {
-    const svgTags = new Set(["svg", "rect", "line", "text", "circle", "polygon", "g", "path"]);
+    const svgTags = new Set(["svg", "rect", "line", "text", "circle", "polygon", "polyline", "g", "path"]);
     const el = svgTags.has(tag)
       ? document.createElementNS("http://www.w3.org/2000/svg", tag)
       : document.createElement(tag);
@@ -4184,7 +4621,7 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
     return h("div", { class: "model-cell", style: { "--model-color": safeColor(model.color) } }, [
       h("div", { class: "model-cell-text" }, [
         h("div", { class: "model-cell-name-row" }, [
-          h("strong", { class: "name" }, highlight(model.name || "Unknown model")),
+          h("strong", { class: "name", title: model.name || "Unknown model" }, highlight(model.name || "Unknown model")),
           deprecated ? h("span", { class: "deprecated-badge", title: depTitle(model) }, "Deprecated") : null,
         ]),
         h("div", { class: "model-cell-meta" }, [
@@ -4269,30 +4706,11 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
     return h("article", { class: "stat-card" }, [h("span", null, label), h("strong", null, value), h("p", null, hint)]);
   }
 
-  function miniBars(data, key, aria) {
-    if (data.length < 2) {
-      return h("div", { class: "chart-empty-note" }, [
-        h("strong", null, "Needs more runs"),
-        h("p", null, "Run Refresh again to turn this into a trend."),
-      ]);
-    }
-    const values = data.slice().reverse().map((r) => Number(r[key]) || 0);
-    const max = Math.max(...values, 1);
-    const fmtVal = (n) => key === "cost_usd" ? money.format(n) : `${Math.round(n)}s`;
-    return h("div", { class: "mini-bars-wrap" }, [
-      h("div", { class: "mini-bars", role: "img", "aria-label": aria }, values.map((v) => h("span", { style: { height: Math.max(4, (v / max) * 100) + "%" }, title: fmtVal(v) }))),
-      h("div", { class: "mini-bars-axis" }, [
-        h("span", null, `${values.length} runs (oldest → newest)`),
-        h("span", null, `peak ${fmtVal(max)}`),
-      ]),
-    ]);
-  }
-
   function leaderboard(data) {
-    if (data.length < 3) {
+    if (data.length < 1) {
       return h("div", { class: "chart-empty-note" }, [
-        h("strong", null, "Runtime leaderboard needs more runs"),
-        h("p", null, "Run Refresh until an agent has at least 3 timed runs."),
+        h("strong", null, "Runtime leaderboard needs a run"),
+        h("p", null, "Run Refresh to record an agent's first timed run."),
       ]);
     }
     const map = new Map();
@@ -4455,6 +4873,13 @@ import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js"
     ui.tableZoom = clampZoom(ui.tableZoom);
     ui.colWidths = ui.colWidths && typeof ui.colWidths === "object" && !Array.isArray(ui.colWidths)
       ? Object.fromEntries(Object.entries(ui.colWidths).filter(([, v]) => Number.isFinite(Number(v)))) : {};
+    // visibleColumns: null (or anything non-array) means "all visible"; an array
+    // is filtered to the known hideable keys so stale/renamed columns can't stick.
+    ui.visibleColumns = Array.isArray(ui.visibleColumns)
+      ? HIDEABLE_COLUMNS.filter((k) => ui.visibleColumns.includes(k)) : null;
+    ui.frontierOnly = Boolean(ui.frontierOnly);
+    ui.pinCompared = Boolean(ui.pinCompared);
+    ui.columnsOpen = Boolean(ui.columnsOpen);
     if (!SORT_KEYS.has(ui.sortKey)) ui.sortKey = "overall";
     if (ui.sortDir !== "asc" && ui.sortDir !== "desc") ui.sortDir = "desc";
   }
