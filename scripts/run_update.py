@@ -61,7 +61,11 @@ SKILL_PATH = ROOT / "skill" / "SKILL.md"
 CHANGELOGS_DIR = Path(os.environ.get("LLM_DASH_CHANGELOGS_DIR") or (ROOT / "changelogs")).resolve()
 CSV_PATH = DATA_DIR / "run_metrics.csv"
 LOGS_DIR = ROOT / "logs"
-AGENT_RUNTIME = "openai-agents"
+# This script drives the update through the openai-agents SDK, so that is the
+# honest default. When a different harness invokes it (e.g. a Claude Code / Codex
+# agent following SKILL.md), it records its real runtime via the env override
+# instead of silently inheriting this constant (H11 / CLAUDE.md identity: no spoofing).
+AGENT_RUNTIME = (os.environ.get("LLM_DASH_AGENT_RUNTIME") or "openai-agents").strip() or "openai-agents"
 EXA_MCP_URL = "https://mcp.exa.ai/mcp"
 MAX_AGENT_TURNS = 50
 LLMSTATS_ENRICHMENT_MAX_CHARS = 8000

@@ -70,7 +70,6 @@ CHANGELOGS_DIR = Path(
     os.environ.get("LLM_DASH_CHANGELOGS_DIR") or (ROOT / "changelogs")
 ).resolve()
 DB_PATH = DATA_DIR / "dash.sqlite"
-INIT_DB_PATH = ROOT / "scripts" / "init_db.py"
 RUN_UPDATE_PATH = ROOT / "scripts" / "run_update.py"
 SEED_CATALOG_PATH = ROOT / "scripts" / "seed_catalog.py"
 LOGS_DIR = ROOT / "logs"
@@ -231,11 +230,6 @@ def _set_bootstrap_state(state: str, message: str, detail: str = "") -> None:
         _bootstrap_state["state"] = state
         _bootstrap_state["message"] = message
         _bootstrap_state["detail"] = detail
-
-
-def _tail_output(stdout: str, stderr: str) -> str:
-    lines = [line.strip() for line in (stdout + "\n" + stderr).splitlines() if line.strip()]
-    return " | ".join(lines[-4:])
 
 
 def _safe_tail(path: Path, max_chars: int = 4000) -> str:
@@ -411,18 +405,63 @@ def _job_log_path(job_id: str) -> Path:
     return LOGS_DIR / f"run-update-{job_id}.log"
 
 
-def _watch_job(job_id: str, process: subprocess.Popen[str], log_path: Path) -> None:
-    exit_code = process.wait()
-    completed_at = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+def _iso_now() -> str:
+    return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _fail_job(job_id: str, log_path: Path, reason: str) -> None:
+    """Mark a job failed after an unexpected watcher error so it never stays
+    stuck at ``running`` (which would 409 every subsequent run) (H2)."""
     with _jobs_lock:
         job = _jobs.get(job_id)
         if not job:
             return
-        job["completed_at"] = completed_at
-        job["exit_code"] = exit_code
-        job["state"] = "canceled" if job.get("cancel_requested") else "succeeded" if exit_code == 0 else "failed"
+        job["state"] = "failed"
+        job["completed_at"] = _iso_now()
+        job["error"] = reason
         job.pop("process", None)
-        job["tail"] = _job_tail(log_path, job)
+        try:
+            job["tail"] = _job_tail(log_path, job)
+        except Exception:  # pragma: no cover - tail is best-effort on the error path
+            pass
+
+
+def _watch_job(job_id: str, process: subprocess.Popen[str], log_path: Path) -> None:
+    # The watcher runs on a daemon thread; an unhandled exception here would die
+    # silently and leave the job pinned at "running" forever. Guard the whole
+    # body and fail the job instead (H2).
+    try:
+        exit_code = process.wait()
+        completed_at = _iso_now()
+        with _jobs_lock:
+            job = _jobs.get(job_id)
+            if not job:
+                return
+            job["completed_at"] = completed_at
+            job["exit_code"] = exit_code
+            job["state"] = "canceled" if job.get("cancel_requested") else "succeeded" if exit_code == 0 else "failed"
+            job.pop("process", None)
+            job["tail"] = _job_tail(log_path, job)
+    except Exception as exc:  # noqa: BLE001 - watcher must never leave a stuck job
+        _log.exception("Update job %s watcher failed", job_id)
+        _fail_job(job_id, log_path, f"{type(exc).__name__}: {exc}")
+
+
+# A running job older than this is treated as stale and surfaced in status so the
+# UI can offer an auto-cancel. Generous: a real research+scoring run is minutes,
+# not an hour (H2).
+JOB_MAX_AGE_SECONDS = 60 * 60
+
+
+def _job_age_seconds(job: dict[str, Any]) -> float | None:
+    started = job.get("started_at")
+    if not started:
+        return None
+    try:
+        start = dt.datetime.fromisoformat(str(started).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return max(0.0, (dt.datetime.now(dt.timezone.utc) - start).total_seconds())
 
 
 _ACTIVE_JOB_STATES = frozenset({"running", "starting"})
@@ -478,38 +517,6 @@ def _last_updated() -> str | None:
 
 def _database_ready() -> bool:
     return _last_updated() is not None
-
-
-def _run_bootstrap() -> None:
-    try:
-        result = subprocess.run(
-            [sys.executable, str(INIT_DB_PATH)],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-    except Exception as exc:  # pragma: no cover - defensive
-        _set_bootstrap_state("error", "Failed to launch the bootstrap seed.", str(exc))
-        return
-
-    if result.returncode != 0:
-        _set_bootstrap_state(
-            "error",
-            "Bootstrap seed failed before the dashboard was ready.",
-            _tail_output(result.stdout, result.stderr) or "Check the server logs for the full traceback.",
-        )
-        return
-
-    if not _database_ready():
-        _set_bootstrap_state(
-            "error",
-            "Bootstrap finished, but dash.sqlite was not queryable.",
-            _tail_output(result.stdout, result.stderr),
-        )
-        return
-
-    _set_bootstrap_state("ready", "Dashboard database ready.", "")
 
 
 def ensure_bootstrap_started() -> None:
@@ -1248,6 +1255,10 @@ def run_update_status(job_id: str) -> dict[str, Any]:
     log_path = ROOT / str(job["log_path"])
     if job["state"] == "running":
         job["tail"] = _job_tail(log_path, job)
+        age = _job_age_seconds(job)
+        if age is not None:
+            job["age_seconds"] = int(age)
+            job["stale"] = age > JOB_MAX_AGE_SECONDS
     return job
 
 

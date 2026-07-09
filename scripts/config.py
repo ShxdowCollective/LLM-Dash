@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import logging
 import os
 import re
 import socket
@@ -18,6 +19,8 @@ try:
     from scripts import voidware_auth
 except ModuleNotFoundError:
     import voidware_auth  # type: ignore
+
+logger = logging.getLogger("llm_dash.config")
 
 APP_NAME = "llmdash"
 KEYRING_SERVICE = "shxdow.llmdash"
@@ -326,8 +329,16 @@ def _read_broker_secret(name: str, *, credential_ref: str = "") -> str:
             credential_ref=credential_ref or None,
         ).get("secret") or "")
     except voidware_auth.VoidwareAuthError as exc:
-        if exc.code in voidware_auth.FRESH_GRANT_CODES:
-            return ""
+        # "Needs a fresh interactive grant" / "no durable secret stored" is the
+        # expected not-configured path — stay quiet so the caller falls back to
+        # the next credential source. A broker/bridge that is *unavailable or
+        # failing* is a distinct operational fault the operator should see, so
+        # surface it at WARNING (broker_status() already carries it to the UI).
+        if exc.code not in voidware_auth.FRESH_GRANT_CODES:
+            logger.warning(
+                "Voidware broker unavailable while reading secret %r (code=%s): %s",
+                name or credential_ref, exc.code, exc,
+            )
         return ""
 
 
