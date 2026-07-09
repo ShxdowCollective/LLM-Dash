@@ -44,6 +44,35 @@ test.describe("settings — schedule", () => {
   });
 });
 
+test.describe("settings — credential slot (T5)", () => {
+  test("saving a provider API key confirms (mocked)", async ({ page }) => {
+    const s = new SettingsPage(page);
+    await s.open("Connection");
+    // Fresh slot defaults to the "select saved key" mode; switch to entering a new key.
+    await page.getByLabel("Source").selectOption("__new__");
+    await page.getByLabel("API key", { exact: true }).fill("sk-e2e-test-key");
+    await page.getByRole("button", { name: "Save new key" }).click();
+    const toast = page.getByTestId("toast");
+    await expect(toast).toBeVisible();
+    await expect(toast).toContainText(/saved/i);
+  });
+});
+
+test.describe("settings — reset scopes (T9)", () => {
+  const scopes = ["stats", "changelog", "models", "full"] as const;
+  for (const scope of scopes) {
+    test(`${scope} reset runs and confirms (mocked)`, async ({ page }) => {
+      const s = new SettingsPage(page);
+      await s.open("Reset");
+      await expect(s.resetButton(scope)).toBeDisabled();
+      await s.typeResetToken(scope);
+      await expect(s.resetButton(scope)).toBeEnabled();
+      await s.resetButton(scope).click();
+      await expect(page.getByTestId("toast")).toBeVisible();
+    });
+  }
+});
+
 test.describe("settings — reset gating", () => {
   test("reset button is disabled until the exact token is typed", async ({ page }) => {
     const s = new SettingsPage(page);

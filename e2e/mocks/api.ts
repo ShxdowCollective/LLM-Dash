@@ -31,6 +31,10 @@ const DEFAULTS: Record<string, JsonBody> = {
   "GET /api/aa/test-connection": { ok: true, reachable: true, status: "ok" },
   "GET /api/llmstats/test-connection": { ok: true, reachable: true, status: "ok" },
   "POST /api/reset": { ok: true, state: "needs_setup" },
+  "POST /api/credentials/slots/provider/save": {
+    ok: true, slot: "provider", configured: true,
+    selection: { name: "LLM_DASH_PROVIDER_API_KEY", ref: {}, meta: {}, grant: {} },
+  },
   "POST /api/schedule": { ok: true, cadence: "daily", next_run: "2026-06-15T09:00:00Z" },
   "DELETE /api/schedule": { ok: true, cadence: "off" },
   "POST /api/open-terminal": { ok: true },
