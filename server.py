@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 import json
+import logging
 import os
 import platform
 import re
@@ -15,11 +17,12 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from scripts import voidware_auth
+from scripts import server_auth, voidware_auth
 from scripts.config import (
     AA_BASE_URL,
     LLMSTATS_BASE_URL,
@@ -37,6 +40,7 @@ from scripts.config import (
     load_provider_config,
     load_provider_bundle,
     discover_provider_credentials,
+    guard_ssrf,
     normalize_base_url,
     normalize_endpoint_mode,
     public_provider_state,
@@ -77,6 +81,51 @@ CHANGELOGS_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(title="LLM-Dash")
 
+_log = logging.getLogger("llm-dash")
+# Generated/persisted on first import so it is stable across the process; the
+# value is only ever *checked*, never echoed into responses or logs.
+ACCESS_TOKEN = server_auth.load_or_create_token()
+
+# Paths that must stay reachable without a token even on an exposed bind, so a
+# fresh LAN client can bootstrap the UI and learn it needs to authenticate.
+_TOKEN_EXEMPT_PATHS = frozenset({"/api/bootstrap-status"})
+
+
+@app.middleware("http")
+async def _access_control(request: Request, call_next):
+    # 1. Host guard (always on): a mismatched Host is DNS-rebinding.
+    if not server_auth.host_allowed(request.headers.get("host")):
+        return JSONResponse({"detail": "Host not allowed."}, status_code=403)
+
+    method = request.method.upper()
+    path = request.url.path
+    is_unsafe = method in server_auth.UNSAFE_METHODS
+    is_api = path.startswith("/api/")
+
+    # 2. Origin guard (state-changing requests only): a cross-site Origin is a
+    #    cross-site form/fetch POST, blocked even on a loopback-only install.
+    if is_unsafe and not server_auth.origin_allowed(
+        request.headers.get("origin"), request.headers.get("host")
+    ):
+        return JSONResponse({"detail": "Cross-origin request rejected."}, status_code=403)
+
+    # 3. Bearer token (only when exposed off-host): every mutating /api route.
+    #    Exposure is the launcher-set bind host OR the actual ASGI bind address, so
+    #    a direct `uvicorn --host 0.0.0.0` (no launcher env) is still gated.
+    if (
+        is_unsafe
+        and is_api
+        and path not in _TOKEN_EXEMPT_PATHS
+        and server_auth.request_needs_token(request.scope.get("server"))
+        and not server_auth.token_matches(request.headers.get("authorization"), ACCESS_TOKEN)
+    ):
+        return JSONResponse(
+            {"detail": "Access token required. This server is exposed on the network."},
+            status_code=401,
+        )
+
+    return await call_next(request)
+
 
 @app.on_event("shutdown")
 def shutdown_voidware_bridge() -> None:
@@ -91,6 +140,9 @@ _bootstrap_state = {
 }
 _jobs_lock = threading.Lock()
 _jobs: dict[str, dict[str, Any]] = {}
+# Surfaced to the UI so a failed startup migration is visible instead of bricking
+# the server (C2). Empty string means healthy.
+_migration_state: dict[str, str] = {"error": ""}
 
 
 class ProviderPayload(BaseModel):
@@ -201,11 +253,34 @@ def _job_tail(log_path: Path, job: dict[str, Any]) -> str:
     return _safe_tail(log_path, max_chars=64000)
 
 
+def _live_secret_values() -> list[str]:
+    """Concrete secret values to substring-scrub from any outbound text. Sourced
+    from the process environment (cheap — no keyring/broker round-trips) plus the
+    server's own access token. Longest-first so a value that contains another is
+    masked whole."""
+    values: set[str] = set()
+    if ACCESS_TOKEN:
+        values.add(ACCESS_TOKEN)
+    for name, val in os.environ.items():
+        if not val or len(val) < 12:
+            continue
+        upper = name.upper()
+        if any(marker in upper for marker in ("API_KEY", "TOKEN", "SECRET", "PASSWORD", "BEARER")):
+            values.add(val)
+    return sorted(values, key=len, reverse=True)
+
+
 def _redact_known_secrets(text: str) -> str:
     redacted = voidware_auth.GRANT_RE.sub("vwgr_***", text)
     redacted = re.sub(r"\bsk-[A-Za-z0-9._-]{8,}\b", "sk-***", redacted)
     redacted = re.sub(r"\bxai-[A-Za-z0-9._-]{8,}\b", "xai-***", redacted)
     redacted = re.sub(r"\bAIza[A-Za-z0-9._-]{8,}\b", "AIza***", redacted)
+    # Value-based scrub: mask the actual live secret strings, not just known
+    # prefixes, so a keyless/custom credential can't leak verbatim into a log or
+    # an HTTPException detail.
+    for value in _live_secret_values():
+        if value in redacted:
+            redacted = redacted.replace(value, "***")
     return redacted
 
 
@@ -271,22 +346,41 @@ def _bundle_from_payload(payload: ProviderPayload) -> ProviderBundle:
     api_key = (payload.api_key or "").strip()
     if not api_key and payload.provider_credential_name:
         api_key = str(voidware_auth.read_secret_with_grant(payload.provider_credential_name).get("secret") or "")
+    base_url = normalize_base_url(payload.base_url, allow_v1=mode == "root")
+    models_override_url = (
+        normalize_base_url(
+            payload.models_override_url,
+            field="models_override_url",
+            allow_v1=mode == "root",
+        )
+        if payload.models_override_url
+        else ""
+    )
+    # Caller-supplied URLs are SSRF-guarded before any outbound request.
+    guard_ssrf(base_url)
+    if models_override_url:
+        guard_ssrf(models_override_url, field="models_override_url")
+    # Never attach the stored provider key to a *different* (caller-supplied)
+    # endpoint — that would let a crafted URL exfiltrate the live key. The request
+    # actually targets ``models_endpoint``, which prefers ``models_override_url``,
+    # so BOTH the base and the override must match the saved config before the
+    # stored key is reused (guards against exfil via models_override_url).
+    same_target = (
+        bool(base_url)
+        and base_url == stored.config.base_url
+        and (models_override_url or "") == (stored.config.models_override_url or "")
+    )
+    effective_key = api_key or (stored.secrets.api_key if same_target else "")
     return ProviderBundle(
         config=ProviderConfig(
-            base_url=normalize_base_url(payload.base_url, allow_v1=mode == "root"),
-            models_override_url=normalize_base_url(
-                payload.models_override_url,
-                field="models_override_url",
-                allow_v1=mode == "root",
-            )
-            if payload.models_override_url
-            else "",
+            base_url=base_url,
+            models_override_url=models_override_url,
             default_model=payload.default_model.strip(),
             backup_model=payload.backup_model.strip(),
             endpoint_mode=mode,
             request_headers=payload.request_headers,
         ),
-        secrets=ProviderSecrets(api_key=api_key or stored.secrets.api_key),
+        secrets=ProviderSecrets(api_key=effective_key),
     )
 
 
@@ -309,7 +403,8 @@ async def _fetch_models_for_bundle(bundle: ProviderBundle) -> tuple[int, Any]:
 
 
 async def _fetch_provider_models() -> tuple[int, Any]:
-    return await _fetch_models_for_bundle(load_provider_bundle())
+    bundle = await asyncio.to_thread(load_provider_bundle)
+    return await _fetch_models_for_bundle(bundle)
 
 
 def _job_log_path(job_id: str) -> Path:
@@ -330,9 +425,33 @@ def _watch_job(job_id: str, process: subprocess.Popen[str], log_path: Path) -> N
         job["tail"] = _job_tail(log_path, job)
 
 
+_ACTIVE_JOB_STATES = frozenset({"running", "starting"})
+
+
 def _any_update_job_running() -> bool:
     with _jobs_lock:
-        return any(job.get("state") == "running" for job in _jobs.values())
+        return any(job.get("state") in _ACTIVE_JOB_STATES for job in _jobs.values())
+
+
+def _reserve_job_slot() -> str | None:
+    """Atomically claim the single job slot. Holds ``_jobs_lock`` across the
+    check-and-reserve so two concurrent POSTs cannot both pass (C4). Returns a new
+    job id when the slot was free, else ``None`` (a job is already active). The
+    reservation is a ``"starting"`` placeholder that ``_any_update_job_running``
+    counts; the caller must promote it to ``"running"`` or release it."""
+    with _jobs_lock:
+        if any(job.get("state") in _ACTIVE_JOB_STATES for job in _jobs.values()):
+            return None
+        job_id = uuid.uuid4().hex
+        _jobs[job_id] = {"id": job_id, "state": "starting"}
+        return job_id
+
+
+def _release_job_slot(job_id: str) -> None:
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+        if job and job.get("state") == "starting":
+            _jobs.pop(job_id, None)
 
 
 def _public_job(job: dict[str, Any]) -> dict[str, Any]:
@@ -474,17 +593,35 @@ def _open_terminal(cwd: Path) -> str | None:
     return _launch_linux_terminal(cwd)
 
 
+def _run_startup_migrations() -> None:
+    """Apply pending migrations. On failure, degrade to read-only serving with a
+    visible error instead of bricking the server forever (C2)."""
+    if not DB_PATH.exists():
+        _migration_state["error"] = ""
+        return
+    try:
+        migrate_score_checks(DB_PATH)
+        migrate_metadata_v4(DB_PATH)
+        _migration_state["error"] = ""
+    except Exception as exc:
+        remediation = f"{sys.executable} -m scripts.migrate_score_checks --db-path {DB_PATH} --dry-run"
+        _log.error(
+            "startup migration failed; serving existing data read-only. "
+            "Inspect the offending rows with: %s | cause: %s",
+            remediation,
+            exc,
+        )
+        _migration_state["error"] = (
+            f"A database migration could not be applied ({exc}). The dashboard is "
+            "serving existing data read-only until it is resolved; check the server "
+            "log for the exact remediation command."
+        )
+
+
 @app.on_event("startup")
 def _startup() -> None:
     ensure_bootstrap_started()
-    if DB_PATH.exists():
-        try:
-            migrate_score_checks(DB_PATH)
-            migrate_metadata_v4(DB_PATH)
-        except Exception as exc:
-            import logging
-            logging.getLogger("llm-dash").warning("startup migration skipped: %s", exc)
-            raise
+    _run_startup_migrations()
 
 
 @app.get("/api/prompt")
@@ -509,7 +646,9 @@ def prompt() -> dict[str, str]:
 @app.get("/api/bootstrap-status")
 def bootstrap_status() -> dict[str, str]:
     ensure_bootstrap_started()
-    return dict(_bootstrap_state)
+    payload = dict(_bootstrap_state)
+    payload["migration_error"] = _migration_state.get("error", "")
+    return payload
 
 
 @app.post("/api/open-terminal")
@@ -782,7 +921,8 @@ async def test_provider_connection() -> dict[str, Any]:
 @app.post("/api/provider/test-connection")
 async def test_provider_connection_payload(payload: ProviderPayload) -> dict[str, Any]:
     try:
-        status_code, body = await _fetch_models_for_bundle(_bundle_from_payload(payload))
+        bundle = await asyncio.to_thread(_bundle_from_payload, payload)
+        status_code, body = await _fetch_models_for_bundle(bundle)
     except voidware_auth.VoidwareAuthError as exc:
         raise _voidware_auth_http_error(exc) from exc
     except ConfigError as exc:
@@ -810,7 +950,7 @@ async def test_provider_model(payload: TestModelPayload) -> dict[str, Any]:
     import httpx
 
     try:
-        bundle = load_provider_bundle()
+        bundle = await asyncio.to_thread(load_provider_bundle)
         if not bundle.config.base_url:
             raise ConfigError("Agent Provider base_url is not configured.")
         target = payload.target or "default"
@@ -829,8 +969,9 @@ async def test_provider_model(payload: TestModelPayload) -> dict[str, Any]:
             "max_tokens": 8,
             "temperature": 0,
         }
+        headers = await asyncio.to_thread(_provider_headers)
         async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(bundle.chat_endpoint, headers=_provider_headers(), json=body)
+            response = await client.post(bundle.chat_endpoint, headers=headers, json=body)
         try:
             data = response.json()
         except ValueError:
@@ -902,7 +1043,7 @@ def delete_llmstats() -> dict[str, Any]:
 async def test_llmstats_connection() -> dict[str, Any]:
     import httpx
 
-    key = load_llmstats_api_key()
+    key = await asyncio.to_thread(load_llmstats_api_key)
     if not key:
         raise HTTPException(status_code=400, detail="LLM Stats API key is not configured.")
     try:
@@ -951,7 +1092,7 @@ def delete_aa() -> dict[str, Any]:
 async def test_aa_connection() -> dict[str, Any]:
     import httpx
 
-    key = load_aa_api_key()
+    key = await asyncio.to_thread(load_aa_api_key)
     if not key:
         raise HTTPException(status_code=400, detail="Artificial Analysis API key is not configured.")
     try:
@@ -1020,73 +1161,82 @@ def delete_schedule() -> dict[str, Any]:
 
 @app.post("/api/run-update")
 def run_update(payload: RunUpdatePayload | None = None) -> dict[str, str]:
-    if _any_update_job_running():
+    job_id = _reserve_job_slot()
+    if job_id is None:
         raise HTTPException(
             status_code=409,
             detail="An update or seed job is running. Wait for it to finish before starting another.",
         )
+    # Any exit before the job is promoted to "running" must free the reserved
+    # slot, or a stray error would leave a permanent "starting" placeholder that
+    # blocks all future jobs (C4).
+    promoted = False
     try:
-        bundle = load_provider_bundle()
-        if not bundle.has_provider:
-            raise ConfigError("Agent Provider requires base_url, api_key, and default_model.")
-    except ConfigError as exc:
-        raise _http_error(exc)
+        try:
+            bundle = load_provider_bundle()
+            if not bundle.has_provider:
+                raise ConfigError("Agent Provider requires base_url, api_key, and default_model.")
+        except ConfigError as exc:
+            raise _http_error(exc)
 
-    job_id = uuid.uuid4().hex
-    log_path = _job_log_path(job_id)
-    log_path.parent.mkdir(exist_ok=True)
-    started_at = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    payload = payload or RunUpdatePayload()
-    command = [
-        sys.executable,
-        str(RUN_UPDATE_PATH),
-        "--log-path",
-        str(log_path),
-        "--source-preset",
-        payload.preset,
-        "--source-count",
-        str(payload.count),
-        "--db-path",
-        str(DB_PATH),
-    ]
-    if payload.index:
-        command.extend(["--source-index", payload.index])
-    if payload.prompt:
-        command.extend(["--source-prompt", payload.prompt])
-    if payload.endpoint:
-        command.extend(["--source-endpoint", payload.endpoint])
-    if payload.credential:
-        command.extend(["--source-credential", payload.credential])
-    log_file = log_path.open("a", encoding="utf-8")
-    try:
-        process = subprocess.Popen(
-            command,
-            cwd=ROOT,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            text=True,
-        )
-        log_file.close()
-    except Exception as exc:
-        log_file.close()
-        raise HTTPException(status_code=500, detail=str(exc))
+        log_path = _job_log_path(job_id)
+        log_path.parent.mkdir(exist_ok=True)
+        started_at = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        payload = payload or RunUpdatePayload()
+        command = [
+            sys.executable,
+            str(RUN_UPDATE_PATH),
+            "--log-path",
+            str(log_path),
+            "--source-preset",
+            payload.preset,
+            "--source-count",
+            str(payload.count),
+            "--db-path",
+            str(DB_PATH),
+        ]
+        if payload.index:
+            command.extend(["--source-index", payload.index])
+        if payload.prompt:
+            command.extend(["--source-prompt", payload.prompt])
+        if payload.endpoint:
+            command.extend(["--source-endpoint", payload.endpoint])
+        if payload.credential:
+            command.extend(["--source-credential", payload.credential])
+        log_file = log_path.open("a", encoding="utf-8")
+        try:
+            process = subprocess.Popen(
+                command,
+                cwd=ROOT,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            log_file.close()
+        except Exception as exc:
+            log_file.close()
+            raise HTTPException(status_code=500, detail=str(exc))
 
-    with _jobs_lock:
-        _jobs[job_id] = {
-            "id": job_id,
-            "state": "running",
-            "started_at": started_at,
-            "completed_at": None,
-            "exit_code": None,
-            "kind": "refresh",
-            "source": payload.preset,
-            "log_path": str(log_path.relative_to(ROOT)),
-            "process": process,
-            "tail": "",
-        }
-    watcher = threading.Thread(target=_watch_job, args=(job_id, process, log_path), name=f"llm-dash-run-{job_id}", daemon=True)
-    watcher.start()
-    return {"id": job_id, "state": "running"}
+        with _jobs_lock:
+            _jobs[job_id] = {
+                "id": job_id,
+                "state": "running",
+                "started_at": started_at,
+                "completed_at": None,
+                "exit_code": None,
+                "kind": "refresh",
+                "source": payload.preset,
+                "log_path": str(log_path.relative_to(ROOT)),
+                "process": process,
+                "tail": "",
+            }
+        watcher = threading.Thread(target=_watch_job, args=(job_id, process, log_path), name=f"llm-dash-run-{job_id}", daemon=True)
+        watcher.start()
+        promoted = True
+        return {"id": job_id, "state": "running"}
+    finally:
+        if not promoted:
+            _release_job_slot(job_id)
 
 
 @app.get("/api/run-update/{job_id}")
@@ -1130,76 +1280,82 @@ def cancel_run_update(job_id: str) -> dict[str, Any]:
 
 @app.post("/api/seed")
 def post_seed(payload: SeedPayload) -> dict[str, str]:
-    if _any_update_job_running():
+    job_id = _reserve_job_slot()
+    if job_id is None:
         raise HTTPException(
             status_code=409,
             detail="An update or seed job is running. Wait for it to finish before starting another.",
         )
+    promoted = False
     try:
-        bundle = load_provider_bundle()
-        if not bundle.has_provider:
-            raise ConfigError("Agent Provider requires base_url, api_key, and default_model.")
-    except ConfigError as exc:
-        raise _http_error(exc)
+        try:
+            bundle = load_provider_bundle()
+            if not bundle.has_provider:
+                raise ConfigError("Agent Provider requires base_url, api_key, and default_model.")
+        except ConfigError as exc:
+            raise _http_error(exc)
 
-    job_id = uuid.uuid4().hex
-    log_path = _job_log_path(job_id)
-    log_path.parent.mkdir(exist_ok=True)
-    started_at = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    command = [
-        sys.executable,
-        str(SEED_CATALOG_PATH),
-        "--log-path",
-        str(log_path),
-        "--preset",
-        payload.preset,
-        "--count",
-        str(payload.count),
-        "--db-path",
-        str(DB_PATH),
-    ]
-    if payload.index:
-        command.extend(["--index", payload.index])
-    if payload.prompt:
-        command.extend(["--prompt", payload.prompt])
-    if payload.endpoint:
-        command.extend(["--endpoint", payload.endpoint])
-    if payload.credential:
-        command.extend(["--credential", payload.credential])
-    log_file = log_path.open("a", encoding="utf-8")
-    try:
-        process = subprocess.Popen(
-            command,
-            cwd=ROOT,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            text=True,
+        log_path = _job_log_path(job_id)
+        log_path.parent.mkdir(exist_ok=True)
+        started_at = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        command = [
+            sys.executable,
+            str(SEED_CATALOG_PATH),
+            "--log-path",
+            str(log_path),
+            "--preset",
+            payload.preset,
+            "--count",
+            str(payload.count),
+            "--db-path",
+            str(DB_PATH),
+        ]
+        if payload.index:
+            command.extend(["--index", payload.index])
+        if payload.prompt:
+            command.extend(["--prompt", payload.prompt])
+        if payload.endpoint:
+            command.extend(["--endpoint", payload.endpoint])
+        if payload.credential:
+            command.extend(["--credential", payload.credential])
+        log_file = log_path.open("a", encoding="utf-8")
+        try:
+            process = subprocess.Popen(
+                command,
+                cwd=ROOT,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            log_file.close()
+        except Exception as exc:
+            log_file.close()
+            raise HTTPException(status_code=500, detail=str(exc))
+
+        with _jobs_lock:
+            _jobs[job_id] = {
+                "id": job_id,
+                "state": "running",
+                "started_at": started_at,
+                "completed_at": None,
+                "exit_code": None,
+                "kind": "seed",
+                "log_path": str(log_path.relative_to(ROOT)),
+                "process": process,
+                "tail": "",
+            }
+        watcher = threading.Thread(
+            target=_watch_job,
+            args=(job_id, process, log_path),
+            name=f"llm-dash-seed-{job_id}",
+            daemon=True,
         )
-        log_file.close()
-    except Exception as exc:
-        log_file.close()
-        raise HTTPException(status_code=500, detail=str(exc))
-
-    with _jobs_lock:
-        _jobs[job_id] = {
-            "id": job_id,
-            "state": "running",
-            "started_at": started_at,
-            "completed_at": None,
-            "exit_code": None,
-            "kind": "seed",
-            "log_path": str(log_path.relative_to(ROOT)),
-            "process": process,
-            "tail": "",
-        }
-    watcher = threading.Thread(
-        target=_watch_job,
-        args=(job_id, process, log_path),
-        name=f"llm-dash-seed-{job_id}",
-        daemon=True,
-    )
-    watcher.start()
-    return {"id": job_id, "state": "running"}
+        watcher.start()
+        promoted = True
+        return {"id": job_id, "state": "running"}
+    finally:
+        if not promoted:
+            _release_job_slot(job_id)
 
 
 @app.post("/api/reset")

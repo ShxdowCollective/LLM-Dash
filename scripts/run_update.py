@@ -10,6 +10,7 @@ import datetime as dt
 import json
 import os
 import re
+import shutil
 import sqlite3
 import sys
 import time
@@ -23,6 +24,7 @@ try:
         LLMSTATS_BASE_URL,
         ConfigError,
         build_auth_headers,
+        guard_ssrf,
         load_aa_api_key,
         load_exa_api_key,
         load_llmstats_api_key,
@@ -39,6 +41,7 @@ except ModuleNotFoundError:
         LLMSTATS_BASE_URL,
         ConfigError,
         build_auth_headers,
+        guard_ssrf,
         load_aa_api_key,
         load_exa_api_key,
         load_llmstats_api_key,
@@ -404,6 +407,31 @@ def safe_rel_path(path: Path, root: Path = ROOT) -> str:
         return path.as_posix()
 
 
+def _atomic_db_replace(work_path: Path, target: Path) -> None:
+    """Atomically publish ``work_path`` as ``target``. On POSIX ``os.replace`` is a
+    rename, so an HTTP reader that already opened the old file keeps a complete
+    snapshot and new opens see the new file whole — no torn read mid-refresh (C3).
+    On Windows a reader (StaticFiles) may briefly hold the target open, so retry
+    with backoff before giving up."""
+    last_exc: Exception | None = None
+    for attempt in range(20):
+        try:
+            os.replace(work_path, target)
+            return
+        except PermissionError as exc:  # Windows: target momentarily open for read
+            last_exc = exc
+            time.sleep(0.1 * (attempt + 1))
+    raise RunUpdateError(f"Could not atomically publish {target.name}: {last_exc}")
+
+
+def _sweep_stale_work_files(db_path: Path) -> None:
+    for stale in db_path.parent.glob(db_path.name + ".writing-*"):
+        try:
+            stale.unlink()
+        except OSError:
+            pass
+
+
 def apply_update(
     update: dict[str, Any],
     metrics: dict[str, Any],
@@ -432,7 +460,18 @@ def apply_update(
     )
     new_models_json = json.dumps(update.get("new_models", []) or [], ensure_ascii=False)
 
-    con = sqlite3.connect(db_path)
+    # Build the whole update against a temp copy, then atomically replace the
+    # served file after COMMIT so a browser fetch never grabs a half-written DB
+    # (C3). Fall back to in-place writes only if the target does not exist yet.
+    use_atomic = db_path.exists()
+    if use_atomic:
+        _sweep_stale_work_files(db_path)
+        work_path = db_path.with_name(db_path.name + f".writing-{os.getpid()}")
+        shutil.copy2(db_path, work_path)
+    else:
+        work_path = db_path
+
+    con = sqlite3.connect(work_path)
     try:
         con.execute("PRAGMA foreign_keys = ON")
         con.execute("BEGIN")
@@ -614,9 +653,17 @@ def apply_update(
         con.commit()
     except Exception:
         con.rollback()
-        raise
-    finally:
         con.close()
+        if use_atomic:
+            try:
+                work_path.unlink()
+            except OSError:
+                pass
+        raise
+    else:
+        con.close()
+        if use_atomic:
+            _atomic_db_replace(work_path, db_path)
 
     changelogs_dir.mkdir(parents=True, exist_ok=True)
     changelog_path.write_text(markdown, encoding="utf-8")
@@ -892,15 +939,12 @@ def read_custom_endpoint_bearer(credential_name: str) -> str:
         import voidware_auth  # type: ignore
 
     name = str(credential_name or "").strip()
-    if name:
-        try:
-            secret = str(voidware_auth.read_secret_with_grant(name).get("secret") or "")
-            if secret:
-                return secret
-        except Exception:
-            pass
-    bundle = load_provider_bundle()
-    return bundle.secrets.api_key
+    if not name:
+        # No purpose-scoped credential -> no Authorization header. Never fall back
+        # to the live provider key on a user-supplied endpoint, and never swallow
+        # a named-credential read failure (S3).
+        return ""
+    return str(voidware_auth.read_secret_with_grant(name).get("secret") or "")
 
 
 def fetch_refresh_candidates(args: argparse.Namespace, log_path: Path) -> list[dict[str, Any]]:
@@ -994,6 +1038,7 @@ def fetch_refresh_candidates(args: argparse.Namespace, log_path: Path) -> list[d
         return [{"name": item.get("id") or item.get("name"), "source": "https://openrouter.ai/models"} for item in ranked if item.get("id") or item.get("name")]
 
     if preset == "custom-endpoint" and args.source_endpoint:
+        guard_ssrf(args.source_endpoint, field="source_endpoint")
         bearer = read_custom_endpoint_bearer(args.source_credential)
         headers = {"Accept": "application/json"}
         if bearer:

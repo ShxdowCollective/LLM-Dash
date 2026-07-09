@@ -17,6 +17,7 @@ try:
         AA_BASE_URL,
         ConfigError,
         LLMSTATS_BASE_URL,
+        guard_ssrf,
         load_aa_api_key,
         load_exa_api_key,
         load_llmstats_api_key,
@@ -46,6 +47,7 @@ except ModuleNotFoundError:
         AA_BASE_URL,
         ConfigError,
         LLMSTATS_BASE_URL,
+        guard_ssrf,
         load_aa_api_key,
         load_exa_api_key,
         load_llmstats_api_key,
@@ -407,15 +409,12 @@ def _read_custom_endpoint_bearer(credential_name: str) -> str:
         import voidware_auth  # type: ignore
 
     name = str(credential_name or "").strip()
-    if name:
-        try:
-            secret = str(voidware_auth.read_secret_with_grant(name).get("secret") or "")
-            if secret:
-                return secret
-        except Exception:
-            pass
-    bundle = load_provider_bundle()
-    return bundle.secrets.api_key
+    if not name:
+        # No purpose-scoped credential -> send no Authorization header. Never fall
+        # back to the live provider key on a user-supplied endpoint, and never
+        # silently swallow a named-credential read failure (S3).
+        return ""
+    return str(voidware_auth.read_secret_with_grant(name).get("secret") or "")
 
 
 def _fetch_custom_endpoint_candidates(endpoint: str, credential: str, count: int) -> list[dict[str, Any]]:
@@ -424,6 +423,7 @@ def _fetch_custom_endpoint_candidates(endpoint: str, credential: str, count: int
     base = endpoint.rstrip("/")
     if not base:
         raise SeedCatalogError("Custom endpoint URL is required for custom-endpoint preset.")
+    guard_ssrf(base, field="endpoint")
     bearer = _read_custom_endpoint_bearer(credential)
     headers = {"Accept": "application/json"}
     if bearer:

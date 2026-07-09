@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import re
+import socket
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -483,6 +485,58 @@ def normalize_base_url(value: str, *, field: str = "base_url", allow_v1: bool = 
     if parsed.params or parsed.query or parsed.fragment:
         raise ConfigError(f"{field} must not include params, query, or fragment")
     return url
+
+
+ALLOW_LOCAL_ENDPOINTS_ENV = "LLM_DASH_ALLOW_LOCAL_ENDPOINTS"
+
+
+def _local_endpoints_allowed() -> bool:
+    return str(os.environ.get(ALLOW_LOCAL_ENDPOINTS_ENV) or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _address_is_blocked(addr: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(addr)
+    except ValueError:
+        return False
+    return (
+        ip.is_loopback
+        or ip.is_private
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
+
+
+def guard_ssrf(url: str, *, field: str = "base_url") -> None:
+    """Reject a caller-supplied URL that resolves to a non-public address.
+
+    Defends the provider test-connection and custom-endpoint seed/refresh paths
+    against SSRF (loopback / RFC1918 / link-local / multicast). Operators who run
+    a local model server (e.g. Ollama) opt in with
+    ``LLM_DASH_ALLOW_LOCAL_ENDPOINTS=1``. DNS is resolved and every returned
+    address is checked, so a hostname that maps to a private IP is also blocked.
+    """
+    if _local_endpoints_allowed():
+        return
+    host = urlparse(str(url or "")).hostname
+    if not host:
+        return
+    # A bracketed/plain IP literal — check directly.
+    if _address_is_blocked(host):
+        raise ConfigError(f"{field} resolves to a blocked non-public address")
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror as exc:
+        raise ConfigError(f"{field} host could not be resolved: {host}") from exc
+    for info in infos:
+        sockaddr = info[4]
+        if sockaddr and _address_is_blocked(str(sockaddr[0])):
+            raise ConfigError(
+                f"{field} resolves to a blocked non-public address "
+                f"(set {ALLOW_LOCAL_ENDPOINTS_ENV}=1 to allow local endpoints)"
+            )
 
 
 def normalize_provider_model_id(base_url: str, model_id: str) -> str:

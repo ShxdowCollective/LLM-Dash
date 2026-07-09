@@ -304,6 +304,9 @@ def start_background(host: str, port: int, *, log_path: Path = DEFAULT_LOG_PATH)
     log_path.parent.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env.setdefault("PYTHONUNBUFFERED", "1")
+    # The server reads this to decide whether the per-install access token is
+    # required (only when bound off-loopback). See scripts/server_auth.py.
+    env["LLM_DASH_BIND_HOST"] = host
     with log_path.open("ab") as log:
         log.write(f"\n--- LLM-Dash server start: {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n".encode())
         process = subprocess.Popen(
@@ -338,7 +341,9 @@ def start_foreground(host: str, port: int, *, open_browser: bool = True) -> int:
         print(f"LLM-Dash: port {port} is already in use on {host}.", file=sys.stderr)
         return 1
 
-    process = subprocess.Popen(_uvicorn_command(host, port), cwd=ROOT)
+    env = os.environ.copy()
+    env["LLM_DASH_BIND_HOST"] = host
+    process = subprocess.Popen(_uvicorn_command(host, port), cwd=ROOT, env=env)
     _write_state(process, host, port, DEFAULT_LOG_PATH)
     try:
         if wait_until_ready(host, port, process):
