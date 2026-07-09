@@ -19,7 +19,7 @@
   --llm-tier-b: var(--vw-iridescent-4);
   --llm-tier-c: var(--vw-iridescent-2);
   --llm-tier-d: var(--vw-iridescent-1);
-  --llm-tier-f: #d36a6a;
+  --llm-tier-f: #ef9a9a; /* H8: brightened for >=4.5:1 grade-F text on dark surfaces */
   --llm-freshness-ok: var(--vw-success);
   --llm-freshness-stale: var(--vw-warning);
   --llm-freshness-error: var(--vw-error);
@@ -855,6 +855,15 @@ table.models td:last-child {
 .tier-d { --tier-color: var(--llm-tier-d); }
 .tier-f { --tier-color: var(--llm-tier-f); }
 .tier-na { --tier-color: var(--vw-surface-3); }
+
+/* H8: the F grade square co-brightens its text and its 34% tinted background, so
+   a token nudge alone can't reach 4.5:1 there. Give the F badge a lighter text
+   on a lower-tint background (>=4.5:1) without desaturating the other tiers. */
+.tier-f .tier-square,
+.score-block.tier-f em {
+  background: color-mix(in srgb, var(--llm-tier-f) 18%, var(--vw-surface-2));
+  color: color-mix(in srgb, var(--llm-tier-f) 95%, var(--vw-text));
+}
 
 /* ------------------------------------------------------------------ */
 /* M13: table zoom, sortable + resizable headers, provider column,    */

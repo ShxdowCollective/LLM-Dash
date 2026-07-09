@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "type": "module",
+  "//": "Scopes web/*.js to ES modules so `node --test` treats ranking.js/ranking.test.js as ESM. The browser loads these as plain .js modules; this file is never bundled or shipped as a dependency."
+}

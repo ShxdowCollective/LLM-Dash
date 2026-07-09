@@ -1,4 +1,5 @@
 // LLM-Dash frontend. Zero-build, package-vendored Voidware, browser SQLite.
+import { overall, valueScore, metricValue, tier, compareBy } from "./ranking.js";
 
 (function () {
   "use strict";
@@ -516,57 +517,9 @@
     return [...years].sort((a, b) => b - a);
   }
 
-  // M13 ranking weights (documented in docs/ARCHITECTURE.md). Capability is 75%
-  // of Overall, but cost now counts so the leaderboard isn't price-blind. Value
-  // is the practical-buyer sort: mostly Overall, then cost, then speed.
-  function overall(model) {
-    return weighted([[model.intelligence, 0.25], [model.coding, 0.25], [model.agents, 0.25], [model.speed, 0.10], [model.cost, 0.15]]);
-  }
-
-  function valueScore(model) {
-    return weighted([[overall(model), 0.60], [model.cost, 0.25], [model.speed, 0.15]]);
-  }
-
-  function metricValue(model, key) {
-    if (key === "overall") return overall(model);
-    if (key === "value") return valueScore(model);
-    return Number(model[key]) || 0;
-  }
-
-  function weighted(parts) {
-    const valid = parts.map(([v, w]) => [Number(v), Number(w)]).filter(([v, w]) => Number.isFinite(v) && Number.isFinite(w));
-    if (!valid.length) return null;
-    const w = valid.reduce((sum, item) => sum + item[1], 0);
-    return +(valid.reduce((sum, item) => sum + item[0] * item[1], 0) / w).toFixed(1);
-  }
-
-  function tier(score) {
-    if (!Number.isFinite(Number(score))) return { label: "N/A", cls: "tier-na" };
-    if (score >= 9) return { label: "S", cls: "tier-s" };
-    if (score >= 8) return { label: "A", cls: "tier-a" };
-    if (score >= 7) return { label: "B", cls: "tier-b" };
-    if (score >= 6) return { label: "C", cls: "tier-c" };
-    if (score >= 5) return { label: "D", cls: "tier-d" };
-    return { label: "F", cls: "tier-f" };
-  }
-
-  function sortValue(model, key) {
-    if (key === "overall") return overall(model) || 0;
-    if (key === "value") return valueScore(model) || 0;
-    return Number(model[key]) || 0;
-  }
-
-  // String columns (name, vendor) compare lexically; everything else numerically.
-  function compareBy(a, b, key, dir) {
-    let delta;
-    if (key === "name" || key === "vendor") {
-      delta = String(a[key] || "").localeCompare(String(b[key] || ""), undefined, { sensitivity: "base" });
-    } else {
-      delta = sortValue(a, key) - sortValue(b, key);
-    }
-    if (dir === "desc") delta = -delta;
-    return delta || String(a.name || "").localeCompare(String(b.name || ""));
-  }
+  // Ranking math (overall/valueScore/metricValue/weighted/tier/sortValue/compareBy)
+  // lives in ./ranking.js — imported at the top of this module and unit-tested by
+  // web/ranking.test.js (T8).
 
   function modelCapabilities(model) {
     let raw = model.input_capabilities;
@@ -665,7 +618,7 @@
             type: "search",
             value: state.ui.text,
             placeholder: "Search model or vendor",
-            oninput: (e) => debounceSearch(e.target.value),
+            oninput: (e) => { state.ui.text = e.target.value; debounceSearch(); },
           }),
         ]),
         // Compact sort select only on mobile (the desktop table sorts via header
@@ -761,7 +714,9 @@
         h("label", { class: "field minoverall" }, [
           h("span", null, `Min overall: ${Number(state.ui.minOverall) > 0 ? Number(state.ui.minOverall).toFixed(1) : "any"}`),
           h("input", {
+            id: "filter-min-overall",
             type: "range", min: "0", max: "10", step: "0.5", value: String(state.ui.minOverall || 0),
+            "aria-label": "Minimum overall score",
             oninput: (e) => { state.ui.minOverall = Number(e.target.value); debounceFilter(); },
           }),
         ]),
@@ -3816,6 +3771,49 @@
     }
     els.overlay.replaceChildren(...nodes);
     document.body.classList.toggle("has-overlay", nodes.length > 0 || state.drawerOpen);
+    manageOverlayFocus(nodes.length > 0);
+  }
+
+  // H3: focus management for every overlay in the overlay layer (help, manual,
+  // refresh options, run window, approval, compare, wizard). `inert` on the
+  // background regions both removes them from the tab order (a real focus trap,
+  // since Tab can't reach inert content) and blocks pointer/AT interaction.
+  const FOCUSABLE_SELECTOR =
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  let overlayWasOpen = false;
+  let overlayRestoreFocus = null;
+
+  function focusFirstIn(container) {
+    if (!container) return;
+    const first = container.querySelector(FOCUSABLE_SELECTOR);
+    if (first) { first.focus({ preventScroll: true }); return; }
+    const card = container.querySelector(".modal-card") || container.firstElementChild;
+    if (card) { card.setAttribute("tabindex", "-1"); card.focus({ preventScroll: true }); }
+  }
+
+  function manageOverlayFocus(open) {
+    // The nav drawer manages its own inert/focus (syncShell + closeDrawer); only
+    // mark the sidebar inert for a modal when the drawer itself isn't the overlay.
+    if (els.header) els.header.toggleAttribute("inert", open);
+    if (els.subnav) els.subnav.toggleAttribute("inert", open);
+    // The mobile shell header (hamburger) lives outside #content, so inert it too
+    // or Tab can escape an open overlay to it on narrow viewports.
+    const mobileHeader = document.getElementById("mobile-header");
+    if (mobileHeader) mobileHeader.toggleAttribute("inert", open);
+    if (els.sidebar) els.sidebar.toggleAttribute("inert", open && !state.drawerOpen);
+    if (els.content) els.content.toggleAttribute("inert", open || state.drawerOpen);
+    if (els.rail) els.rail.toggleAttribute("inert", open || state.drawerOpen);
+    if (open && !overlayWasOpen) {
+      overlayRestoreFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      focusFirstIn(els.overlay);
+    } else if (!open && overlayWasOpen) {
+      const target = overlayRestoreFocus;
+      overlayRestoreFocus = null;
+      if (target && document.contains(target) && typeof target.focus === "function") {
+        target.focus({ preventScroll: true });
+      }
+    }
+    overlayWasOpen = open;
   }
 
   function modal(title, children, onClose) {
@@ -4014,13 +4012,12 @@
     render();
   }
 
-  function debounceSearch(value) {
+  // H4: commit the search text synchronously so state is never stale (Enter, a
+  // filter change, or export mid-type all see the current query); debounce only
+  // the expensive refresh+render. Focus/caret survive the render via mount().
+  function debounceSearch() {
     window.clearTimeout(state.searchDebounce);
-    state.searchDebounce = window.setTimeout(() => {
-      state.ui.text = value;
-      refreshModels();
-      render();
-    }, 180);
+    state.searchDebounce = window.setTimeout(() => { refreshModels(); render(); }, 180);
   }
 
   function resetFilters() {
@@ -4065,15 +4062,27 @@
   async function pollMeta() {
     try {
       const data = await api("/api/meta");
-      if (data.last_updated && state.metaSeen && data.last_updated !== state.metaSeen) {
-        state.lastUpdated = data.last_updated;
+      if (!data.last_updated) return;
+      state.lastUpdated = data.last_updated;
+      if (state.metaSeen && data.last_updated !== state.metaSeen) {
+        const node = toast("New dashboard data is ready", "success", "Reload", async () => {
+          // H7: match pollSeed/performReset — surface a load failure instead of
+          // leaving an unhandled rejection and a stale dashboard.
+          try {
+            await loadDatabase();
+            refreshModels();
+            render();
+          } catch (error) {
+            toast(message(error) || "Could not load the new data.", "error");
+          }
+        });
+        // H6: only mark this update seen once the notice actually surfaced; if a
+        // modal suppressed the toast, keep re-offering it on the next poll.
+        if (node) state.metaSeen = data.last_updated;
+      } else {
         state.metaSeen = data.last_updated;
-        toast("New dashboard data is ready", "success", "Reload", async () => { await loadDatabase(); refreshModels(); render(); });
-      } else if (data.last_updated) {
-        state.lastUpdated = data.last_updated;
-        state.metaSeen = data.last_updated;
-        updateFreshness();
       }
+      updateFreshness();
     } catch (_) {}
   }
 
@@ -4095,9 +4104,13 @@
     ]);
     els.toast.appendChild(node);
     while (els.toast.children.length > 3) els.toast.firstChild.remove();
-    // Loading toasts persist until the caller replaces them; everything else
-    // auto-dismisses. Return the node so a caller can swap it out.
-    if (t !== "loading") window.setTimeout(() => { if (node.isConnected && id <= state.toastId) node.remove(); }, 4500);
+    // Loading toasts persist until the caller replaces them; error toasts persist
+    // until dismissed (role="alert" + the × button) so a failure notice is never
+    // missed (H10). Everything else auto-dismisses. Return the node so a caller
+    // can swap it out.
+    if (t !== "loading" && t !== "error") {
+      window.setTimeout(() => { if (node.isConnected && id <= state.toastId) node.remove(); }, 4500);
+    }
     return node;
   }
 
@@ -4143,7 +4156,23 @@
   }
 
   function mount(node) {
+    // H4: preserve keyboard focus (and the text caret) across a full re-render so
+    // the search box and the filter sliders don't drop focus mid-interaction — a
+    // keyboard user's next keystroke would otherwise land on nothing.
+    const active = document.activeElement;
+    const focusId = active && els.body.contains(active) && active.id ? active.id : "";
+    let caret = null;
+    if (focusId && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) {
+      try { caret = { start: active.selectionStart, end: active.selectionEnd }; } catch (_) { caret = null; }
+    }
     els.body.replaceChildren(node);
+    if (!focusId) return;
+    const next = els.body.querySelector("#" + (window.CSS && CSS.escape ? CSS.escape(focusId) : focusId));
+    if (!next) return;
+    next.focus({ preventScroll: true });
+    if (caret && typeof next.setSelectionRange === "function") {
+      try { next.setSelectionRange(caret.start, caret.end); } catch (_) {}
+    }
   }
 
   function byId(id) {
@@ -4566,7 +4595,12 @@
   }
 
   function csv(value) {
-    return `"${String(value ?? "").replace(/"/g, '""')}"`;
+    let s = String(value ?? "");
+    // H9: neutralize CSV formula injection — a cell beginning with = + - @ (or a
+    // leading control char a parser may strip to reach one) is executed as a
+    // formula by Excel/Sheets. Prefix with an apostrophe so it's read as text.
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return `"${s.replace(/"/g, '""')}"`;
   }
 
   function message(error) {
