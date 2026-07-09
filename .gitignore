@@ -14,6 +14,7 @@ dist/
 
 # Local-only docs (kept on disk, not in repo)
 LOGBOOK.md
+TODO.md
 docs/plans/
 docs/logbooks/
 
