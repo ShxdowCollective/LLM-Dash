@@ -67,7 +67,7 @@ in-progress update. Killing the agent doesn't affect the dashboard.
 | Frontend | Vanilla HTML / CSS / JS | Zero-build constraint; no npm at runtime |
 | SQL in browser | sql.js (SQLite-WASM) | Real SQL for complex filtering without a server round-trip |
 | Markdown rendering | marked.js | Tiny, single-file, zero dependencies |
-| Charts | SVG + CSS mini-bars | SVG powers the model scatter/radar surface; lightweight CSS bars summarize run telemetry |
+| Charts | SVG + uPlot | SVG powers model scatter/radar analysis and score-history sparklines; uPlot renders run telemetry trends |
 | Local server | FastAPI + uvicorn | Needed for API routes; bare `http.server` can't do `/api/*` |
 | CLI/install lifecycle | `llm-dash` Python console command + native installers | Gives release archives and repo checkouts the same start/stop/status flow |
 | Agent execution | OpenAI Agents SDK | BYOK-compatible; runs against any OpenAI-compatible endpoint |
@@ -178,7 +178,7 @@ changelogs 1──1 run_metrics (via changelog_date)
 | **Table** | Sortable model leaderboard with tier-letter score cells, compact mobile cards, comparison selection, search, filters, and CSV export | `v_models_latest`, `model_scores` |
 | **Chart** | SVG scatter/radar analysis surface with axis selectors, keyboard-focusable model points, selection panel, legend, and comparison strip | `v_models_latest`, `model_scores` |
 | **Changelog** | Date list + rendered Markdown body. The older Compare tab is intentionally removed; changelog files remain append-only (Settings → Reset with typed confirmation is the deliberate operator exception; normal update runs never delete history). | `changelogs` table + `changelogs/*.md` |
-| **Stats** | Token/cost/duration analytics, Agent Provider Leaderboard, per-agent breakdowns, and compact trend bars | `run_metrics` |
+| **Stats** | Token/cost/duration analytics, Agent Provider Leaderboard, per-agent breakdowns, and responsive uPlot trend charts | `run_metrics` |
 | **Settings** | Provider, Models, Research, Schedule, and Reset subpages, plus a Manual Update card on the Provider subpage and a sidebar-footer Refresh trigger | `/api/provider`, `/api/exa`, `/api/llmstats`, `/api/schedule`, `/api/run-update`, `/api/reset` |
 
 ### State Management
@@ -482,4 +482,4 @@ the job entirely.
 | Update contract | SKILL.md (agent reads it) | Python `update.py` script | Agent-agnostic; any LLM can follow it |
 | Scheduling | OS-native jobs | Claude Code `/schedule`, cron | Reliable, survives reboots, no dependency on Claude |
 | Credential store | env → selected Voidware provider → Voidware broker → keyring | env-only, dotenv | Layered precedence: process env first, then reusable brokered provider grants, with keyring kept as a legacy migration fallback |
-| Chart surface | SVG + CSS | Chart.js, `<canvas>`, uPlot | Zero-build, accessible SVG model points, and lightweight telemetry bars |
+| Chart surface | SVG + uPlot | Chart.js or a frontend framework | Zero-build, accessible SVG model analysis plus responsive uPlot telemetry trends |
