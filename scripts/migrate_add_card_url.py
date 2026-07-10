@@ -44,15 +44,25 @@ LEFT JOIN model_scores s ON s.id = (
 """
 
 
-def main(db_path: Path = DB_PATH) -> int:
-    if not db_path.exists():
-        print(f"error: {db_path} not found", file=sys.stderr)
+def _current_version(con: sqlite3.Connection) -> int:
+    try:
+        row = con.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone()
+        return int(row[0]) if row else 1
+    except (sqlite3.OperationalError, TypeError, ValueError):
         return 1
+
+
+def migrate(db_path: Path = DB_PATH) -> bool:
+    if not db_path.exists():
+        return False
     con = sqlite3.connect(db_path)
     try:
         con.execute("PRAGMA foreign_keys = OFF")
-        con.execute("BEGIN")
         cols = {r[1] for r in con.execute("PRAGMA table_info(models)")}
+        version = _current_version(con)
+        if "card_url" in cols and version >= 3:
+            return False
+        con.execute("BEGIN")
         if "card_url" not in cols:
             con.execute("ALTER TABLE models ADD COLUMN card_url TEXT")
             print("added models.card_url")
@@ -71,16 +81,39 @@ def main(db_path: Path = DB_PATH) -> int:
             )
             filled += cur.rowcount
         print(f"backfilled card_url on {filled} rows")
+        # Repair a v4 database that skipped this migration without downgrading
+        # its version marker. The v4 migration will run next for real v2/v3 DBs.
+        target_version = max(version, 3)
         con.execute(
-            "INSERT INTO meta (key, value) VALUES ('schema_version', '3') "
-            "ON CONFLICT(key) DO UPDATE SET value = '3'"
+            "INSERT INTO meta (key, value) VALUES ('schema_version', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (str(target_version),),
         )
         con.execute("COMMIT")
+        con.execute("PRAGMA foreign_keys = ON")
+        return True
     except Exception:
-        con.execute("ROLLBACK")
+        try:
+            con.execute("ROLLBACK")
+        except sqlite3.Error:
+            pass
         raise
     finally:
         con.close()
+
+
+def main() -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--db-path", default=str(DB_PATH))
+    args = parser.parse_args()
+    db_path = Path(args.db_path)
+    if not db_path.exists():
+        print(f"error: {db_path} not found", file=sys.stderr)
+        return 1
+    migrated = migrate(db_path)
+    print("schema_version -> at least 3" if migrated else "no migration needed")
     return 0
 
 

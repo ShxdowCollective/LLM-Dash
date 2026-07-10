@@ -1,5 +1,5 @@
 -- LLM-Dash schema. Source of truth for data/dash.sqlite.
--- See docs/plans/IMPLEMENTATION_PLAN.md §4.
+-- Architecture and migration contract: docs/ARCHITECTURE.md#data-model.
 
 PRAGMA foreign_keys = ON;
 

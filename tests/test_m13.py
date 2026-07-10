@@ -14,6 +14,7 @@ import scripts.init_db as init_db
 import scripts.reset_local_state as rls
 import server
 from scripts.migrate_model_metadata_v4 import migrate as migrate_v4
+from scripts.migrate_add_card_url import migrate as migrate_v3
 from scripts.run_update import canonical_capabilities as ru_caps, RunUpdateError
 
 
@@ -88,6 +89,82 @@ def test_migration_idempotent(tmp_path):
     c.commit(); c.close()
     assert migrate_v4(db) is True  # columns exist but version < 4 -> bumps
     assert migrate_v4(db) is False
+
+
+def test_startup_migration_chain_applies_v3_before_v4(tmp_path, monkeypatch):
+    db = tmp_path / "dash.sqlite"
+    con = sqlite3.connect(db)
+    con.executescript(
+        """
+        CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        CREATE TABLE models (
+            id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE,
+            vendor TEXT NOT NULL, color TEXT NOT NULL,
+            released TEXT, params TEXT, pricing TEXT, notes TEXT,
+            first_seen TEXT NOT NULL, last_seen TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active'
+        );
+        CREATE TABLE model_scores (
+            id INTEGER PRIMARY KEY,
+            model_id INTEGER NOT NULL REFERENCES models(id) ON DELETE CASCADE,
+            as_of TEXT NOT NULL,
+            intelligence REAL CHECK (intelligence IS NULL OR intelligence BETWEEN 0 AND 10),
+            coding REAL CHECK (coding IS NULL OR coding BETWEEN 0 AND 10),
+            agents REAL CHECK (agents IS NULL OR agents BETWEEN 0 AND 10),
+            speed REAL CHECK (speed IS NULL OR speed BETWEEN 0 AND 10),
+            cost REAL CHECK (cost IS NULL OR cost BETWEEN 0 AND 10),
+            source_notes TEXT,
+            UNIQUE (model_id, as_of)
+        );
+        CREATE VIEW v_models_latest AS SELECT m.*, s.as_of AS scores_as_of,
+            s.intelligence, s.coding, s.agents, s.speed, s.cost
+            FROM models m LEFT JOIN model_scores s ON s.id = (
+                SELECT id FROM model_scores WHERE model_id = m.id
+                ORDER BY as_of DESC, id DESC LIMIT 1
+            );
+        INSERT INTO meta (key, value) VALUES ('schema_version', '2');
+        INSERT INTO models (
+            id, name, vendor, color, first_seen, last_seen, status
+        ) VALUES (1, 'Legacy Model', 'OpenAI', '#fff', '2026-01-01', '2026-01-01', 'active');
+        """
+    )
+    con.close()
+
+    monkeypatch.setattr(server, "DB_PATH", db)
+    server._migration_state["error"] = ""
+    server._run_startup_migrations()
+
+    con = sqlite3.connect(db)
+    try:
+        cols = {row[1] for row in con.execute("PRAGMA table_info(models)")}
+        view_cols = {row[1] for row in con.execute("PRAGMA table_info(v_models_latest)")}
+        version = con.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
+        card_url = con.execute("SELECT card_url FROM models WHERE id=1").fetchone()[0]
+    finally:
+        con.close()
+    assert {"card_url", "input_capabilities", "deprecated_on"} <= cols
+    assert {"card_url", "input_capabilities", "deprecated_on"} <= view_cols
+    assert version == "4"
+    assert card_url == "https://platform.openai.com/docs/models"
+    assert server._migration_state["error"] == ""
+    assert migrate_v3(db) is False
+    assert migrate_v4(db) is False
+
+
+def test_v3_repair_does_not_downgrade_v4_marker(tmp_path):
+    db = _seed(tmp_path)
+    con = sqlite3.connect(db)
+    con.execute("ALTER TABLE models DROP COLUMN card_url")
+    con.commit()
+    con.close()
+
+    assert migrate_v3(db) is True
+    con = sqlite3.connect(db)
+    try:
+        assert con.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0] == "4"
+        assert "card_url" in {row[1] for row in con.execute("PRAGMA table_info(models)")}
+    finally:
+        con.close()
 
 
 # --- capability validation ------------------------------------------------

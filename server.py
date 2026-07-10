@@ -57,6 +57,7 @@ from scripts.config import (
     update_slot_api_key,
 )
 from scripts.migrate_score_checks import migrate as migrate_score_checks
+from scripts.migrate_add_card_url import migrate as migrate_card_url
 from scripts.migrate_model_metadata_v4 import migrate as migrate_metadata_v4
 from scripts.schedule_job import ScheduleError, apply_schedule, remove_schedule, status as schedule_status
 
@@ -608,6 +609,7 @@ def _run_startup_migrations() -> None:
         return
     try:
         migrate_score_checks(DB_PATH)
+        migrate_card_url(DB_PATH)
         migrate_metadata_v4(DB_PATH)
         _migration_state["error"] = ""
     except Exception as exc:

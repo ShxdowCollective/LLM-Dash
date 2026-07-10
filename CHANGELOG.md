@@ -10,6 +10,42 @@ tracks changes to the **application** itself.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-07-10
+
+### Added
+
+- Added uPlot telemetry trends, per-model score-history sparklines and deltas,
+  model permalinks with a responsive details drawer, Pareto-frontier controls,
+  table column presets, and pinned comparisons that remain visible through
+  filters.
+- Added hermetic browser coverage for the new comparison and analytics flows,
+  plus 28 adjudicated visual baselines across wide, desktop, tablet, and mobile
+  viewports.
+
+### Changed
+
+- Expanded local release verification to 192 Python tests, 19 frontend unit
+  tests, and 92 functional, accessibility, security, and visual browser tests.
+- Refreshed the architecture map and installed a deterministic structural
+  staleness gate for future commits.
+
+### Security
+
+- Added DNS-rebinding and cross-site mutation guards, bearer protection for
+  exposed binds, SSRF protection for caller-controlled endpoints, secret-value
+  redaction, and stored-key isolation for custom provider URLs.
+- Sanitized rendered changelog Markdown and hardened Voidware credential grants,
+  selection, renewal, external mutation, and reset cleanup paths.
+
+### Fixed
+
+- Made database publication and update-job reservation atomic, moved blocking
+  credential work off async request paths, and degraded failed migrations to an
+  explicit read-only state instead of bricking startup.
+- Hardened update status/cancel behavior, persistent failure reporting, focus
+  restoration, keyboard navigation, CSV formula escaping, freshness polling,
+  and low-grade contrast.
+
 ## [1.2.2] - 2026-07-05
 
 ### Fixed
@@ -97,7 +133,8 @@ tracks changes to the **application** itself.
 - Cross-platform `llm-dash` CLI and installers (macOS/Linux/Windows) with
   foreground, silent/background, status, stop, and reset commands.
 
-[Unreleased]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.2.2...HEAD
+[Unreleased]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/ShxdowCollective/LLM-Dash/compare/v1.1.0...v1.2.0

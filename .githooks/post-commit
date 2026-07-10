@@ -1,0 +1,21 @@
+#!/bin/sh
+# shxdowmap-post-commit: deterministic architecture-doc staleness gate.
+#
+# Resolves the shxdowmap engine from installed skill paths and runs a quiet
+# structural-drift check. Writes only the gitignored .shxdowmap/stale marker;
+# it never modifies tracked files and never fails the commit. If the shxdowmap
+# skill is not installed (e.g. a collaborator without it), this no-ops.
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+for eng in \
+  "$root/skills/shxdowmap/scripts/shxdowmap.sh" \
+  "$HOME/.claude/skills/shxdowmap/scripts/shxdowmap.sh" \
+  "$HOME/.codex/skills/shxdowmap/scripts/shxdowmap.sh" \
+  "$HOME/.cursor/skills/shxdowmap/scripts/shxdowmap.sh" \
+  "$HOME/.kilo/skills/shxdowmap/scripts/shxdowmap.sh"
+do
+  if [ -x "$eng" ]; then
+    "$eng" check --hook --root "$root" >/dev/null 2>&1 || true
+    exit 0
+  fi
+done
+exit 0

@@ -34,6 +34,7 @@ try:
         redact_value,
     )
     from scripts.migrate_score_checks import migrate as migrate_score_checks
+    from scripts.migrate_add_card_url import migrate as migrate_card_url
     from scripts.migrate_model_metadata_v4 import migrate as migrate_metadata_v4
 except ModuleNotFoundError:
     from config import (  # type: ignore
@@ -51,6 +52,7 @@ except ModuleNotFoundError:
         redact_value,
     )
     from migrate_score_checks import migrate as migrate_score_checks  # type: ignore
+    from migrate_add_card_url import migrate as migrate_card_url  # type: ignore
     from migrate_model_metadata_v4 import migrate as migrate_metadata_v4  # type: ignore
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -1208,6 +1210,8 @@ def main() -> int:
             raise RunUpdateError(f"Missing database: {db_path}")
         if migrate_score_checks(db_path):
             write_log(log_path, "score_check_migration_applied")
+        if migrate_card_url(db_path):
+            write_log(log_path, "card_url_migration_applied")
         if migrate_metadata_v4(db_path):
             write_log(log_path, "metadata_v4_migration_applied")
 
