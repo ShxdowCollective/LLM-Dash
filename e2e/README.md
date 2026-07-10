@@ -23,7 +23,8 @@ one hermetic, deterministic foundation.
 ## Determinism
 
 - **Hermetic data:** `global-setup.ts` seeds a throwaway DB via
-  `scripts/init_db.py` into `e2e/.tmp/` (honoring `LLM_DASH_DATA_DIR` /
+  `scripts/init_db.py`, then `enrich_seed.py` adds deterministic multi-run
+  telemetry and score history under `e2e/.tmp/` (honoring `LLM_DASH_DATA_DIR` /
   `LLM_DASH_CHANGELOGS_DIR`). The real `data/` and append-only `changelogs/` are
   never touched.
 - **No leaked secrets:** `playwright.config.ts` neutralizes every provider env

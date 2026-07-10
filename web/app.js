@@ -4355,7 +4355,8 @@ import { overall, valueScore, metricValue, tier, compareBy, paretoFrontier } fro
   // no-op so ordinary navigation never clobbers the current selection.
   function applyPermalinkModel(id) {
     if (!id) return;
-    state.ui.inspect = id;
+    const numericId = Number(id);
+    state.ui.inspect = Number.isFinite(numericId) ? numericId : id;
     if (window.innerWidth <= 900) state.detailDrawerOpen = true;
   }
 
@@ -4857,7 +4858,8 @@ import { overall, valueScore, metricValue, tier, compareBy, paretoFrontier } fro
     // compare model from older prefs.
     const ui = state.ui;
     ui.compare = Array.isArray(ui.compare) ? ui.compare.slice(0, MAX_COMPARE) : [];
-    ui.inspect = typeof ui.inspect === "string" ? ui.inspect : "";
+    const inspectId = Number(ui.inspect);
+    ui.inspect = String(ui.inspect ?? "").trim() && Number.isFinite(inspectId) ? inspectId : "";
     if (!Array.isArray(ui.vendors)) {
       ui.vendors = typeof ui.vendor === "string" && ui.vendor ? [ui.vendor] : [];
     }

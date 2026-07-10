@@ -11,6 +11,11 @@ export class ModelsPage {
   readonly xAxis: Locator;
   readonly yAxis: Locator;
   readonly chartModes: Locator;
+  readonly columnsBtn: Locator;
+  readonly columnsMenu: Locator;
+  readonly frontierToggle: Locator;
+  readonly compareTray: Locator;
+  readonly pinCompared: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -22,6 +27,11 @@ export class ModelsPage {
     this.xAxis = page.getByRole("combobox", { name: "X axis" });
     this.yAxis = page.getByRole("combobox", { name: "Y axis" });
     this.chartModes = page.getByRole("group", { name: "Chart mode" });
+    this.columnsBtn = page.getByRole("button", { name: "Columns", exact: true });
+    this.columnsMenu = page.locator(".columns-pop");
+    this.frontierToggle = page.getByRole("button", { name: /^Frontier · \d+$/ });
+    this.compareTray = page.getByRole("region", { name: "Compare selection" });
+    this.pinCompared = this.compareTray.getByRole("checkbox", { name: "Pin compared" });
   }
 
   /** All rendered model rows (list or table) and mobile cards. */
@@ -39,7 +49,21 @@ export class ModelsPage {
     await this.row(model).first().click();
   }
   async compare(model: string) {
-    await this.row(model).first().getByRole("checkbox").check();
+    const checkbox = this.row(model).first().getByRole("checkbox");
+    if (!(await checkbox.isChecked())) await checkbox.check();
+  }
+
+  tableHeader(label: string) {
+    return this.page.locator("table.models thead").getByRole("columnheader", { name: label, exact: true });
+  }
+
+  async openColumnsMenu() {
+    await this.columnsBtn.click();
+    await this.columnsMenu.waitFor({ state: "visible" });
+  }
+
+  async toggleColumn(label: string) {
+    await this.columnsMenu.getByRole("checkbox", { name: label }).click();
   }
 
   scatterMode() {

@@ -27,8 +27,8 @@ test.describe("app shell", () => {
 
   test("freshness chip shows a deterministic relative age", async ({ app, page }) => {
     await app();
-    // Clock is frozen at 2026-06-14; seed is 2026-04-20 → stable "55d ago".
-    await expect(page.locator("#freshness")).toHaveText(/Last update: 55d ago/);
+    // Clock is frozen at 2026-06-14; enriched seed last_updated is 2026-05-15 → 30d ago.
+    await expect(page.locator("#freshness")).toHaveText(/Last update: 30d ago/);
   });
 
   test("without a provider, refresh prompts to add one", async ({ app, page }) => {

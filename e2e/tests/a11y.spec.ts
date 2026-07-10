@@ -1,6 +1,7 @@
 import { test, expect } from "../fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import { AppShell } from "../pages/AppShell";
+import { ChangelogPage } from "../pages/ChangelogPage";
 
 const AREAS = ["Models", "Changelog", "Stats", "Settings"] as const;
 
@@ -17,6 +18,11 @@ for (const area of AREAS) {
   test(`a11y: ${area} has no serious/critical violations`, async ({ app, page }) => {
     await app();
     if (area !== "Models") await new AppShell(page).go(area);
+    if (area === "Changelog") {
+      const c = new ChangelogPage(page);
+      await c.entry(/April 20, 2026/).click();
+      await expect(c.runDetailsTitle).toBeVisible();
+    }
     const violations = await scan(page);
     expect(
       violations,

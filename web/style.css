@@ -23,6 +23,7 @@
   --llm-freshness-ok: var(--vw-success);
   --llm-freshness-stale: var(--vw-warning);
   --llm-freshness-error: var(--vw-error);
+  --llm-accent-text: color-mix(in srgb, var(--vw-accent) 58%, white);
   --llm-shell-side: 282px;
   --llm-shell-header: 64px;
   --llm-s-1: 4px;
@@ -2303,7 +2304,7 @@ body.is-col-resizing .model-row { pointer-events: none; }
 }
 
 .changelog-count.is-changed {
-  color: var(--vw-accent);
+  color: var(--llm-accent-text);
   background: color-mix(in srgb, var(--vw-accent) 16%, transparent);
 }
 
@@ -2331,7 +2332,7 @@ body.is-col-resizing .model-row { pointer-events: none; }
   font-family: var(--vw-font-mono);
   font-size: 12px;
   letter-spacing: 0.04em;
-  color: var(--vw-accent);
+  color: var(--llm-accent-text);
 }
 
 .changelog-panel-summary {
@@ -2370,7 +2371,7 @@ body.is-col-resizing .model-row { pointer-events: none; }
 }
 
 .changelog-chip-label.is-changed {
-  color: var(--vw-accent);
+  color: var(--llm-accent-text);
   background: color-mix(in srgb, var(--vw-accent) 18%, transparent);
 }
 
