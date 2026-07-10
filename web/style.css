@@ -4209,9 +4209,15 @@ kbd {
 }
 
 @media (max-width: 560px) {
-  .stats-grid,
   .analytics-grid {
     grid-template-columns: 1fr;
+  }
+
+  .list-model-name {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.2;
   }
 
   .chart-controls,
@@ -4599,7 +4605,10 @@ kbd {
     overflow-y: auto;
   }
 
-  #app.llm-app.has-rail { padding-right: 0; }
+  #app.llm-app.has-rail {
+    flex-direction: column;
+    padding-right: 0;
+  }
   .app-detail-rail {
     position: static;
     width: auto;
@@ -4625,6 +4634,14 @@ kbd {
 }
 
 @media (max-width: 720px) {
+  .app-content .vw-subpage-nav[data-area="settings"] {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .app-content .vw-subpage-nav[data-area="settings"] .vw-subpage-nav-link {
+    width: 100%;
+    padding-inline: 8px;
+  }
   .cmp-body { grid-template-columns: 1fr; }
   .compare-tray { margin: 0 12px 12px; flex-wrap: wrap; }
 }

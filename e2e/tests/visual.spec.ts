@@ -1,13 +1,6 @@
 import { test, expect } from "../fixtures";
 import { AppShell } from "../pages/AppShell";
 
-// Dynamic, clock-relative chrome is masked so only structural/visual change
-// trips the diff. Clock is already frozen by the fixture; masking is belt-and-
-// suspenders.
-function masks(page: any) {
-  return { mask: [page.locator("#freshness")] };
-}
-
 const BREAKPOINTS = [
   { name: "wide", width: 2560, height: 1440 },
   { name: "desktop", width: 1440, height: 900 },
@@ -43,7 +36,7 @@ const SURFACES: { name: string; open: (page: any, app: any) => Promise<void> }[]
     name: "wizard",
     open: async (page, app) => {
       await app({ query: "?setup=1", skipReady: true });
-      await page.getByRole("navigation", { name: "Setup steps" }).waitFor();
+      await page.locator('[aria-label="Setup progress"]').waitFor();
     },
   },
 ];
@@ -54,7 +47,7 @@ for (const bp of BREAKPOINTS) {
     for (const s of SURFACES) {
       test(s.name, async ({ app, page }) => {
         await s.open(page, app);
-        await expect(page).toHaveScreenshot(`${s.name}-${bp.name}.png`, masks(page));
+        await expect(page).toHaveScreenshot(`${s.name}-${bp.name}.png`);
       });
     }
   });

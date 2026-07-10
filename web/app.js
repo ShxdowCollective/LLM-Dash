@@ -591,16 +591,19 @@ import { overall, valueScore, metricValue, tier, compareBy, paretoFrontier } fro
   function renderSubnav() {
     if (state.setupMode) {
       els.subnav.hidden = true;
+      delete els.subnav.dataset.area;
       els.subnav.replaceChildren();
       return;
     }
     const config = AREA[state.area] || AREA.models;
     if (!config.subpages.length) {
       els.subnav.hidden = true;
+      delete els.subnav.dataset.area;
       els.subnav.replaceChildren();
       return;
     }
     els.subnav.hidden = false;
+    els.subnav.dataset.area = state.area;
     els.subnav.replaceChildren(...config.subpages.map(([key, label]) => {
       const current = state.subpage[state.area] === key;
       return h("button", {

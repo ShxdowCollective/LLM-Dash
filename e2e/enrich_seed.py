@@ -93,13 +93,19 @@ def render_changelog_md(run: dict) -> str:
             "---",
         ]
     )
+    changed = ", ".join(run["changed"])
+    score_copy = (
+        f"{changed} — synthetic e2e-only deltas for sparkline coverage."
+        if changed
+        else "Five frontier models received synthetic e2e-only deltas for sparkline coverage."
+    )
     body = f"""# E2E enrichment entry
 
 {run['summary']}
 
 ## Score Changes
 
-{', '.join(run['changed'])} — synthetic e2e-only deltas for sparkline coverage.
+{score_copy}
 """
     footer = f"""---
 

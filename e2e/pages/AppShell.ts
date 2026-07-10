@@ -18,7 +18,7 @@ export class AppShell {
     this.page = page;
     this.sidebar = page.locator("#sidebar");
     this.content = page.locator("#content-body");
-    this.subnav = page.getByRole("navigation", { name: "Sub-pages" });
+    this.subnav = page.locator("#subpage-nav");
     this.refresh = page.locator("#refresh-trigger");
     this.help = page.getByRole("button", { name: "Keyboard shortcuts" });
     this.freshness = page.locator("#freshness");

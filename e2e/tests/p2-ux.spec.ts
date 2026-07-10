@@ -41,11 +41,11 @@ test.describe("P2 — permalink", () => {
     expect(copied).toContain(`#models/list?m=${PERMALINK_MODEL_ID}`);
   });
 
-  test("inspected model persists across reload", async ({ app, page }) => {
+  test("inspected model persists across fresh navigation", async ({ app, page }) => {
     await app();
     const m = new ModelsPage(page);
     await m.open(PERMALINK_MODEL_NAME);
-    await page.reload();
+    await page.goto("/");
     await waitForAppReady(page);
     await expect(m.detailRail).toContainText(PERMALINK_MODEL_NAME);
   });
