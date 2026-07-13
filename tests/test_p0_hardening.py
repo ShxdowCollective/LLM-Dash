@@ -187,6 +187,20 @@ def test_value_scrub_masks_live_secret(monkeypatch):
     assert "***" in scrubbed
 
 
+def test_approval_denial_does_not_expose_exception_message(client, monkeypatch):
+    raw_detail = "approval denied: traceback at /private/app/broker.py:42"
+
+    def _deny():
+        raise server.voidware_auth.VoidwareAuthError(raw_detail, code="approval_denied")
+
+    monkeypatch.setattr(server.voidware_auth, "deny_pending_approval", _deny)
+    response = client.post("/api/voidware/broker/approval/deny")
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "Voidware approval was denied."
+    assert raw_detail not in response.text
+
+
 # --- C2: migration degrade instead of brick -------------------------------
 
 def test_migration_failure_degrades(tmp_path, monkeypatch):
