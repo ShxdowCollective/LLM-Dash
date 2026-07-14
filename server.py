@@ -909,7 +909,7 @@ def post_voidware_broker_approval_deny() -> dict[str, Any]:
         voidware_auth.deny_pending_approval()
     except voidware_auth.VoidwareAuthError as exc:
         if exc.code == "approval_denied":
-            return {"ok": False, "code": exc.code, "message": str(exc)}
+            return {"ok": False, "code": exc.code, "message": "Voidware approval was denied."}
         raise _voidware_auth_http_error(exc) from exc
     return {"ok": True}
 
