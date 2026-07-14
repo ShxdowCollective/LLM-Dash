@@ -336,8 +336,8 @@ def _read_broker_secret(name: str, *, credential_ref: str = "") -> str:
         # surface it at WARNING (broker_status() already carries it to the UI).
         if exc.code not in voidware_auth.FRESH_GRANT_CODES:
             logger.warning(
-                "Voidware broker unavailable while reading secret %r (code=%s): %s",
-                name or credential_ref, exc.code, exc,
+                "Voidware broker unavailable while reading a configured secret (code=%s)",
+                exc.code,
             )
         return ""
 
