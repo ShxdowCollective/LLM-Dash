@@ -4589,7 +4589,7 @@ import { overall, valueScore, metricValue, tier, compareBy, paretoFrontier } fro
     if (children !== undefined && children !== null) {
       (Array.isArray(children) ? children : [children]).flat().forEach((child) => {
         if (child === null || child === undefined || child === false) return;
-        el.appendChild(child instanceof Node ? child : document.createTextNode(String(child)));
+        el.append(child instanceof Node ? child : String(child));
       });
     }
     if (pendingValue !== undefined) el.value = pendingValue;
