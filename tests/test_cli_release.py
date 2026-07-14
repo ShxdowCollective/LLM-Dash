@@ -145,3 +145,20 @@ def test_pyproject_dependencies_match_requirements():
         if line.strip() and not line.startswith("#")
     )
     assert pyproject_deps == requirements
+
+
+def test_exposed_server_announcement_does_not_print_access_token(monkeypatch, tmp_path, capsys):
+    from llm_dash import cli
+    from scripts import server_auth
+
+    sentinel = "secret-token-regression-sentinel"
+    monkeypatch.setattr(server_auth, "token_required", lambda: True)
+    monkeypatch.setattr(server_auth, "load_or_create_token", lambda: sentinel)
+    monkeypatch.setattr(server_auth, "_token_path", lambda: tmp_path / "llmdash_access_token")
+
+    cli._announce_access_token("0.0.0.0", 8787)
+
+    output = capsys.readouterr().out
+    assert sentinel not in output
+    assert "llmdash_access_token" in output
+    assert "token values are not printed" in output

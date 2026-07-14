@@ -19,8 +19,8 @@ def _host(value: str | None) -> str:
 
 
 def _announce_access_token(host: str, port: int) -> None:
-    """When binding off-loopback, the per-install access token is required. Print
-    it (and a ready-to-use URL) so the LAN operator can reach the UI."""
+    """When binding off-loopback, ensure the per-install access token exists and
+    print retrieval guidance without exposing the token value."""
     try:
         os.environ["LLM_DASH_BIND_HOST"] = host
         from scripts import server_auth
@@ -28,13 +28,15 @@ def _announce_access_token(host: str, port: int) -> None:
 
         if not server_auth.token_required():
             return
-        token = server_auth.load_or_create_token()
+        server_auth.load_or_create_token()
+        token_path = server_auth._token_path()
     except Exception:
         return
     base = f"http://{url_host(host)}:{port}"
     print(f"LLM-Dash: server is exposed on {host}; an access token is required.")
-    print(f"  Open: {base}/?token={token}")
-    print("  (or send 'Authorization: Bearer <token>' on API calls)")
+    print(f"  Open: {base}/")
+    print(f"  Token: read from {token_path}")
+    print("  (send 'Authorization: Bearer <token>' on API calls; token values are not printed)")
 
 
 def _port(value: int | None) -> int:
