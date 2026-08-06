@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 import time
 import traceback
@@ -751,20 +752,42 @@ def dry_run_plan(args: argparse.Namespace) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    env_preset = os.environ.get("LLM_DASH_SEED_PRESET")
+    preset_choices = tuple(PRESET_LABELS)
     parser.add_argument(
         "--preset",
-        choices=("aa", "llmstats", "exa", "openrouter", "custom-prompt", "custom-endpoint"),
-        required=True,
+        choices=preset_choices,
+        default=env_preset,
+        required=env_preset is None,
     )
-    parser.add_argument("--count", type=int, default=25)
-    parser.add_argument("--index", default="intelligence", help="AA ranking index")
-    parser.add_argument("--prompt", default="", help="Custom discovery brief")
-    parser.add_argument("--endpoint", default="", help="Custom OpenAI-compatible base URL")
-    parser.add_argument("--credential", default="", help="Saved credential name for custom-endpoint")
+    parser.add_argument("--count", type=int, default=os.environ.get("LLM_DASH_SEED_COUNT", 25))
+    parser.add_argument(
+        "--index",
+        default=os.environ.get("LLM_DASH_SEED_INDEX", "intelligence"),
+        help="AA ranking index",
+    )
+    parser.add_argument(
+        "--prompt",
+        default=os.environ.get("LLM_DASH_SEED_PROMPT", ""),
+        help="Custom discovery brief",
+    )
+    parser.add_argument(
+        "--endpoint",
+        default=os.environ.get("LLM_DASH_SEED_ENDPOINT", ""),
+        help="Custom OpenAI-compatible base URL",
+    )
+    parser.add_argument(
+        "--credential",
+        default=os.environ.get("LLM_DASH_SEED_CREDENTIAL", ""),
+        help="Saved credential name for custom-endpoint",
+    )
     parser.add_argument("--db-path", default=str(DB_PATH))
     parser.add_argument("--log-path", default="")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+    # argparse does not apply ``choices`` validation to a string default.
+    if args.preset not in preset_choices:
+        parser.error(f"argument --preset: invalid choice: {args.preset!r}")
 
     log_path = Path(args.log_path) if args.log_path else ROOT / "logs" / "seed-catalog.log"
     db_path = Path(args.db_path)
