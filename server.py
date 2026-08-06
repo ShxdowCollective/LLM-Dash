@@ -1316,26 +1316,26 @@ def post_seed(payload: SeedPayload) -> dict[str, str]:
             str(SEED_CATALOG_PATH),
             "--log-path",
             str(log_path),
-            "--preset",
-            payload.preset,
-            "--count",
-            str(payload.count),
             "--db-path",
             str(DB_PATH),
         ]
-        if payload.index:
-            command.extend(["--index", payload.index])
-        if payload.prompt:
-            command.extend(["--prompt", payload.prompt])
-        if payload.endpoint:
-            command.extend(["--endpoint", payload.endpoint])
-        if payload.credential:
-            command.extend(["--credential", payload.credential])
+        seed_env = os.environ.copy()
+        seed_env.update(
+            {
+                "LLM_DASH_SEED_PRESET": payload.preset,
+                "LLM_DASH_SEED_COUNT": str(payload.count),
+                "LLM_DASH_SEED_INDEX": payload.index,
+                "LLM_DASH_SEED_PROMPT": payload.prompt,
+                "LLM_DASH_SEED_ENDPOINT": payload.endpoint,
+                "LLM_DASH_SEED_CREDENTIAL": payload.credential,
+            }
+        )
         log_file = log_path.open("a", encoding="utf-8")
         try:
             process = subprocess.Popen(
                 command,
                 cwd=ROOT,
+                env=seed_env,
                 stdout=log_file,
                 stderr=subprocess.STDOUT,
                 text=True,

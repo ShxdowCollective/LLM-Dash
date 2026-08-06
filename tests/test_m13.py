@@ -357,6 +357,7 @@ def test_api_seed_passes_active_db_path_to_subprocess(tmp_path, monkeypatch):
 
     def fake_popen(command, **kwargs):
         calls["command"] = command
+        calls["env"] = kwargs["env"]
         return Process()
 
     monkeypatch.setattr(server, "DB_PATH", active_db)
@@ -368,12 +369,20 @@ def test_api_seed_passes_active_db_path_to_subprocess(tmp_path, monkeypatch):
         server._jobs.clear()
 
     client = TestClient(server.app)
-    resp = client.post("/api/seed", json={"preset": "aa", "count": 1})
+    prompt = "models; touch /tmp/uncontrolled-command"
+    resp = client.post(
+        "/api/seed",
+        json={"preset": "custom-prompt", "count": 1, "prompt": prompt},
+    )
 
     assert resp.status_code == 200
     command = calls["command"]
     assert "--db-path" in command
     assert command[command.index("--db-path") + 1] == str(active_db)
+    assert prompt not in command
+    assert calls["env"]["LLM_DASH_SEED_PRESET"] == "custom-prompt"
+    assert calls["env"]["LLM_DASH_SEED_COUNT"] == "1"
+    assert calls["env"]["LLM_DASH_SEED_PROMPT"] == prompt
     for log_file in (server.ROOT / "logs").glob("test-seed-*.log"):
         log_file.unlink(missing_ok=True)
 
