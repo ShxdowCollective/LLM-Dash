@@ -31,7 +31,6 @@ try:
         load_provider_bundle,
         provider_api_base,
         redact_headers,
-        redact_value,
     )
     from scripts.migrate_score_checks import migrate as migrate_score_checks
     from scripts.migrate_add_card_url import migrate as migrate_card_url
@@ -49,7 +48,6 @@ except ModuleNotFoundError:
         load_provider_bundle,
         provider_api_base,
         redact_headers,
-        redact_value,
     )
     from migrate_score_checks import migrate as migrate_score_checks  # type: ignore
     from migrate_add_card_url import migrate as migrate_card_url  # type: ignore
@@ -1170,7 +1168,6 @@ def dry_run(log_path: Path) -> None:
         "endpoint_mode": bundle.config.endpoint_mode,
         "default_model": bundle.config.default_model,
         "backup_model": bundle.config.backup_model,
-        "provider_key": redact_value(bundle.secrets.api_key),
         "headers": redact_headers(build_auth_headers(bundle)),
         "exa_configured": bool(load_exa_api_key()),
         "llmstats_configured": bool(load_llmstats_api_key()),
